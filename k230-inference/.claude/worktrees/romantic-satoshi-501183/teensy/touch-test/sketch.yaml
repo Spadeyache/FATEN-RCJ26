@@ -1,0 +1,15 @@
+profiles:
+  profile-1767655872632:
+    fqbn: teensy:avr:teensy41:usb=serial,speed=600,opt=o2std,keys=en-us
+    platforms:
+      - platform: teensy:avr (1.59.0)
+        platform_index_url: https://www.pjrc.com/teensy/package_teensy_index.json
+    programmer: ""
+    port_config:
+      baudrate: "115200"
+      lineEnding: "\r\n"
+      bits: "8"
+      parity: none
+      stop_bits: "1"
+    port: COM3 Serial
+default_profile: profile-1767655872632

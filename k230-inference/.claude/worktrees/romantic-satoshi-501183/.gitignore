@@ -1,0 +1,10 @@
+electronics/fp-info-cache
+electronics/sym-lib-table
+*.lck
+
+dev-tools/*.gz
+dev-tools/*.img
+
+*.vscode/
+
+*build/

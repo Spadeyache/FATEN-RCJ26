@@ -1,0 +1,66 @@
+version: '3.8'
+
+services:
+  # Service 1: Training YOLOv8n models
+  train:
+    build:
+      context: ./docker/train
+      dockerfile: Dockerfile
+    container_name: k230d-train
+    image: k230d-train:latest
+    shm_size: '8gb'
+    volumes:
+      - ./workspace:/workspace
+      - ./datasets:/datasets
+      - ./models:/models
+      - ./runs:/runs
+    working_dir: /workspace
+    environment:
+      - PYTHONUNBUFFERED=1
+      - CUDA_VISIBLE_DEVICES=0
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    command: /bin/bash
+    stdin_open: true
+    tty: true
+    networks:
+      - k230d-net
+
+  # Service 2: Converting ONNX to K230D .kmodel and testing
+  convert:
+    build:
+      context: ./docker/convert
+      dockerfile: Dockerfile
+    container_name: k230d-convert
+    image: k230d-convert:latest
+    volumes:
+      - ./workspace:/workspace
+      - ./datasets:/datasets
+      - ./models:/models
+      - ./output:/output
+      - ./test_images:/test_images
+    working_dir: /workspace
+    environment:
+      - PYTHONUNBUFFERED=1
+      # Must match dotnet-install path in docker/convert/Dockerfile (not /usr/share/dotnet).
+      - DOTNET_ROOT=/root/.dotnet
+    command: /bin/bash
+    stdin_open: true
+    tty: true
+    networks:
+      - k230d-net
+
+networks:
+  k230d-net:
+    driver: bridge
+
+volumes:
+  datasets:
+  models:
+  runs:
+  output:

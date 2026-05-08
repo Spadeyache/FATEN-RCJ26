@@ -1,0 +1,1204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ESP32 Camera Viewer</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@600;700&display=swap" rel="stylesheet">
+<style>
+/* ── Variables ─────────────────────────────────────────────── */
+:root {
+  --bg:        #0e0f11;
+  --bg2:       #161719;
+  --bg3:       #1c1e21;
+  --surface:   #222428;
+  --border:    #2e3035;
+  --border2:   #3a3d44;
+  --text:      #d8dae0;
+  --text-dim:  #6b6f7a;
+  --text-faint:#3a3d44;
+  --accent:    #e8840a;
+  --accent-lo: rgba(232,132,10,0.12);
+  --green:     #2ecc71;
+  --green-lo:  rgba(46,204,113,0.12);
+  --red:       #e05252;
+  --red-lo:    rgba(224,82,82,0.12);
+  --blue:      #5b9cf6;
+  --yellow:    #f0c040;
+
+  /* Button depth system */
+  --btn-h:     36px;
+  --btn-r:     8px;
+  --btn-face:  #252729;
+  --btn-top:   #2f3235;
+  --btn-edge:  #18191b;
+  --btn-shadow: 0 1px 0 #111, 0 3px 6px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.06);
+  --btn-shadow-press: 0 0 0 #111, 0 1px 2px rgba(0,0,0,0.6), inset 0 2px 4px rgba(0,0,0,0.4);
+}
+
+/* ── Reset ─────────────────────────────────────────────────── */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'DM Mono', monospace;
+  font-size: 13px;
+  padding: 14px 16px;
+  display: flex; flex-direction: column; height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Header ────────────────────────────────────────────────── */
+.app-header {
+  display: flex; align-items: center; gap: 12px;
+  margin-bottom: 12px; flex-shrink: 0;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 10px;
+}
+.app-title {
+  font-family: 'Syne', sans-serif;
+  font-size: 13px; font-weight: 700;
+  letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--text-dim);
+}
+.app-title span { color: var(--accent); }
+
+/* ── Status pill ───────────────────────────────────────────── */
+.status {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 11px; padding: 3px 10px 3px 7px;
+  border-radius: 99px; font-family: 'DM Mono', monospace;
+  letter-spacing: 0.03em; border: 1px solid transparent;
+  transition: all 0.2s;
+}
+.status::before {
+  content: ''; width: 6px; height: 6px; border-radius: 50%;
+  flex-shrink: 0;
+}
+.status.connected    { background: var(--green-lo); color: var(--green); border-color: rgba(46,204,113,0.25); }
+.status.connected::before { background: var(--green); box-shadow: 0 0 6px var(--green); animation: pulse 2s infinite; }
+.status.disconnected { background: var(--bg3); color: var(--text-dim); border-color: var(--border); }
+.status.disconnected::before { background: var(--text-faint); }
+.status.error        { background: var(--red-lo); color: var(--red); border-color: rgba(224,82,82,0.25); }
+.status.error::before { background: var(--red); }
+@keyframes pulse { 0%,100%{ opacity:1; } 50%{ opacity:0.4; } }
+
+/* ── Toolbar ───────────────────────────────────────────────── */
+.toolbar {
+  display: flex; align-items: center; gap: 8px;
+  margin-bottom: 12px; flex-wrap: wrap; flex-shrink: 0;
+}
+.toolbar-group {
+  display: flex; align-items: center; gap: 6px;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 5px 8px;
+}
+.toolbar-group label {
+  font-size: 10px; color: var(--text-dim);
+  text-transform: uppercase; letter-spacing: 0.08em;
+  white-space: nowrap;
+}
+.toolbar-spacer { flex: 1; }
+
+/* ── Select ────────────────────────────────────────────────── */
+select {
+  font-family: 'DM Mono', monospace;
+  font-size: 12px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border2);
+  background: var(--bg3);
+  color: var(--text);
+  cursor: pointer;
+  outline: none;
+  -webkit-appearance: none;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%236b6f7a'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  padding-right: 24px;
+}
+select:focus { border-color: var(--accent); }
+
+/* ══════════════════════════════════════════════════════════════
+   BUTTON SYSTEM — the centrepiece
+   Three tiers: primary (accent), default (raised), ghost (flat)
+   All share the same tactile press mechanic.
+══════════════════════════════════════════════════════════════ */
+button {
+  font-family: 'DM Mono', monospace;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  height: var(--btn-h);
+  padding: 0 14px;
+  border-radius: var(--btn-r);
+  border: 1px solid var(--btn-edge);
+  background: var(--btn-face);
+  background-image: linear-gradient(180deg, var(--btn-top) 0%, var(--btn-face) 100%);
+  color: var(--text);
+  cursor: pointer;
+  position: relative;
+  box-shadow: var(--btn-shadow);
+  transition: background 0.1s, box-shadow 0.07s, transform 0.07s, color 0.15s;
+  user-select: none;
+  white-space: nowrap;
+  outline: none;
+  /* The "raised surface" feel */
+  top: 0;
+}
+button:hover {
+  background: var(--bg3);
+  background-image: linear-gradient(180deg, #323539 0%, var(--bg3) 100%);
+  color: #eee;
+  border-color: var(--border2);
+}
+button:active, button.pressing {
+  box-shadow: var(--btn-shadow-press);
+  transform: translateY(2px);
+  background-image: linear-gradient(180deg, var(--btn-face) 0%, #1e2022 100%);
+  border-color: #111;
+}
+button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Primary — connect / main action */
+button.primary {
+  background: #8a4e12;
+  background-image: none;
+  border-color: #5c3209;
+  color: #e8c89a;
+  box-shadow: 0 1px 0 #3a1f05, 0 3px 7px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,190,120,0.08);
+  text-shadow: none;
+}
+button.primary:hover {
+  background: #9a5a18;
+  background-image: none;
+  color: #f0d4ae;
+  border-color: #6a3a0c;
+}
+button.primary:active {
+  background: #7a4410;
+  box-shadow: 0 0 0 #3a1f05, 0 1px 2px rgba(0,0,0,0.6), inset 0 2px 5px rgba(0,0,0,0.35);
+  transform: translateY(2px);
+}
+
+/* Active/connected state */
+button.active {
+  background: linear-gradient(180deg, #1a4a2a 0%, #0f3018 100%);
+  border-color: #0a2010;
+  color: var(--green);
+  box-shadow: 0 1px 0 #051008, 0 3px 8px rgba(46,204,113,0.15), inset 0 1px 0 rgba(46,204,113,0.1);
+}
+button.active:active {
+  transform: translateY(2px);
+  box-shadow: 0 0 0 #051008, inset 0 2px 4px rgba(0,0,0,0.4);
+}
+
+/* Active-dim: auto-scroll on */
+button.active-dim {
+  background: linear-gradient(180deg, #1a2a1e 0%, #121e16 100%);
+  border-color: #0a1a0e;
+  color: #4edd8a;
+  box-shadow: 0 1px 0 #051008, 0 2px 5px rgba(0,0,0,0.4), inset 0 1px 0 rgba(46,204,113,0.08);
+}
+
+/* Danger — delete */
+button.danger {
+  background: linear-gradient(180deg, #2d1414 0%, #1e0d0d 100%);
+  border-color: #3a1010;
+  color: #c06060;
+  box-shadow: 0 1px 0 #0d0505, 0 2px 5px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,80,80,0.06);
+  height: 26px; padding: 0 8px; font-size: 11px; border-radius: 6px;
+}
+button.danger:hover { color: var(--red); border-color: #552020; }
+button.danger:active { transform: translateY(1px); }
+
+/* Small buttons (marker panel, send) */
+button.sm {
+  height: 28px; padding: 0 10px; font-size: 11px; border-radius: 7px;
+  box-shadow: 0 1px 0 #111, 0 2px 4px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.05);
+}
+button.sm:active { transform: translateY(1px); box-shadow: var(--btn-shadow-press); }
+
+button.icon-btn {
+  height: 28px; width: 28px; padding: 0;
+  border-radius: 7px; font-size: 13px;
+  box-shadow: 0 1px 0 #111, 0 2px 4px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.05);
+}
+button.icon-btn:active { transform: translateY(1px); }
+
+/* Place mode active */
+#placeModeBtn.placing {
+  background: linear-gradient(180deg, #3a2200 0%, #271700 100%);
+  border-color: #5a3300;
+  color: var(--accent);
+  box-shadow: 0 1px 0 #150b00, 0 3px 8px rgba(232,132,10,0.2), inset 0 1px 0 rgba(255,180,50,0.1);
+}
+
+/* ── Layout ────────────────────────────────────────────────── */
+.split { display: flex; gap: 14px; flex: 1; min-height: 0; }
+.cam-col { display: flex; flex-direction: column; gap: 8px; flex-shrink: 0; }
+
+/* ── Camera wrap ───────────────────────────────────────────── */
+.canvas-wrap {
+  position: relative; display: inline-block;
+  border-radius: 10px; overflow: hidden; background: #000;
+  box-shadow: 0 0 0 1px var(--border), 0 4px 16px rgba(0,0,0,0.6);
+}
+canvas { display: block; image-rendering: pixelated; }
+#overlay { position: absolute; top: 0; left: 0; pointer-events: none; image-rendering: pixelated; }
+
+.dual-cam { display: flex; gap: 12px; flex-wrap: wrap; }
+.cam-caption {
+  font-size: 10px; color: var(--text-dim);
+  text-transform: uppercase; letter-spacing: 0.08em;
+  margin: 2px 0 0 2px;
+}
+
+.fps-overlay {
+  position: absolute; top: 8px; right: 8px;
+  font-size: 10px; color: var(--green);
+  background: rgba(0,0,0,0.7); padding: 2px 7px; border-radius: 4px;
+  pointer-events: none; letter-spacing: 0.04em;
+  border: 1px solid rgba(46,204,113,0.2);
+}
+.err-overlay {
+  position: absolute; bottom: 8px; left: 8px;
+  font-size: 10px; color: var(--yellow);
+  background: rgba(0,0,0,0.7); padding: 2px 7px; border-radius: 4px;
+  pointer-events: none;
+  border: 1px solid rgba(240,192,64,0.2);
+}
+
+/* ── Stats ─────────────────────────────────────────────────── */
+.stats { display: flex; gap: 12px; flex-wrap: wrap; }
+.stat {
+  font-size: 11px; color: var(--text-dim);
+  background: var(--bg2); border: 1px solid var(--border);
+  padding: 3px 8px; border-radius: 5px;
+}
+.stat span { color: var(--text); font-weight: 500; }
+.error-msg { font-size: 12px; color: var(--red); }
+
+/* ── Monitor column ────────────────────────────────────────── */
+.mon-col { display: flex; flex-direction: column; flex: 1; min-width: 0; min-height: 0; }
+.mon-header {
+  display: flex; align-items: center; gap: 7px;
+  margin-bottom: 6px; flex-shrink: 0;
+}
+.mon-title {
+  font-family: 'Syne', sans-serif;
+  font-size: 11px; font-weight: 700;
+  letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--text-dim); flex: 1;
+}
+.mon-badge {
+  font-size: 10px; padding: 2px 8px; border-radius: 99px;
+  background: var(--bg3); color: var(--text-dim); border: 1px solid var(--border);
+}
+
+/* ── Log ───────────────────────────────────────────────────── */
+.mon-log {
+  flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px; font-size: 12px; line-height: 1.7;
+  word-break: break-all; contain: strict;
+  box-shadow: inset 0 2px 8px rgba(0,0,0,0.4);
+}
+.mon-log::-webkit-scrollbar { width: 5px; }
+.mon-log::-webkit-scrollbar-track { background: transparent; }
+.mon-log::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+.log-line { color: #9da0a8; white-space: pre-wrap; }
+.log-line .ts { color: #2e4a2e; margin-right: 7px; user-select: none; font-size: 10px; }
+.log-line.warn { color: var(--yellow); }
+.log-line.err  { color: var(--red); }
+.log-line.info { color: var(--blue); }
+.log-empty { color: var(--text-faint); font-size: 12px; text-align: center; padding-top: 40px; }
+
+/* ── Send bar ──────────────────────────────────────────────── */
+.mon-send { display: flex; gap: 6px; margin-top: 6px; flex-shrink: 0; }
+.mon-send input {
+  flex: 1; font-family: 'DM Mono', monospace; font-size: 12px;
+  padding: 0 10px; height: 34px;
+  border-radius: 8px; border: 1px solid var(--border2);
+  background: var(--bg2); color: var(--text); outline: none;
+  box-shadow: inset 0 1px 4px rgba(0,0,0,0.3);
+  transition: border-color 0.15s;
+}
+.mon-send input:focus { border-color: var(--accent); }
+.mon-send input::placeholder { color: var(--text-faint); }
+
+/* ── No serial ─────────────────────────────────────────────── */
+.no-serial {
+  padding: 1rem; background: var(--bg2); border-radius: 10px;
+  font-size: 13px; color: var(--text-dim); border: 1px solid var(--border);
+  max-width: 400px; line-height: 1.7;
+}
+
+/* ── Marker panel ──────────────────────────────────────────── */
+.marker-panel {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px; flex-shrink: 0;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
+}
+.marker-panel-header {
+  display: flex; align-items: center; gap: 7px; margin-bottom: 9px;
+}
+.marker-panel-title {
+  font-family: 'Syne', sans-serif;
+  font-size: 10px; font-weight: 700;
+  letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--text-dim); flex: 1;
+}
+.marker-list { display: flex; flex-direction: column; gap: 6px; }
+
+.marker-row {
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 7px 8px;
+  display: flex; flex-direction: column; gap: 5px;
+  transition: border-color 0.15s;
+  cursor: default;
+}
+.marker-row:hover { border-color: var(--border2); }
+.marker-row.selected { border-color: var(--accent); box-shadow: 0 0 0 1px rgba(232,132,10,0.15); }
+
+.marker-row-top { display: flex; align-items: center; gap: 6px; }
+.marker-swatch {
+  width: 9px; height: 9px; border-radius: 2px; flex-shrink: 0;
+  border: 1px solid rgba(255,255,255,0.12);
+}
+.marker-name-input {
+  flex: 1; font-family: 'DM Mono', monospace; font-size: 12px;
+  background: transparent; border: none; color: var(--text);
+  outline: none; padding: 0; min-width: 0;
+}
+.marker-name-input:focus { color: var(--accent); }
+
+/* Visibility and delete within rows */
+.marker-vis-btn {
+  font-size: 11px; padding: 0 6px; height: 22px;
+  border-radius: 5px; border: 1px solid var(--border);
+  background: var(--bg2); color: var(--text-dim); cursor: pointer; flex-shrink: 0;
+  box-shadow: 0 1px 0 #0a0a0a, inset 0 1px 0 rgba(255,255,255,0.04);
+  transition: all 0.1s;
+}
+.marker-vis-btn:active { transform: translateY(1px); box-shadow: none; }
+.marker-vis-btn.visible { color: var(--accent); border-color: rgba(232,132,10,0.4); background: rgba(232,132,10,0.08); }
+
+.marker-del-btn {
+  font-size: 11px; padding: 0 7px; height: 22px;
+  border-radius: 5px; border: 1px solid #2e1a1a;
+  background: #1a1010; color: #884444; cursor: pointer; flex-shrink: 0;
+  box-shadow: 0 1px 0 #0a0505, inset 0 1px 0 rgba(255,80,80,0.04);
+  transition: all 0.1s;
+}
+.marker-del-btn:hover { background: #2a1010; color: var(--red); border-color: #4a2020; }
+.marker-del-btn:active { transform: translateY(1px); box-shadow: none; }
+
+.marker-fields { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 4px; }
+.marker-field { display: flex; flex-direction: column; gap: 2px; }
+.marker-field label {
+  font-size: 9px; color: var(--text-faint);
+  text-transform: uppercase; letter-spacing: 0.08em;
+}
+.marker-field input {
+  font-family: 'DM Mono', monospace; font-size: 12px;
+  background: var(--bg); border: 1px solid var(--border);
+  color: var(--text); border-radius: 5px; padding: 3px 5px;
+  width: 100%; outline: none;
+  box-shadow: inset 0 1px 3px rgba(0,0,0,0.3);
+  transition: border-color 0.15s;
+}
+.marker-field input:focus { border-color: var(--accent); }
+.marker-hint { font-size: 11px; color: var(--text-faint); text-align: center; padding: 8px 0 2px; }
+
+/* ── Limit select (inline, small) ──────────────────────────── */
+.limit-sel {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px; padding: 2px 20px 2px 6px;
+  border-radius: 5px; border: 1px solid var(--border);
+  background: var(--bg3); color: var(--text-dim);
+  cursor: pointer; outline: none; appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5'%3E%3Cpath d='M0 0l4 5 4-5z' fill='%236b6f7a'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 6px center;
+}
+
+/* ── Serial filter bar ──────────────────────────────────────── */
+.filter-bar {
+  display: flex; align-items: center; gap: 5px;
+  margin-bottom: 6px; flex-shrink: 0; flex-wrap: wrap;
+}
+.filter-bar > span {
+  font-size: 10px; color: var(--text-dim);
+  text-transform: uppercase; letter-spacing: 0.08em;
+  margin-right: 2px;
+}
+.filter-btn {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px; height: 22px; padding: 0 8px;
+  border-radius: 5px; border: 1px solid var(--border);
+  background: var(--bg3); color: var(--text-dim);
+  cursor: pointer; letter-spacing: 0.04em;
+  transition: all 0.12s;
+  box-shadow: 0 1px 0 #0a0a0a;
+}
+.filter-btn:hover { border-color: var(--border2); color: var(--text); }
+.filter-btn.active {
+  background: rgba(232,132,10,0.12);
+  border-color: rgba(232,132,10,0.4);
+  color: var(--accent);
+}
+
+/* ── Live metrics panel ──────────────────────────────────────── */
+.metrics-panel {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 8px 12px;
+  flex-shrink: 0;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
+}
+.metrics-header {
+  font-family: 'Syne', sans-serif;
+  font-size: 10px; font-weight: 700;
+  letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--text-dim); margin-bottom: 6px;
+}
+.metrics-grid { display: flex; flex-wrap: wrap; gap: 6px; }
+.metric-chip {
+  font-size: 11px;
+  background: var(--bg3); border: 1px solid var(--border);
+  border-radius: 5px; padding: 3px 8px;
+  display: flex; gap: 5px; align-items: baseline;
+}
+.metric-chip .mk { color: var(--text-faint); font-size: 9px; text-transform: uppercase; letter-spacing: 0.06em; }
+.metric-chip .mv { color: var(--text); font-weight: 500; }
+.metric-chip.fresh { border-color: rgba(232,132,10,0.3); }
+.metric-chip.fresh .mv { color: var(--accent); }
+
+/* ── Calibration inputs ─────────────────────────────────────── */
+.cal-input {
+  font-family: 'DM Mono', monospace;
+  font-size: 12px;
+  height: 28px;
+  padding: 0 8px;
+  width: 74px;
+  border-radius: 7px;
+  border: 1px solid var(--border2);
+  background: var(--bg3);
+  color: var(--text);
+  outline: none;
+  box-shadow: inset 0 1px 4px rgba(0,0,0,0.3);
+}
+.cal-input:focus { border-color: var(--accent); }
+.cal-badge {
+  font-size: 10px; padding: 2px 8px; border-radius: 99px;
+  background: rgba(232,132,10,0.10);
+  color: var(--accent);
+  border: 1px solid rgba(232,132,10,0.25);
+}
+</style>
+</head>
+<body>
+<div class="app-header">
+  <span class="app-title">ESP32<span>-S3</span> CAMERA VIEWER</span>
+  <span class="status disconnected" id="statusBadge">Disconnected</span>
+</div>
+
+<div class="toolbar">
+  <div class="toolbar-group">
+    <label>BAUD</label>
+    <select id="baud">
+      <option value="115200" selected>115200</option>
+      <option value="230400">230400</option>
+      <option value="460800">460800</option>
+      <option value="921600">921600</option>
+    </select>
+  </div>
+  <button id="connectBtn" class="primary">Connect</button>
+
+  <div class="toolbar-group">
+    <label>CAL</label>
+    <input id="gainR" class="cal-input" type="number" step="0.01" value="1.98598130841" min="0" title="Red gain" readonly>
+    <input id="gainG" class="cal-input" type="number" step="0.01" value="2.25265017668" min="0" title="Green gain" readonly>
+    <input id="gainB" class="cal-input" type="number" step="0.01" value="3.10" min="0" title="Blue gain" readonly>
+    <input id="dR"    class="cal-input" type="number" step="1"    value="9"    title="R_D (subtract from R)" readonly>
+    <input id="dG"    class="cal-input" type="number" step="1"    value="20"   title="G_D (subtract from G)" readonly>
+    <input id="dB"    class="cal-input" type="number" step="1"    value="13"   title="B_D (subtract from B)" readonly>
+    <span class="cal-badge" id="calBadge" title="Offset view uses these values">offset: on</span>
+  </div>
+
+  <div class="toolbar-spacer"></div>
+  <button id="scaleBtn" class="sm">2×</button>
+  <button id="saveBtn" class="sm">&#x1F4BE; Save frame</button>
+</div>
+
+<div class="split" id="mainArea">
+  <div class="cam-col">
+    <div class="dual-cam">
+      <div>
+        <div class="canvas-wrap">
+          <canvas id="cam" width="160" height="120"></canvas>
+          <canvas id="overlay" width="160" height="120" style="width:320px;height:240px;"></canvas>
+          <div class="fps-overlay" id="fpsLabel">-- fps</div>
+          <div class="err-overlay" id="errOverlay">err: &mdash;</div>
+        </div>
+        <div class="cam-caption">Raw</div>
+      </div>
+
+      <div>
+        <div class="canvas-wrap">
+          <canvas id="camOffset" width="160" height="120"></canvas>
+        </div>
+        <div class="cam-caption">Offset (PC)</div>
+      </div>
+    </div>
+    <div class="stats">
+      <div class="stat">Frames <span id="frameCount">0</span></div>
+      <div class="stat">Size <span id="sizeLabel">160&times;120</span></div>
+      <div class="stat">B/frame <span id="bytesLabel">38400</span></div>
+    </div>
+    <div class="error-msg" id="errorHint" style="display:none;"></div>
+
+    <div class="marker-panel" style="width:100%;">
+      <div class="marker-panel-header">
+        <span class="marker-panel-title">Measurement Zones</span>
+        <button id="placeModeBtn" class="sm">&#xFF0B; Place</button>
+        <button id="addMarkerBtn" class="sm">&#xFF0B; Add</button>
+      </div>
+      <div class="marker-list" id="markerList"></div>
+      <div class="marker-hint" id="markerHint">No zones added yet.</div>
+    </div>
+  </div>
+
+  <div class="mon-col">
+    <div class="mon-header">
+      <span class="mon-title">Serial Monitor</span>
+      <span class="mon-badge" id="lineCountBadge">0 lines</span>
+      <button id="autoScrollBtn" class="sm active-dim">&#x2193; Auto</button>
+      <button id="clearBtn" class="sm">Clear</button>
+    </div>
+
+    <div class="filter-bar">
+      <span>Filter:</span>
+      <button class="filter-btn active" data-tag="ALL">ALL</button>
+      <button class="filter-btn" data-tag="RES">[RES]</button>
+      <button class="filter-btn" data-tag="CLS">[CLS]</button>
+      <button class="filter-btn" data-tag="PIX">[PIX]</button>
+      <button class="filter-btn" data-tag="SIN">[SIN]</button>
+      <button class="filter-btn" data-tag="SOUT">[SOUT]</button>
+      <button class="filter-btn" data-tag="UNTAGGED">Other</button>
+    </div>
+
+    <div class="metrics-panel" id="metricsPanel">
+      <div class="metrics-header">Live Metrics <span style="font-weight:400;color:var(--text-faint);font-size:9px;letter-spacing:0">(from [RES] lines)</span></div>
+      <div class="metrics-grid" id="metricsGrid">
+        <div class="metric-chip" id="mc-mode"><span class="mk">mode</span><span class="mv" id="mv-mode">—</span></div>
+        <div class="metric-chip" id="mc-feat"><span class="mk">feat</span><span class="mv" id="mv-feat">—</span></div>
+        <div class="metric-chip" id="mc-com"><span class="mk">com</span><span class="mv" id="mv-com">—</span></div>
+        <div class="metric-chip" id="mc-blk"><span class="mk">blk</span><span class="mv" id="mv-blk">—</span></div>
+        <div class="metric-chip" id="mc-sil"><span class="mk">sil</span><span class="mv" id="mv-sil">—</span></div>
+        <div class="metric-chip" id="mc-red"><span class="mk">red</span><span class="mv" id="mv-red">—</span></div>
+        <div class="metric-chip" id="mc-gL"><span class="mk">gL</span><span class="mv" id="mv-gL">—</span></div>
+        <div class="metric-chip" id="mc-gR"><span class="mk">gR</span><span class="mv" id="mv-gR">—</span></div>
+        <div class="metric-chip" id="mc-ang"><span class="mk">angle</span><span class="mv" id="mv-ang">—</span></div>
+        <div class="metric-chip" id="mc-samples"><span class="mk">samples</span><span class="mv" id="mv-samples">—</span></div>
+      </div>
+    </div>
+
+    <div class="mon-log" id="monLog"><div class="log-empty">Waiting for data&hellip;</div></div>
+    <div class="mon-send">
+      <input id="sendInput" type="text" placeholder="Send text &rarr; Enter" autocomplete="off">
+      <button id="sendBtn" class="sm">Send</button>
+      <button id="sendNlBtn" class="icon-btn" title="Send with newline">&#x21B5;</button>
+    </div>
+  </div>
+</div>
+
+<script>
+'use strict';
+
+// ── DOM ───────────────────────────────────────────────────────────────────────
+const canvas         = document.getElementById('cam');
+const ctx            = canvas.getContext('2d');
+const overlay        = document.getElementById('overlay');
+const octx           = overlay.getContext('2d');
+const offsetCanvas   = document.getElementById('camOffset');
+const offsetCtx      = offsetCanvas.getContext('2d');
+const connectBtn     = document.getElementById('connectBtn');
+const saveBtn        = document.getElementById('saveBtn');
+const scaleBtn       = document.getElementById('scaleBtn');
+const statusBadge    = document.getElementById('statusBadge');
+const fpsLabel       = document.getElementById('fpsLabel');
+const errOverlayEl   = document.getElementById('errOverlay');
+const frameCountEl   = document.getElementById('frameCount');
+const sizeLabel      = document.getElementById('sizeLabel');
+const bytesLabel     = document.getElementById('bytesLabel');
+const errorHint      = document.getElementById('errorHint');
+const monLog         = document.getElementById('monLog');
+const lineCountBadge = document.getElementById('lineCountBadge');
+const clearBtn       = document.getElementById('clearBtn');
+const autoScrollBtn  = document.getElementById('autoScrollBtn');
+const sendInput      = document.getElementById('sendInput');
+const sendBtn        = document.getElementById('sendBtn');
+const sendNlBtn      = document.getElementById('sendNlBtn');
+const addMarkerBtn   = document.getElementById('addMarkerBtn');
+const placeModeBtn   = document.getElementById('placeModeBtn');
+const markerListEl   = document.getElementById('markerList');
+const markerHint     = document.getElementById('markerHint');
+const gainREl        = document.getElementById('gainR');
+const gainGEl        = document.getElementById('gainG');
+const gainBEl        = document.getElementById('gainB');
+const dREl           = document.getElementById('dR');
+const dGEl           = document.getElementById('dG');
+const dBEl           = document.getElementById('dB');
+const calBadge       = document.getElementById('calBadge');
+
+// ── Serial ────────────────────────────────────────────────────────────────────
+let port = null, reader = null, writer = null, running = false;
+
+// ── Camera ────────────────────────────────────────────────────────────────────
+let scale = 2;
+let totalFrames = 0, fpsFrames = 0, lastFpsTime = performance.now();
+let imageData = ctx.createImageData(160, 120);
+let offsetImageData = offsetCtx.createImageData(160, 120);
+let pixBuf    = new Uint8Array(160 * 120 * 2); // grows only when needed
+
+canvas.style.width  = (160 * scale) + 'px';
+canvas.style.height = (120 * scale) + 'px';
+offsetCanvas.style.width  = (160 * scale) + 'px';
+offsetCanvas.style.height = (120 * scale) + 'px';
+
+// ── Calibration (hardcoded to match vision.cpp) ───────────────────────────────
+const calActive = true;
+const cal = {
+  // const float R_Gain = 1.98598130841;
+  // const float G_Gain = 2.25265017668;
+  // const float B_Gain = 4.0;
+  rGain: 1.98598130841,
+  gGain: 2.25265017668,
+  bGain: 3.1,
+  // const uint8_t R_D = 12.4 * 0.8;  -> 9 (truncate)
+  // const uint8_t G_D = 25.2 * 0.8;  -> 20 (truncate)
+  // const uint8_t B_D = 17.4 * 0.8;  -> 13 (truncate)
+  rD: 9,
+  gD: 20,
+  bD: 13
+};
+function clamp8(x) { return x < 0 ? 0 : x > 255 ? 255 : x | 0; }
+function updateCalBadge() {
+  if (!calActive) { calBadge.textContent = 'offset: off'; return; }
+  calBadge.textContent =
+    `offset: on  (RG ${cal.rGain.toFixed(2)}  GG ${cal.gGain.toFixed(2)}  BG ${cal.bGain.toFixed(2)}  ` +
+    `RD ${cal.rD|0}  GD ${cal.gD|0}  BD ${cal.bD|0})`;
+}
+updateCalBadge();
+
+// ── Log ───────────────────────────────────────────────────────────────────────
+let autoScroll   = true;
+let logLineCount = 0;
+let MAX_LINES    = 100;
+const dec        = new TextDecoder();
+const enc        = new TextEncoder();
+
+// ── Parser ────────────────────────────────────────────────────────────────────
+const MAGIC    = new Uint8Array([0xAA, 0x55, 0xBB, 0x44]);
+const META_LEN = 8;
+const ST_TEXT = 0, ST_MAGIC = 1, ST_META = 2, ST_PIXELS = 3;
+let   parserState = ST_TEXT, magicPos = 0;
+let   metaBuf = new Uint8Array(META_LEN), metaPos = 0;
+let   pixPos = 0, pixTotal = 0;
+let   frameW = 0, frameH = 0, frameErr = 0;
+
+// Text accumulator — fixed buffer, no per-byte allocation
+let txtBuf = new Uint8Array(256), txtLen = 0, txtTimer = 0;
+
+// ── Overlay dirty flag ────────────────────────────────────────────────────────
+let overlayDirty = true;
+const markDirty = () => { overlayDirty = true; };
+
+// ── No Web Serial fallback ────────────────────────────────────────────────────
+if (!navigator.serial) {
+  document.getElementById('mainArea').innerHTML =
+    '<div class="no-serial">Web Serial API not available.<br>Use <strong>Chrome</strong> or <strong>Edge</strong> on desktop.<br>Serve over HTTPS or localhost.</div>';
+  connectBtn.disabled = true;
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  MARKERS
+// ═════════════════════════════════════════════════════════════════════════════
+const ZONE_COLORS = ['#ff8800','#ff3366','#00ccff','#aaff00','#cc44ff'];
+let markers = [
+  { id:1, name:'Left sensor',  x:70, y:60, w:5, h:5, color:'#ff8800', visible:true },
+  { id:2, name:'Right sensor', x:90, y:60, w:5, h:5, color:'#ff8800', visible:true },
+];
+let nextId = 3, placeMode = false, placingWhich = null;
+
+function setPlaceMode(on) {
+  placeMode = on;
+  placeModeBtn.textContent       = on ? '\u2715 Cancel' : '\uff0b Place';
+  placeModeBtn.className         = on ? 'placing' : '';
+  overlay.style.cursor           = on ? 'crosshair' : 'default';
+  overlay.style.pointerEvents    = on ? 'auto' : 'none';
+}
+
+placeModeBtn.onclick = () => {
+  if (placeMode) { setPlaceMode(false); return; }
+  const sel = markers.find(m => m._selected) || markers[0];
+  placingWhich = sel ? sel.id : null;
+  setPlaceMode(true);
+};
+
+overlay.addEventListener('click', e => {
+  if (!placeMode) return;
+  const r  = overlay.getBoundingClientRect();
+  const cx = Math.round((e.clientX - r.left) * (canvas.width  / r.width));
+  const cy = Math.round((e.clientY - r.top)  * (canvas.height / r.height));
+  const m  = markers.find(m2 => m2.id === placingWhich);
+  if (m) { m.x = Math.max(0, cx - (m.w >> 1)); m.y = Math.max(0, cy - (m.h >> 1)); renderMarkerList(); markDirty(); }
+  setPlaceMode(false);
+});
+
+addMarkerBtn.onclick = () => {
+  markers.push({ id:nextId++, name:'Zone '+(markers.length+1), x:20, y:20, w:5, h:5,
+    color:ZONE_COLORS[markers.length % ZONE_COLORS.length], visible:true });
+  renderMarkerList(); markDirty();
+};
+
+const deleteMarker = id => { markers = markers.filter(m => m.id !== id); renderMarkerList(); markDirty(); };
+
+const escHtml = s => s.replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+function renderMarkerList() {
+  markerListEl.innerHTML = '';
+  markerHint.style.display = markers.length ? 'none' : 'block';
+  for (const m of markers) {
+    const row = document.createElement('div');
+    row.className = 'marker-row' + (m._selected ? ' selected' : '');
+    row.innerHTML =
+      `<div class="marker-row-top">
+        <div class="marker-swatch" style="background:${m.color}"></div>
+        <input class="marker-name-input" value="${escHtml(m.name)}" placeholder="Name">
+        <button class="marker-vis-btn${m.visible?' visible':''}">${m.visible?'&#x1F441;':'&#x1F6AB;'}</button>
+        <button class="marker-del-btn">&times;</button>
+       </div>
+       <div class="marker-fields">
+        <div class="marker-field"><label>X</label><input type="number" class="mf-x" value="${m.x}" min="0" max="4095"></div>
+        <div class="marker-field"><label>Y</label><input type="number" class="mf-y" value="${m.y}" min="0" max="4095"></div>
+        <div class="marker-field"><label>W</label><input type="number" class="mf-w" value="${m.w}" min="1" max="4095"></div>
+        <div class="marker-field"><label>H</label><input type="number" class="mf-h" value="${m.h}" min="1" max="4095"></div>
+       </div>`;
+    row.querySelector('.marker-name-input').oninput = e => { m.name = e.target.value; markDirty(); };
+    row.querySelector('.marker-vis-btn').onclick     = () => { m.visible = !m.visible; renderMarkerList(); markDirty(); };
+    row.querySelector('.marker-del-btn').onclick     = () => deleteMarker(m.id);
+    for (const [key, cls] of [['x','.mf-x'],['y','.mf-y'],['w','.mf-w'],['h','.mf-h']]) {
+      row.querySelector(cls).oninput = e => { const v = e.target.value|0; if (v >= 0) { m[key] = v; markDirty(); } };
+    }
+    row.addEventListener('mousedown', e => {
+      if (e.target.tagName === 'BUTTON' || e.target.tagName === 'INPUT') return;
+      markers.forEach(mm => mm._selected = false);
+      m._selected = true; placingWhich = m.id; renderMarkerList();
+    });
+    markerListEl.appendChild(row);
+  }
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  OVERLAY  (skipped entirely when not dirty)
+// ═════════════════════════════════════════════════════════════════════════════
+function drawOverlay() {
+  if (!overlayDirty) return;
+  overlayDirty = false;
+  octx.clearRect(0, 0, overlay.width, overlay.height);
+  for (const { visible, x, y, w, h, color } of markers) {
+    if (!visible) continue;
+    octx.fillStyle = 'rgba(255,255,255,0.12)';
+    octx.fillRect(x, y, w, h);
+    octx.strokeStyle = color; octx.lineWidth = 1;
+    octx.strokeRect(x+.5, y+.5, w-1, h-1);
+    const t = Math.min(4, (Math.min(w, h) / 3) | 0);
+    octx.beginPath();
+    octx.moveTo(x+.5,     y+t+.5);  octx.lineTo(x+.5,   y+.5);   octx.lineTo(x+t+.5,   y+.5);
+    octx.moveTo(x+w-t-.5, y+.5);    octx.lineTo(x+w-.5, y+.5);   octx.lineTo(x+w-.5,   y+t+.5);
+    octx.moveTo(x+.5,     y+h-t-.5);octx.lineTo(x+.5,   y+h-.5); octx.lineTo(x+t+.5,   y+h-.5);
+    octx.moveTo(x+w-t-.5, y+h-.5);  octx.lineTo(x+w-.5, y+h-.5); octx.lineTo(x+w-.5,   y+h-t-.5);
+    octx.stroke();
+  }
+}
+
+function syncOverlaySize(w, h) {
+  overlay.width = w; overlay.height = h;
+  overlay.style.width  = canvas.style.width;
+  overlay.style.height = canvas.style.height;
+  markDirty();
+}
+
+function syncOffsetSize(w, h) {
+  offsetCanvas.width = w; offsetCanvas.height = h;
+  offsetCanvas.style.width  = canvas.style.width;
+  offsetCanvas.style.height = canvas.style.height;
+  offsetImageData = offsetCtx.createImageData(w, h);
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  LOG
+// ═════════════════════════════════════════════════════════════════════════════
+const pad2 = n => String(n).padStart(2,'0');
+function tsNow() {
+  const d = new Date();
+  return pad2(d.getHours())+':'+pad2(d.getMinutes())+':'+pad2(d.getSeconds())+'.'+String(d.getMilliseconds()).padStart(3,'0');
+}
+function classify(t) {
+  const l = t.toLowerCase();
+  if (/\b(error|err|fail|assert|abort|panic)\b/.test(l)) return 'err';
+  if (/\b(warn|warning|caution)\b/.test(l)) return 'warn';
+  if (/\b(info|init|boot|ready|ok)\b/.test(l)) return 'info';
+  return '';
+}
+// ── Serial filter ─────────────────────────────────────────────────────────────
+// Known tag prefixes produced by serial_print.h on Xiao.
+const KNOWN_TAGS = ['[RES]', '[CLS]', '[PIX]', '[SIN]', '[SOUT]'];
+let activeFilter = 'ALL';   // 'ALL' | '[RES]' | '[CLS]' | ... | 'UNTAGGED'
+
+function lineTag(text) {
+  for (const t of KNOWN_TAGS) if (text.startsWith(t)) return t;
+  return 'UNTAGGED';
+}
+
+function lineVisible(text) {
+  if (activeFilter === 'ALL') return true;
+  if (activeFilter === 'UNTAGGED') return lineTag(text) === 'UNTAGGED';
+  return text.startsWith(activeFilter);
+}
+
+// Wire filter buttons
+document.querySelectorAll('.filter-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    activeFilter = btn.dataset.tag;
+    // Re-apply visibility to all existing log lines
+    monLog.querySelectorAll('.log-line').forEach(div => {
+      div.style.display = lineVisible(div._rawText || '') ? '' : 'none';
+    });
+    if (autoScroll) monLog.scrollTop = monLog.scrollHeight;
+  });
+});
+
+// ── Live metrics ──────────────────────────────────────────────────────────────
+// Parses key=value pairs out of [RES] lines and updates the metric chips.
+// Supports floats, ints, and negative numbers.
+const MODE_NAMES = { '0':'LINE', '1':'EVAC', '2':'NOGI', '3':'GAP' };
+
+function parseResLine(text) {
+  // Strip the [RES] prefix
+  const body = text.startsWith('[RES]') ? text.slice(5).trim() : text;
+  const kv = {};
+  for (const m of body.matchAll(/([\w]+)=([-\d.]+)/g)) kv[m[1]] = m[2];
+  return kv;
+}
+
+function setMetric(id, val, show) {
+  const chip = document.getElementById('mc-' + id);
+  const mv   = document.getElementById('mv-' + id);
+  if (!chip || !mv) return;
+  chip.style.display = show ? '' : 'none';
+  mv.textContent = val;
+  chip.classList.add('fresh');
+  setTimeout(() => chip.classList.remove('fresh'), 600);
+}
+
+function updateMetrics(kv) {
+  const has = k => k in kv;
+  if (has('mode')) setMetric('mode', (MODE_NAMES[kv.mode] || kv.mode) + ' (' + kv.mode + ')', true);
+  if (has('feat')) setMetric('feat', kv.feat, true);
+  if (has('com'))  setMetric('com',  parseFloat(kv.com).toFixed(1), true);
+  if (has('blk'))  setMetric('blk',  kv.blk, true);
+  if (has('sil'))  setMetric('sil',  kv.sil, true);
+  if (has('red'))  setMetric('red',  kv.red, true);
+  if (has('gL'))   setMetric('gL',   kv.gL,  true);
+  if (has('gR'))   setMetric('gR',   kv.gR,  true);
+  if (has('ang'))  setMetric('ang',  parseFloat(kv.ang).toFixed(1) + '°', true);
+  if (has('samples')) setMetric('samples', kv.samples, true);
+  // Hide chips not present in this mode's output
+  const present = new Set(Object.keys(kv));
+  for (const k of ['com','blk','sil','red','gL','gR','ang','samples']) {
+    if (!present.has(k)) document.getElementById('mc-' + k).style.display = 'none';
+  }
+}
+
+function appendLine(text) {
+  // Remove "Waiting…" placeholder on first line
+  if (monLog.firstChild && monLog.firstChild.classList && monLog.firstChild.classList.contains('log-empty'))
+    monLog.removeChild(monLog.firstChild);
+  // Drop oldest lines
+  while (logLineCount >= MAX_LINES && monLog.firstChild)
+    { monLog.removeChild(monLog.firstChild); logLineCount--; }
+
+  const div = document.createElement('div');
+  div.className = 'log-line ' + classify(text);
+  div._rawText  = text;   // stash for filter re-apply
+  const ts = document.createElement('span');
+  ts.className = 'ts'; ts.textContent = tsNow();
+  div.appendChild(ts);
+  div.appendChild(document.createTextNode(text));
+  div.style.display = lineVisible(text) ? '' : 'none';
+  monLog.appendChild(div);
+  logLineCount++;
+  lineCountBadge.textContent = logLineCount + (logLineCount !== 1 ? ' lines' : ' line');
+  if (autoScroll) monLog.scrollTop = monLog.scrollHeight;
+
+  // Update metrics panel from [RES] lines
+  if (text.startsWith('[RES]')) updateMetrics(parseResLine(text));
+}
+
+autoScrollBtn.onclick = () => {
+  autoScroll = !autoScroll;
+  autoScrollBtn.className   = autoScroll ? 'active-dim' : '';
+  autoScrollBtn.textContent = autoScroll ? '\u2193 Auto' : '\u2193 Off';
+  if (autoScroll) monLog.scrollTop = monLog.scrollHeight;
+};
+clearBtn.onclick = () => {
+  monLog.innerHTML = '<div class="log-empty">Waiting for data\u2026</div>';
+  logLineCount = 0;
+  lineCountBadge.textContent = '0 lines';
+  resetMetrics();
+};
+
+function resetMetrics() {
+  for (const k of ['mode','feat','com','blk','sil','red','gL','gR','ang','samples']) {
+    const mv = document.getElementById('mv-' + k);
+    if (mv) mv.textContent = '\u2014';
+    const chip = document.getElementById('mc-' + k);
+    if (chip) { chip.classList.remove('fresh'); chip.style.display = ''; }
+  }
+}
+
+// ── Send ──────────────────────────────────────────────────────────────────────
+async function sendText(nl) {
+  if (!writer) { appendLine('[send error: not connected]'); return; }
+  const txt = sendInput.value;
+  if (!txt && !nl) return;
+  try {
+    await writer.write(enc.encode(txt + (nl ? '\n' : '')));
+    appendLine('\u2192 ' + txt + (nl ? '\\n' : ''));
+    sendInput.value = '';
+  } catch(e) { appendLine('[send error: ' + e.message + ']'); }
+}
+sendBtn.onclick   = () => sendText(false);
+sendNlBtn.onclick = () => sendText(true);
+sendInput.addEventListener('keydown', e => { if (e.key === 'Enter') sendText(true); });
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  CONNECT
+// ═════════════════════════════════════════════════════════════════════════════
+connectBtn.onclick = async () => {
+  if (running) { await disconnect(); return; }
+  try {
+    // Auto-select if there's exactly one already-granted port, else show picker
+    const ports = await navigator.serial.getPorts();
+    port = ports.length === 1 ? ports[0] : await navigator.serial.requestPort();
+    await port.open({ baudRate: document.getElementById('baud').value | 0 });
+    running = true;
+    try { writer = port.writable.getWriter(); } catch { writer = null; }
+    connectBtn.textContent = 'Disconnect'; connectBtn.classList.add('active'); connectBtn.classList.remove('primary');
+    setStatus('connected','Connected'); errorHint.style.display = 'none';
+    appendLine('[connected at ' + document.getElementById('baud').value + ' baud]');
+    readLoop();
+  } catch(e) { setStatus('error','Error'); showError(e.message); }
+};
+async function disconnect() {
+  running = false;
+  if (reader) { try { await reader.cancel(); } catch {} reader = null; }
+  if (writer) { try { writer.releaseLock(); } catch {} writer = null; }
+  if (port)   { try { await port.close();   } catch {} port   = null; }
+  connectBtn.textContent = 'Connect'; connectBtn.classList.remove('active'); connectBtn.classList.add('primary');
+  setStatus('disconnected','Disconnected'); appendLine('[disconnected]');
+}
+const setStatus  = (cls,t) => { statusBadge.className = 'status '+cls; statusBadge.textContent = t; };
+const showError  = msg     => { errorHint.style.display = 'block'; errorHint.textContent = msg; };
+
+scaleBtn.onclick = () => {
+  scale = scale===1 ? 2 : scale===2 ? 4 : 1;
+  canvas.style.width   = (canvas.width  * scale)+'px';
+  canvas.style.height  = (canvas.height * scale)+'px';
+  overlay.style.width  = canvas.style.width;
+  overlay.style.height = canvas.style.height;
+  scaleBtn.textContent = scale+'x';
+  markDirty();
+};
+
+saveBtn.onclick = () => {
+  const tmp = document.createElement('canvas');
+  tmp.width = canvas.width; tmp.height = canvas.height;
+  const tc = tmp.getContext('2d');
+  tc.drawImage(canvas, 0, 0); tc.drawImage(overlay, 0, 0);
+  const a = document.createElement('a');
+  a.download = 'esp32_'+Date.now()+'.png'; a.href = tmp.toDataURL(); a.click();
+};
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  TEXT ACCUMULATOR
+// ═════════════════════════════════════════════════════════════════════════════
+function flushTxt() {
+  if (!txtLen) return;
+  const line = dec.decode(txtBuf.subarray(0, txtLen)).trim();
+  txtLen = 0;
+  if (line) appendLine(line);
+}
+function emitTextByte(b) {
+  if (b === 0x0D) return;
+  if (b === 0x0A) { clearTimeout(txtTimer); txtTimer = 0; flushTxt(); return; }
+  if (b === 0x09 || (b >= 0x20 && b <= 0x7E)) {
+    if (txtLen < 256) { txtBuf[txtLen++] = b; }
+    else { txtLen = 0; return; }
+    clearTimeout(txtTimer);
+    txtTimer = setTimeout(() => { txtLen = 0; txtTimer = 0; }, 200);
+  } else { clearTimeout(txtTimer); txtTimer = 0; txtLen = 0; }
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  BINARY PARSER  — bulk chunk processing, no per-byte allocation
+// ═════════════════════════════════════════════════════════════════════════════
+function processChunk(chunk) {
+  let i = 0;
+  const len = chunk.length;
+  while (i < len) {
+    switch (parserState) {
+
+      case ST_TEXT: {
+        let j = i;
+        while (j < len && chunk[j] !== MAGIC[0]) j++;
+        for (let k = i; k < j; k++) emitTextByte(chunk[k]);
+        i = j;
+        if (i < len) { magicPos = 1; parserState = ST_MAGIC; i++; }
+        break;
+      }
+
+      case ST_MAGIC: {
+        const b = chunk[i++];
+        if (b === MAGIC[magicPos]) {
+          if (++magicPos === MAGIC.length) { metaPos = 0; parserState = ST_META; }
+        } else {
+          for (let k = 0; k < magicPos; k++) emitTextByte(MAGIC[k]);
+          magicPos = 0; parserState = ST_TEXT; emitTextByte(b);
+        }
+        break;
+      }
+
+      case ST_META: {
+        const avail = Math.min(META_LEN - metaPos, len - i);
+        metaBuf.set(chunk.subarray(i, i + avail), metaPos);
+        metaPos += avail; i += avail;
+        if (metaPos === META_LEN) {
+          frameW = metaBuf[0] | (metaBuf[1] << 8);
+          frameH = metaBuf[2] | (metaBuf[3] << 8);
+          let e  = metaBuf[4] | (metaBuf[5]<<8) | (metaBuf[6]<<16) | (metaBuf[7]<<24);
+          frameErr = (e & 0x80000000) ? e - 0x100000000 : e;
+          pixTotal = frameW * frameH * 2;
+          if (pixTotal > 0 && frameW < 4096 && frameH < 4096) {
+            if (pixBuf.length < pixTotal) pixBuf = new Uint8Array(pixTotal);
+            pixPos = 0; parserState = ST_PIXELS;
+          } else { parserState = ST_TEXT; }
+        }
+        break;
+      }
+
+      case ST_PIXELS: {
+        const avail = Math.min(pixTotal - pixPos, len - i);
+        pixBuf.set(chunk.subarray(i, i + avail), pixPos);
+        pixPos += avail; i += avail;
+        if (pixPos === pixTotal) { renderFrame(); parserState = ST_TEXT; }
+        break;
+      }
+    }
+  }
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  RENDER
+// ═════════════════════════════════════════════════════════════════════════════
+function renderFrame() {
+  const w = frameW, h = frameH;
+  if (w !== canvas.width || h !== canvas.height) {
+    canvas.width = w; canvas.height = h;
+    canvas.style.width  = (w * scale)+'px'; canvas.style.height = (h * scale)+'px';
+    imageData = ctx.createImageData(w, h);
+    sizeLabel.textContent  = w+'\xd7'+h;
+    bytesLabel.textContent = w * h * 2;
+    syncOverlaySize(w, h);
+    syncOffsetSize(w, h);
+  }
+  const data = imageData.data, n = w * h;
+  const odata = offsetImageData.data;
+  for (let i = 0; i < n; i++) {
+    const px = (pixBuf[i*2] << 8) | pixBuf[i*2+1];
+    const j  = i * 4;
+    const r   = ((px >> 11) & 0x1F) << 3;
+    const g   = ((px >>  5) & 0x3F) << 2;
+    const b   =  (px        & 0x1F) << 3;
+    data[j]   = r;
+    data[j+1] = g;
+    data[j+2] = b;
+    data[j+3] = 255;
+
+    // Offset view computed on PC, matching vision.cpp trend:
+    // calR = clamp( (r - R_D) * R_Gain ), same for G/B
+    if (calActive) {
+      odata[j]   = clamp8((r - cal.rD) * cal.rGain);
+      odata[j+1] = clamp8((g - cal.gD) * cal.gGain);
+      odata[j+2] = clamp8((b - cal.bD) * cal.bGain);
+    } else {
+      odata[j] = 0; odata[j+1] = 0; odata[j+2] = 0;
+    }
+    odata[j+3] = 255;
+  }
+  ctx.putImageData(imageData, 0, 0);
+  offsetCtx.putImageData(offsetImageData, 0, 0);
+  drawOverlay(); // skips if not dirty
+
+  frameCountEl.textContent  = ++totalFrames;
+  errOverlayEl.textContent  = 'err: ' + frameErr;
+  fpsFrames++;
+  const now = performance.now(), el = now - lastFpsTime;
+  if (el >= 1000) {
+    fpsLabel.textContent = ((fpsFrames / el * 1000) | 0) + ' fps';
+    fpsFrames = 0; lastFpsTime = now;
+  }
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  READ LOOP
+// ═════════════════════════════════════════════════════════════════════════════
+async function readLoop() {
+  reader = port.readable.getReader();
+  try {
+    while (running) {
+      const { value, done } = await reader.read();
+      if (done || !value) break;
+      processChunk(value);
+    }
+  } catch { if (running) await disconnect(); }
+  finally { reader = null; }
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+renderMarkerList();
+syncOverlaySize(160, 120);
+syncOffsetSize(160, 120);
+</script>
+</body>
+</html>

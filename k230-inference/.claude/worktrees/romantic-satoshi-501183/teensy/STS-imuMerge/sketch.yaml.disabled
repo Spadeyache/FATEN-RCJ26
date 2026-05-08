@@ -1,0 +1,19 @@
+profiles:
+  profile-1774120748317:
+    fqbn: teensy:avr:teensy41:usb=serial,speed=600,opt=o2std,keys=en-us
+    platforms:
+      - platform: teensy:avr (1.60.0)
+        platform_index_url: https://www.pjrc.com/teensy/package_teensy_index.json
+    libraries:
+      - dir: C:\Users\magic\Documents\Arduino\libraries\I2Cdev
+      - dir: C:\Users\magic\Documents\Arduino\libraries\MPU6050
+      - Madgwick (1.2.0)
+      - FTServo (2.0.0)
+    programmer: ""
+    port_config:
+      baudrate: "115200"
+      lineEnding: "\r\n"
+      bits: "8"
+      parity: none
+      stop_bits: "1"
+    port: COM14

@@ -1,0 +1,83 @@
+# K230D YOLOv8n Pipeline - Git Ignore
+
+# Dataset directories
+datasets/
+test_images/
+
+# Model outputs
+models/*.pt
+models/*.onnx
+output/*.kmodel
+output/*.py
+
+# Training runs
+runs/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Environment
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Docker
+.docker/
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Configuration (keep examples)
+workspace/data.yaml
+
+# Compiled files
+*.pyc
+*.pyo
+
+# OS
+Thumbs.db
+.DS_Store
+
+# nncase temporary files
+tmp/
+dump/
+
+# Training artifacts
+wandb/
+mlruns/
+
+# Cache
+.cache/
+*.cache
+
+# Test outputs
+test_output/

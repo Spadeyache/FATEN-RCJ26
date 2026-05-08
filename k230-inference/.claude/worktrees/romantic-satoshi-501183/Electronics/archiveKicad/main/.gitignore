@@ -1,0 +1,93 @@
+# KiCad .gitignore for team collaboration
+# =========================================
+
+# Auto-save and temporary files
+#auto_saved_files#
+*.autosave
+*-save.kicad_pcb
+*-save.kicad_sch
+*.bak
+*.bck
+*~
+
+# Lock files
+*.lck
+~*.lck
+
+# Backup directories
+*-backups/
+*.bak.*/
+
+# Footprint cache (regenerated automatically)
+fp-info-cache
+
+# Personal project settings (not shared with team)
+*.kicad_prl
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Gerber and fabrication outputs (optional - uncomment if not sharing)
+# gerbers/
+# *.zip
+# *.gbr
+# *.drl
+# *-dxf.zip
+
+# Bill of Materials exports (optional - uncomment if regenerated)
+# *.csv
+# *.xlsx
+# BOM*.pdf
+
+# 3D cache
+*.wrl.cache/
+*.step.cache/
+
+# Python bytecode (if using KiCad Python scripts)
+__pycache__/
+*.pyc
+*.pyo
+
+# Netlist files (regenerated)
+*.net
+
+# Rescue library (keep commented if you want to track these)
+# *-rescue.lib
+# *-rescue.dcm
+# *-rescue.kicad_sym
+
+# Plot and export files
+*.ps
+*.pdf
+*.svg
+*.plt
+
+# Simulation files
+*.cir
+
+# =========================================
+# EasyEDA specific files
+# =========================================
+
+# EasyEDA backup files
+*.json~
+*-backup-*.json
+*.eprj~
+*_Backup_*
+
+# EasyEDA auto-save files
+*.auto
+
+# EasyEDA cache and temporary files
+.easyeda/
+*.tmp
+
+# EasyEDA Gerber and fabrication outputs
+Gerber_*.zip
+PCB_*.zip
+
+# EasyEDA BOM exports
+BOM_*.csv
+BOM_*.xlsx

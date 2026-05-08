@@ -54,7 +54,7 @@ k230dev-yolo/
 │   ├── data.yaml.example       # Dataset configuration template
 │   ├── requirements-train.txt  # Training dependencies
 │   └── requirements-convert.txt # Conversion dependencies
-├── datasets/                   # Your training datasets
+├── datasets/                   # Your training datasets (`organize_ir_to_IRmy_dataset.py` sorts flat exports; see §4)
 ├── models/                     # Exported models (.pt, .onnx)
 ├── output/                     # Final .kmodel files
 ├── runs/                       # Training runs
@@ -83,7 +83,7 @@ docker run --rm --gpus all nvidia/cuda:12.1.0-base-ubuntu22.04 nvidia-smi
 
 ```bash
 # Clone or navigate to project
-cd k230dev-yolo
+cd k230-training
 
 # Create necessary directories
 mkdir -p datasets models output runs test_images
@@ -107,35 +107,44 @@ docker compose build convert --no-cache
 
 ### 4. Prepare Your Dataset
 
-Organize your dataset in YOLO format:
+Use this **YOLO layout** under `datasets/` (same pattern as `my_dataset/`):
 
 ```
 datasets/
 └── my_dataset/
-    ├── images/
-    │   ├── train/
+    ├── train/
+    │   ├── images/
     │   │   ├── img1.jpg
     │   │   └── ...
-    │   └── val/
-    │       ├── img1.jpg
+    │   └── labels/
+    │       ├── img1.txt
     │       └── ...
-    └── labels/
-        ├── train/
-        │   ├── img1.txt
-        │   └── ...
-        └── val/
-            ├── img1.txt
-            └── ...
+    └── val/
+        ├── images/
+        └── labels/
 ```
 
-Update `workspace/data.yaml`:
+Optional `test/` with `images/` (and labels if you have them) is only needed for extra evaluation; Ultralytics training uses **train** and **val**.
+
+**Sorting a flat annotated export**
+
+Some exports arrive as sibling folders **`images/`** and **`labels/`** plus **`classes.txt`** (for example after unzipping `IR-*.zip`). Split them into the layout above:
+
+```bash
+# From repo root (Windows: py -3 …)
+python datasets/organize_ir_to_IRmy_dataset.py
+```
+
+Defaults read `datasets/IR-2026-05-07-18-52/` and write **`datasets/IRmy_dataset/`**. Useful flags: `--train-ratio`, `--seed`, `--force` (replace output), `--src` / `--out` paths.
+
+Update `workspace/data.yaml` **`train`** / **`val`** to the **image** folders (relative to **`path`**):
 
 ```yaml
-path: /datasets/my_dataset
-train: images/train
-val: images/val
+path: /datasets/my_dataset   # e.g. /datasets/IRmy_dataset after sorting
+train: train/images
+val: val/images
 
-nc: 2  # Number of classes
+nc: 2  # Match classes.txt / your label IDs
 names:
   0: class1
   1: class2
@@ -175,11 +184,11 @@ python train_yolov8n.py \
 ```bash
 # Still in training container
 python export_to_onnx.py \
-    /runs/my_model/weights/best.pt \
-    --output /models \
-    --img-height 480 \
-    --img-width 640 \
-    --opset 11
+  /runs/mymodel/weights/best.pt \
+  --output /models \
+  --img-height 480 \
+  --img-width 640 \
+  --opset 11
 ```
 
 **Output:** `/models/best_640x480.onnx` (or similar, based on your resolution)
@@ -327,7 +336,7 @@ python train_yolov8n.py \
 **High-Quality Quantization:**
 ```bash
 python convert_to_kmodel.py model.onnx \
-    --calib-data /datasets/my_dataset/images/val \
+    --calib-data /datasets/my_dataset/val/images \
     --num-samples 200  # More samples = better accuracy
 ```
 
