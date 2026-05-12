@@ -170,6 +170,7 @@ def convert_to_kmodel(
     quant_type: str = "uint8",
     w_quant_type: str = "uint8",
     calib_method: str = "Kld",
+    finetune_weights_method: str = "UseSquant",
 ) -> str:
 
     print(f"\n{'='*60}")
@@ -192,6 +193,7 @@ def convert_to_kmodel(
     print(f"[CONFIG] Act quant type  : {quant_type}")
     print(f"[CONFIG] Weight quant    : {w_quant_type}")
     print(f"[CONFIG] Calib method    : {calib_method}")
+    print(f"[CONFIG] Weight finetune : {finetune_weights_method}")
     print(f"[CONFIG] Calib samples   : {num_calibration_samples}")
 
     verify_onnx_model(onnx_path, img_height, img_width)
@@ -245,14 +247,17 @@ def convert_to_kmodel(
         ptq_options.quant_type = quant_type
         ptq_options.w_quant_type = w_quant_type
         ptq_options.calibrate_method = calib_method
-        ptq_options.finetune_weights_method = "NoFineTuneWeights"
+        ptq_options.finetune_weights_method = finetune_weights_method
         ptq_options.samples_count = len(calibration_data)
 
         print(f"[COMPILE] ✓ PTQTensorOptions:")
-        print(f"[COMPILE]     quant_type       : {ptq_options.quant_type}")
-        print(f"[COMPILE]     w_quant_type     : {ptq_options.w_quant_type}")
-        print(f"[COMPILE]     calibrate_method : {ptq_options.calibrate_method}")
-        print(f"[COMPILE]     samples_count    : {ptq_options.samples_count}")
+        print(f"[COMPILE]     quant_type            : {ptq_options.quant_type}")
+        print(f"[COMPILE]     w_quant_type          : {ptq_options.w_quant_type}")
+        print(f"[COMPILE]     calibrate_method      : {ptq_options.calibrate_method}")
+        print(f"[COMPILE]     finetune_weights_method: {ptq_options.finetune_weights_method}")
+        print(f"[COMPILE]     samples_count         : {ptq_options.samples_count}")
+        if finetune_weights_method != "NoFineTuneWeights":
+            print(f"[COMPILE]     ⓘ  Weight finetuning enabled — compilation will take longer (1-5 min)")
 
         ptq_data = [[img] for img in calibration_data]
         print(f"\n[COMPILE] Calibration tensor check:")
@@ -325,6 +330,13 @@ def main():
     parser.add_argument(
         "--calib-method", type=str, default="Kld", choices=["Kld", "NoClip", "AbsMax"]
     )
+    parser.add_argument(
+        "--finetune-weights",
+        type=str,
+        default="UseSquant",
+        choices=["NoFineTuneWeights", "UseSquant", "UseAdaRound"],
+        help="Quant-aware weight refinement. UseSquant ≈ AdaRound — recovers accuracy lost to int8 quant.",
+    )
 
     args = parser.parse_args()
 
@@ -339,6 +351,7 @@ def main():
         quant_type=args.quant_type,
         w_quant_type=args.w_quant_type,
         calib_method=args.calib_method,
+        finetune_weights_method=args.finetune_weights,
     )
     print(f"\n✓ Done! kmodel ready at: {kmodel_path}\n")
 
