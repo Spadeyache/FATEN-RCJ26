@@ -269,7 +269,7 @@ def convert_to_kmodel(
         )
 
         ptq_options.set_tensor_data(ptq_data)
-        compile_options.quant_options = ptq_options
+        # compile_options.quant_options = ptq_options
         print(f"[COMPILE] ✓ Calibration data set")
 
         compiler = nncase.Compiler(compile_options)
@@ -282,8 +282,8 @@ def convert_to_kmodel(
         compiler.import_onnx(model_content, import_options)
         print(f"[COMPILE] ✓ ONNX imported")
 
-        compiler.use_ptq(ptq_options)
-        print(f"[COMPILE] ✓ PTQ applied")
+        # compiler.use_ptq(ptq_options)
+        # print(f"[COMPILE] ✓ PTQ applied")
 
         print(f"\n[COMPILE] Compiling... (this may take several minutes)")
         compiler.compile()

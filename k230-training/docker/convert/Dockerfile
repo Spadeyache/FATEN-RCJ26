@@ -43,6 +43,12 @@ RUN pip3 install --no-cache-dir \
 RUN find /root/.dotnet/shared/Microsoft.NETCore.App/ -maxdepth 1 -mindepth 1 -type d \
     -exec ln -sf /usr/lib/x86_64-linux-gnu/libstdc++.so.6 {}/libstdc++.so.6 \;
 
+# 4. nncase K230 simulator + plugin discoverable for the runtime
+#    (needed by test_kmodel.py / Simulator.run())
+ENV PATH="/usr/local/lib/python3.8/dist-packages:$PATH"
+ENV NNCASE_PLUGIN_PATH="/usr/local/lib/python3.8/dist-packages"
+RUN chmod +x /usr/local/lib/python3.8/dist-packages/nncase.simulator.k230.sc
+
 # 作業ディレクトリの設定
 WORKDIR /workspace
 RUN mkdir -p /workspace/models /workspace/output /workspace/calibration_data
