@@ -45,15 +45,14 @@ void initActions() {
     _HS45HB0.attach(HS45HB0_PIN, 1000, 2000);
     _HS45HB1.attach(HS45HB1_PIN, 1000, 2000);
 
-    grabARM(true); // Close gripper on boot
-
-    _HS45HB0.detach();
-    _HS45HB1.detach();
-
+    grabARM(false); // Open gripper on boot
+    
     krs.begin();
     krs.setSpd(KRS_ID, KRS_SPD);
 
     liftARM(11050);
+    _HS45HB0.detach();
+    _HS45HB1.detach();
 }
 
 // ---------------------------------------------------------------------------

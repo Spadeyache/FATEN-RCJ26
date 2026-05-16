@@ -170,6 +170,7 @@ void loop() {
                 xiao.send(XIAO_REG_MODE, XIAO_MODE_LINE);
                 delay(200);
                 cmdFilter.clear(); xiaoCommand = 0; disableGreen = true; _disableGreenStart = millis(); runLinePID();}
+            else if (xiaoCommand == 8) { runLinePID(); }  // ----------------------------------------------------------------------------GAP------------------------
             else                       { runLinePID(); } // no command → follow line
         }
         break;

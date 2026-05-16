@@ -16,20 +16,21 @@ public:
     uint8_t votesRed    = 0;
     uint8_t votesSilver = 0;
     uint8_t votesBlack = 0;
+    uint8_t votesNoLine = 0;
 
     CommandFilter() { clear(); }
 
     void clear() {
         for (int i = 0; i < FILTER_QUEUE_SIZE; i++) _queue[i] = 0;
         _head = 0;
-        votesUturn = votesLeft = votesRight = votesRed = votesSilver = votesBlack = 0;
+        votesUturn = votesLeft = votesRight = votesRed = votesSilver = votesBlack = votesNoLine = 0;
     }
 
     uint8_t update(uint8_t rawCmd) {
         _queue[_head] = rawCmd;
         _head = (_head + 1) % FILTER_QUEUE_SIZE;
 
-        votesUturn = votesLeft = votesRight = votesRed = votesSilver = votesBlack = 0;
+        votesUturn = votesLeft = votesRight = votesRed = votesSilver = votesBlack = votesNoLine = 0;
         for (int i = 0; i < FILTER_QUEUE_SIZE; i++) {
             switch (_queue[i]) {
                 case 1: votesUturn++; votesLeft++; votesRight++; break;
@@ -38,6 +39,8 @@ public:
                 case 4: votesRed++;    break;
                 case 5: votesSilver++; break;  // line-follow silver
                 case 6: votesBlack++;  break;  // line-follow black intersection
+                // we use 7 for annother ver of 6 so skip
+                case 8: votesNoLine++; break;  // no-line (XIAO sees zero black)
                 // case 7: votesSilver++; break;  // evac silver  → same silver bucket/threshold
                 // case 8: votesBlack++;  break;  // evac black   → same black  bucket/threshold
                 // case 9: votesBlack++;  break;  // NOGI intersect → same black bucket/threshold
@@ -60,6 +63,7 @@ public:
         // Black intersection only fires when no green is present (guard raised to <= 2)
         if (votesBlack >= FILTER_THRESHOLD_INTERSECTION && votesLeft <= 2 && votesRight <= 2) return 6;
         if (votesBlack >= 2 && votesLeft == 0 && votesRight == 0) return 7;
+        if (votesNoLine >= FILTER_THRESHOLD_NOLINE) return 8;
 
         return 0;
     }
