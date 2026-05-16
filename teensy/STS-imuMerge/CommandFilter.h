@@ -59,6 +59,7 @@ public:
 
         // Black intersection only fires when no green is present (guard raised to <= 2)
         if (votesBlack >= FILTER_THRESHOLD_INTERSECTION && votesLeft <= 2 && votesRight <= 2) return 6;
+        if (votesBlack >= 2 && votesLeft == 0 && votesRight == 0) return 7;
 
         return 0;
     }

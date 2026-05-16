@@ -95,10 +95,10 @@ enum XiaoMode : uint8_t {
 
 // --- CommandFilter ---
 #define FILTER_QUEUE_SIZE   15       // Rolling window length
-#define FILTER_THRESHOLD    4        // used to be 7 : Votes needed to confirm a command
-#define FILTER_THRESHOLD_RED 5
-#define FILTER_THRESHOLD_SILVER 4
-#define FILTER_THRESHOLD_INTERSECTION 4
+#define FILTER_THRESHOLD    4              // used to be 7 : Votes needed for left or right green  -- UTURN votes are hardcoded in CommandFilter.h
+#define FILTER_THRESHOLD_RED 5             //    counts to identify red
+#define FILTER_THRESHOLD_SILVER 4          //
+#define FILTER_THRESHOLD_INTERSECTION 6    //    counts to identify no green intersection (NGI) 
 
 // --- Evacuation Zone ---
 // #define EVAC_BEEP_ON_MS     20       // Buzzer on-time per beep

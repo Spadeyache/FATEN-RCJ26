@@ -95,7 +95,7 @@ void initComms() {
 
 // Call every loop iteration.
 // Parses all pending XIAO packets, then re-runs the vote filter every 20 ms.
-void updateComms(bool instantRun) {
+void updateComms(bool instantRun/*not 50Hz*/) {
 
     xiao.update();
     // Line error and gap angle are time-critical; update every loop.

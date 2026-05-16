@@ -100,47 +100,70 @@ void loop() {
             Serial.println("Green re-enabled");
         }
 
-        static unsigned long lastTouch = 0;
+        static unsigned long lastTouch = 0;    // ------ THOUCH -------------
         if(touchfront && millis() - lastTouch >= 20){
             Serial.println("touch - detected");
-            analogWrite(BUZZER_PIN, 80);
-            execForward(-70, 50);
-            executeTurn(-80.0f);
+            motor(0,0);
+            delay(800);
+            updateSensors();
+            if(touchfront){
+                execForward(-70, 50);
+                executeTurn(-80.0f, true);
+                cmdFilter.clear(); 
+                while(xiaoCommand != 6){
+                    updateComms();
+                    updateSensors();
+                    if(conduct0){
+                        analogWrite(BUZZER_PIN, 80);
+                        executeTurn(-20,true);
+                        execForward(80, 2);
+                    }
+                    analogWrite(BUZZER_PIN, 0);
+                    motor(100,7);
+                }
 
-
+            }
             lastTouch = millis();
             break;
         }
         
         if (!isBusyTurning) {
             // Priority: U-Turn > Intersection (L/R) > Red > Silver > PID
-            if      (xiaoCommand == 1) { doUTurn(); }
-            else if (xiaoCommand == 2 && !disableGreen) {
+            if      (xiaoCommand == 1) { doUTurn(); }                               // u turn
+            else if (xiaoCommand == 2 && !disableGreen) {                           // turn left
                 // analogWrite(BUZZER_PIN, 60); // stays on until handleTurnTick() finishes
                 execForward(70, 28); executeTurn(-90.0f);
                 disableGreen = true;
             }
-            else if (xiaoCommand == 3 && !disableGreen) {
+            else if (xiaoCommand == 3 && !disableGreen) {                                       // turn right
                 // analogWrite(BUZZER_PIN, 160); // stays on until handleTurnTick() finishes
                 execForward(70, 28); executeTurn(90.0f);
                 disableGreen = true;
             }
-            else if (xiaoCommand == 4) { robotState = STALLED_RED;  }
-            else if (xiaoCommand == 5) { enterEvacuationZone();     }
-            else if (xiaoCommand == 6) { motor(0,0); xiao.send(XIAO_REG_MODE, XIAO_MODE_NOGI); cmdFilter.clear(); delay(200); 
+            else if (xiaoCommand == 4) { robotState = STALLED_RED;  }  // red
+            else if (xiaoCommand == 5) { enterEvacuationZone();     }  // silver
+            else if (xiaoCommand == 6 || xiaoCommand == 7) { 
+                Serial.printf("CmdFilter votes | U:%u L:%u R:%u Red:%u Slv:%u Blk:%u | Cmd:%u Err:%.1f\n",
+                    cmdFilter.votesUturn, cmdFilter.votesLeft, cmdFilter.votesRight,
+                    cmdFilter.votesRed, cmdFilter.votesSilver, cmdFilter.votesBlack,
+                    xiaoCommand, xiaoLineError);
+
+                motor(0,0); xiao.send(XIAO_REG_MODE, XIAO_MODE_NOGI); cmdFilter.clear(); delay(200);  // no green intersection
                 for (int i = 0; i < 15; i++) {
                     updateComms(true);
                 }
+                Serial.printf("CmdFilter votes | Blk:%u", cmdFilter.votesBlack);
+
                 if(xiaoCommand == 6){
                     analogWrite(BUZZER_PIN, 80);// buzzer if intersection.
                     execForward(100,40);
                 }  else{
-                    execForward(-70, 35); // for now we just go back and go no intersection line follow.
+                    // execForward(-70, 35); // for now we just go back and go no intersection line follow.
                     //turn to the direction of 90 deg turn.
                 }
 
                 xiao.send(XIAO_REG_MODE, XIAO_MODE_LINE);
-                delay(2000);
+                delay(200);
                 cmdFilter.clear(); disableGreen = true; _disableGreenStart = millis(); runLinePID();} // i need to distinguish 90 and T.
             else                       { runLinePID(); } // no command → follow line
         }
@@ -174,13 +197,21 @@ void loop() {
 
     // Debug at ~10 Hz
     static unsigned long lastDebug = 0;
-    if (millis() - lastDebug >= 1000) {
-        Serial.printf("State:%d Cmd:%u Err:%.1f Busy:%d NoGrn:%d | U:%u L:%u R:%u Red:%u Slv:%u | K230:%s dets:%u\n",
-                      (int)robotState, xiaoCommand, xiaoLineError,
-                      (int)isBusyTurning, (int)disableGreen,
-                      cmdFilter.votesUturn, cmdFilter.votesLeft,
-                      cmdFilter.votesRight, cmdFilter.votesRed, cmdFilter.votesSilver,
-                      k230Running ? "RUN" : "IDL", detectionCount);
+    if (millis() - lastDebug >= 10) {
+        // Serial.printf("State:%d Cmd:%u Err:%.1f Busy:%d NoGrn:%d | U:%u L:%u R:%u Red:%u Slv:%u | K230:%s dets:%u\n",
+        //               (int)robotState, xiaoCommand, xiaoLineError,
+        //               (int)isBusyTurning, (int)disableGreen,
+        //               cmdFilter.votesUturn, cmdFilter.votesLeft,
+        //               cmdFilter.votesRight, cmdFilter.votesRed, cmdFilter.votesSilver,
+        //               k230Running ? "RUN" : "IDL", detectionCount);
+
+        Serial.printf("CmdFilter votes | U:%u L:%u R:%u Red:%u Slv:%u Blk:%u | Cmd:%u Err:%.1f\n",
+                      cmdFilter.votesUturn, cmdFilter.votesLeft, cmdFilter.votesRight,
+                      cmdFilter.votesRed, cmdFilter.votesSilver, cmdFilter.votesBlack,
+                      xiaoCommand, xiaoLineError);
+
+
+
         lastDebug = millis();
     }
 }

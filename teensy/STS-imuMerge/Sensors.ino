@@ -45,7 +45,7 @@ void updateSensors() {
 
     // HIGH(1) is OFF and LOW(0) is Touching 
     touchfront = !digitalRead(_touchfront);
-    conduct0 = !digitalRead(_conductPin0);
+    conduct0 = digitalRead(_conductPin0);
     conduct1 = !digitalRead(_conductPin1);
 }
 
