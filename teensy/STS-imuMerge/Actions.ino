@@ -1,5 +1,8 @@
 #include "globals.h"
 
+// Forward decl — defined in Comms.ino
+void updateComms(bool instantRun = false);
+
 // =============================================================================
 //  Actions.ino — High-level non-blocking manoeuvres + arm control
 //  Exposes: initActions()
@@ -9,7 +12,7 @@
 //           handleEvacuationZone()       — called each loop tick in EVACUATION_ZONE
 //           handleTurnTick()             — called each loop tick in EXECUTING_TURN
 //           grabARM(closed)
-//           liftARM(lift)               — blocking; only call from setup() or evac sequence
+//           liftARM(pos)                — blocking; KRS pos 3500–11500. Only call from setup() or evac sequence
 // =============================================================================
 
 // --- Hobby Servos (grab arm) ---
@@ -46,6 +49,11 @@ void initActions() {
 
     _HS45HB0.detach();
     _HS45HB1.detach();
+
+    krs.begin();
+    krs.setSpd(KRS_ID, KRS_SPD);
+
+    liftARM(11050);
 }
 
 // ---------------------------------------------------------------------------
@@ -70,7 +78,13 @@ void executeTurn(float angle, bool blocking = false) {
     robotState      = EXECUTING_TURN;
 
     if (blocking) {
-        while (millis() - _turnStart < _turnDuration) { /* spin-wait */ }
+        unsigned long lastComms = 0;
+        while (millis() - _turnStart < _turnDuration) {
+            if (millis() - lastComms >= 20) {
+                updateComms();
+                lastComms = millis();
+            }
+        }
         handleTurnTick(); // Finalise immediately
     }
 }
@@ -97,7 +111,7 @@ void doUTurn() {
 //                 true  → yaw-hold loop using IMU; corrects drift each tick
 //                         (requires IMU enabled in Sensors.ino)
 // ---------------------------------------------------------------------------
-void execForward(float speed, float distance_mm, bool usePID = false) {
+void execForward(float speed, float distance_mm, bool usePID = false, bool updateCmds = false) {
     // Scale duration by speed ratio so the same mm always gives the same distance
     unsigned long duration        = (unsigned long)fabsf(distance_mm * FORWARD_MS_PER_MM * MAX_MOTOR_SPEED / speed);
 
@@ -107,16 +121,32 @@ void execForward(float speed, float distance_mm, bool usePID = false) {
     if (!usePID) {
         // Open-loop: drive straight, wait, stop
         motor(speed, speed);
-        delay(fabsf(duration));
+        if (updateCmds) {
+            unsigned long start     = millis();
+            unsigned long lastComms = 0;
+            while (millis() - start < duration) {
+                if (millis() - lastComms >= 20) {
+                    updateComms();
+                    lastComms = millis();
+                }
+            }
+        } else {
+            delay(fabsf(duration));
+        }
         motor(0, 0);
 
     } else {
         // Yaw-hold PID: sample IMU every tick, correct left/right to stay straight
-        float         startYaw = yaw;
-        unsigned long start    = millis();
+        float         startYaw  = yaw;
+        unsigned long start     = millis();
+        unsigned long lastComms = 0;
 
         while (millis() - start < duration) {
             updateSensors(); // refresh yaw (no-op until IMU is enabled)
+            if (updateCmds && millis() - lastComms >= 20) {
+                updateComms();
+                lastComms = millis();
+            }
 
             float yawError   = yaw - startYaw;           // +ve = drifted right
             float correction = FORWARD_YAW_KP * yawError;
@@ -198,8 +228,8 @@ void grabARM(bool closed) {
 }
 
 // Blocking — only call during setup() or a controlled stop sequence.
-void liftARM(bool lift) {
-    krs.setPos(KRS_ID, lift ? 11050 : 4400);
+void liftARM(int pos) {
+    krs.setPos(KRS_ID, pos);
     delay(800);
     krs.setFree(KRS_ID);
 }

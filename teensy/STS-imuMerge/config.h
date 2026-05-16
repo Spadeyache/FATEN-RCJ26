@@ -46,6 +46,7 @@ enum XiaoMode : uint8_t {
 #define KRS_BAUD            115200UL
 #define KRS_TIMEOUT         400      // ms
 #define KRS_ID              1
+#define KRS_SPD             43       // 1-127, KRS setSpd value
 
 // --- Motor Speed Limits ---
 #define MAX_MOTOR_SPEED     100      // Absolute cap applied to all wheel commands

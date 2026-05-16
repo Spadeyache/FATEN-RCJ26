@@ -40,8 +40,8 @@ void enterEvacuationZone();
 void handleTurnTick();
 void handleEvacuationZone();
 void grabARM(bool closed);
-void liftARM(bool lift);
-void execForward(float speed, float distance_mm, bool usePID = false);
+void liftARM(int pos);
+void execForward(float speed, float distance_mm, bool usePID = false, bool updateCmds = false);
 
 // Mapping.ino
 void mappingInit(bool restart);
@@ -109,20 +109,25 @@ void loop() {
             if(touchfront){
                 execForward(-70, 50);
                 executeTurn(-80.0f, true);
-                cmdFilter.clear(); 
-                while(xiaoCommand != 6){
+                execForward(70, 2);
+                motor(0,0); xiao.send(XIAO_REG_MODE, XIAO_MODE_EVAC); delay(200);   // switch Xiao → evac silver/black detection  EVAC mode but its just looking if there is a black line()silver  is ignored
+                cmdFilter.clear();
+                while(xiaoCommand != 6 && xiaoCommand != 7){
                     updateComms();
                     updateSensors();
                     if(conduct0){
                         analogWrite(BUZZER_PIN, 80);
                         executeTurn(-20,true);
-                        execForward(80, 2);
+                        if(xiaoCommand == 6 || xiaoCommand == 7) {cmdFilter.clear(); lastTouch = millis(); break;}
+                        execForward(80, 2, false, true);
                     }
                     analogWrite(BUZZER_PIN, 0);
                     motor(100,7);
                 }
-
+                motor(0,0); xiao.send(XIAO_REG_MODE, XIAO_MODE_LINE); delay(200);   // restore line-follow mode
             }
+            execForward(70, 50);
+            cmdFilter.clear();
             lastTouch = millis();
             break;
         }
@@ -142,7 +147,7 @@ void loop() {
             }
             else if (xiaoCommand == 4) { robotState = STALLED_RED;  }  // red
             else if (xiaoCommand == 5) { enterEvacuationZone();     }  // silver
-            else if (xiaoCommand == 6 || xiaoCommand == 7) { 
+            else if ((xiaoCommand == 6 || xiaoCommand == 7) && !disableGreen) {
                 Serial.printf("CmdFilter votes | U:%u L:%u R:%u Red:%u Slv:%u Blk:%u | Cmd:%u Err:%.1f\n",
                     cmdFilter.votesUturn, cmdFilter.votesLeft, cmdFilter.votesRight,
                     cmdFilter.votesRed, cmdFilter.votesSilver, cmdFilter.votesBlack,
@@ -155,7 +160,7 @@ void loop() {
                 Serial.printf("CmdFilter votes | Blk:%u", cmdFilter.votesBlack);
 
                 if(xiaoCommand == 6){
-                    analogWrite(BUZZER_PIN, 80);// buzzer if intersection.
+                    // analogWrite(BUZZER_PIN, 80);// buzzer if intersection.
                     execForward(100,40);
                 }  else{
                     // execForward(-70, 35); // for now we just go back and go no intersection line follow.
@@ -164,7 +169,7 @@ void loop() {
 
                 xiao.send(XIAO_REG_MODE, XIAO_MODE_LINE);
                 delay(200);
-                cmdFilter.clear(); disableGreen = true; _disableGreenStart = millis(); runLinePID();} // i need to distinguish 90 and T.
+                cmdFilter.clear(); xiaoCommand = 0; disableGreen = true; _disableGreenStart = millis(); runLinePID();}
             else                       { runLinePID(); } // no command → follow line
         }
         break;
