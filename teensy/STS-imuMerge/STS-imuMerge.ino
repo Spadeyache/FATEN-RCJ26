@@ -211,10 +211,12 @@ void loop() {
         //               cmdFilter.votesRight, cmdFilter.votesRed, cmdFilter.votesSilver,
         //               k230Running ? "RUN" : "IDL", detectionCount);
 
-        Serial.printf("CmdFilter votes | U:%u L:%u R:%u Red:%u Slv:%u Blk:%u | Cmd:%u Err:%.1f\n",
-                      cmdFilter.votesUturn, cmdFilter.votesLeft, cmdFilter.votesRight,
-                      cmdFilter.votesRed, cmdFilter.votesSilver, cmdFilter.votesBlack,
-                      xiaoCommand, xiaoLineError);
+
+        
+        // Serial.printf("CmdFilter votes | U:%u L:%u R:%u Red:%u Slv:%u Blk:%u | Cmd:%u Err:%.1f\n",
+        //               cmdFilter.votesUturn, cmdFilter.votesLeft, cmdFilter.votesRight,
+        //               cmdFilter.votesRed, cmdFilter.votesSilver, cmdFilter.votesBlack,
+        //               xiaoCommand, xiaoLineError);
 
 
 

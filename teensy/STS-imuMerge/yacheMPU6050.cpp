@@ -101,10 +101,10 @@ FASTRUN void yacheMPU6050::update() {
     while (y >  180.0f) y -= 360.0f;
     while (y < -180.0f) y += 360.0f;
 
-    // Exponential moving average — tune IMU_EMA_ALPHA in config.h
-    _yaw   = IMU_EMA_ALPHA * y + (1.0f - IMU_EMA_ALPHA) * _yaw;
-    _pitch = IMU_EMA_ALPHA * p + (1.0f - IMU_EMA_ALPHA) * _pitch;
-    _roll  = IMU_EMA_ALPHA * r + (1.0f - IMU_EMA_ALPHA) * _roll;
+    // DMP already filters internally — no extra smoothing needed.
+    _yaw   = y;
+    _pitch = p;
+    _roll  = r;
 }
 
 void yacheMPU6050::applyOffsets() {
@@ -135,15 +135,16 @@ void yacheMPU6050::calibrate() {
                   ax_offset, ay_offset, az_offset);
     Serial.printf("    int16_t gx_offset = %d, gy_offset = %d, gz_offset = %d;\n",
                   gx_offset, gy_offset, gz_offset);
-    Serial.println("=== Final check means (ax should be ~16384; ay, az, gyros should be ~0) ===");
+    Serial.println("=== Final check means (az should be ~16384; ax, ay, gyros should be ~0) ===");
     Serial.printf("    ax=%d ay=%d az=%d | gx=%d gy=%d gz=%d\n",
                   mean_ax, mean_ay, mean_az, mean_gx, mean_gy, mean_gz);
 }
 
 void yacheMPU6050::runAutoCalibration() {
-    az_offset = (int16_t)(-mean_az / 8);
+    // Calibrate flat (Z-up): expect az ~= +16384 (gravity on Z), ax ~= 0, ay ~= 0.
+    ax_offset = (int16_t)(-mean_ax / 8);
     ay_offset = (int16_t)(-mean_ay / 8);
-    ax_offset = (int16_t)((16384 - mean_ax) / 8);
+    az_offset = (int16_t)((16384 - mean_az) / 8);
     gx_offset = (int16_t)(-mean_gx / 4);
     gy_offset = (int16_t)(-mean_gy / 4);
     gz_offset = (int16_t)(-mean_gz / 4);
@@ -152,9 +153,9 @@ void yacheMPU6050::runAutoCalibration() {
         int8_t ready = 0;
         applyOffsets();
         meansensors();
-        if (abs(mean_az)           <= acel_deadzone) ready++; else az_offset -= mean_az / acel_deadzone;
+        if (abs(mean_ax)           <= acel_deadzone) ready++; else ax_offset -= mean_ax / acel_deadzone;
         if (abs(mean_ay)           <= acel_deadzone) ready++; else ay_offset -= mean_ay / acel_deadzone;
-        if (abs(16384 - mean_ax)   <= acel_deadzone) ready++; else ax_offset += (16384 - mean_ax) / acel_deadzone;
+        if (abs(16384 - mean_az)   <= acel_deadzone) ready++; else az_offset += (16384 - mean_az) / acel_deadzone;
         if (abs(mean_gx)           <= giro_deadzone) ready++; else gx_offset -= mean_gx / (giro_deadzone + 1);
         if (abs(mean_gy)           <= giro_deadzone) ready++; else gy_offset -= mean_gy / (giro_deadzone + 1);
         if (abs(mean_gz)           <= giro_deadzone) ready++; else gz_offset -= mean_gz / (giro_deadzone + 1);

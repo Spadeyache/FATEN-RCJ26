@@ -34,8 +34,9 @@ private:
 
     // Hardcoded calibration offsets.
     // Run with CALIBRATE_IMU=1 to measure, then paste the printed values here.
-    int16_t ax_offset = 1775, ay_offset = 455,  az_offset = 1598;
-    int16_t gx_offset = 79,   gy_offset = 13,   gz_offset = -46;
+    int16_t ax_offset = 0, ay_offset = 0,  az_offset = 0;
+    int16_t gx_offset = -0,   gy_offset = -0,   gz_offset = 0;
+
 
     int32_t buffersize    = 1000;
     int16_t acel_deadzone = 8;

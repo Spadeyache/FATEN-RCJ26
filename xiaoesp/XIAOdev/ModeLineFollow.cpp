@@ -58,6 +58,10 @@ void modeLineFollowRun(camera_fb_t* fb, YacheEncodedSerial& teensy) {
     else if (greenRight > LF_GREEN_PixCOUNT_THRESHOLD)                                         featureId = FEAT_GREEN_RIGHT;
     else if (blackCount > LF_BLACK_PixCOUNT_THRESHOLD)                                      featureId = FEAT_BLACK_INTERSECT;
 
+    // No black at all → "no line"; overrides phantom green/u-turn from noise scanning around COM=midpoint.
+    // Red/silver still win below.
+    if (blackCount <= 5)                            featureId = FEAT_NO_LINE;
+
     if (redCount    > LF_RED_PixCOUNT_THRESHOLD)    featureId = FEAT_RED;
     if (silverCount > LF_SILVER_PixCOUNT_THRESHOLD) featureId = FEAT_SILVER;
 

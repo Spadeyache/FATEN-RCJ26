@@ -1,0 +1,7 @@
+{
+  "kmodel_path": "exports/v09_raw01_mixquant__diag/model.kmodel",
+  "compile_seconds": 101.03631210327148,
+  "dump_dir": "exports/v09_raw01_mixquant__diag/dump",
+  "quant_scheme_path": null,
+  "ptq_code": 3
+}

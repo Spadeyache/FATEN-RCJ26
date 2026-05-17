@@ -1,0 +1,6 @@
+GNNEConv2D
+B,OC,IC,OH,OW,KH,KW
+1,64,64,30,40,3,3
+GNNEActivation
+ , , , 
+1,64,30,40

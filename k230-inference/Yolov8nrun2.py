@@ -9,7 +9,7 @@ import image
 if __name__=="__main__":
 
     # 这里仅为示例，自定义场景请修改为您自己的模型路径、标签名称、模型输入大小
-    kmodel_path= "/data/kmodel/best_640x480_k230.kmodel"
+    kmodel_path= "/data/kmodel/best_640x480_k230_float.kmodel"
 #    kmodel_path="/data/kmodels/best_320_k230d.kmodel"
 
 #    kmodel_path="/sdcard/examples/kmodel/face_alignment_post.kmodel"
@@ -19,8 +19,8 @@ if __name__=="__main__":
     # 添加显示模式，默认hdmi，可选hdmi/lcd/lt9611/st7701/hx8399/nt35516,其中hdmi默认置为lt9611，分辨率1920*1080；lcd默认置为st7701，分辨率800*480
     display_mode="lcd"
     rgb888p_size=[640,480]
-    confidence_threshold = 0.03
-    nms_threshold=0.15
+    confidence_threshold = 0.01
+    nms_threshold=0.015
     # 初始化PipeLine
     pl=PipeLine(rgb888p_size=rgb888p_size,display_mode=display_mode)
     pl.create()

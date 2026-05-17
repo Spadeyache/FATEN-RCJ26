@@ -16,7 +16,7 @@ void modeNoGIRun(camera_fb_t* fb, YacheEncodedSerial& teensy) {
     // }
 
     // ── 2. Decide feature ─────────────────────────────────────────────────────
-    uint8_t featureId = (totalBlack > NOGI_BLACK_THRESHOLD) ? FEAT_NOGI_INTERSECT : FEAT_NONE;
+    uint8_t featureId = (totalBlack >= NOGI_BLACK_THRESHOLD) ? FEAT_NOGI_INTERSECT : FEAT_NONE;
     teensy.send(XIAO_REG_FEATURE, featureId);
 
     // ── 3. Debug output ───────────────────────────────────────────────────────

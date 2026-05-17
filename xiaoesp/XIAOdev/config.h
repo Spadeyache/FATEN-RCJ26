@@ -27,6 +27,7 @@
 #define FEAT_EVAC_SILVER   5   // evac-mode silver tape
 #define FEAT_EVAC_BLACK    6   // evac-mode black return line
 #define FEAT_NOGI_INTERSECT 6  // no-green intersection detected
+#define FEAT_NO_LINE       8   // line lost: blackCount == 0, COM fell back to midpoint
 
 // Mode IDs received on XIAO_REG_MODE
 #define MODE_LINEFOLLOW    0
@@ -65,14 +66,19 @@
 #define LF_GREEN_PixCOUNT_THRESHOLD    5    // pixels needed to confirm green
 
 // ── Mode 1 : Evac ────────────────────────────────────────────────────────────
-#define EVAC_SCAN_ROW         15   // Y row (near top = further ahead of robot)
-#define EVAC_SILVER_THRESHOLD  5   // Min silver pixels → report FEAT_EVAC_SILVER
-#define EVAC_BLACK_THRESHOLD   5   // Min black pixels → report FEAT_EVAC_BLACK
+// Rectangular scan region (inclusive). Frame is 160 x 120.
+#define EVAC_SCAN_X_MIN        50
+#define EVAC_SCAN_X_MAX       110
+#define EVAC_SCAN_Y_MIN        15
+#define EVAC_SCAN_Y_MAX        60
+#define EVAC_SCAN_STEP          4   // sample every Nth pixel in x and y
+#define EVAC_SILVER_THRESHOLD   5   // Min silver samples in region → FEAT_EVAC_SILVER
+#define EVAC_BLACK_THRESHOLD    5   // Min black samples in region  → FEAT_EVAC_BLACK
 
 // ── Mode 2 : No-Green Intersection ──────────────────────────────────────────
 // #define NOGI_SCAN_ROW_COUNT   15   // Rows scanned: y = 0 .. NOGI_SCAN_ROW_COUNT-1
 #define NOGI_SCAN_ROW 15
-#define NOGI_BLACK_THRESHOLD  10   // Total black pixels across all rows → detect
+#define NOGI_BLACK_THRESHOLD  6   // Total black pixels across all rows → detect
 
 // ── Mode 3 : Gap (line-angle estimation) ────────────────────────────────────
 #define GAP_SCAN_ROW_START    45   // Top row of multi-row scan window

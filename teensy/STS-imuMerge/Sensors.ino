@@ -24,9 +24,9 @@ volatile bool conduct1 = false;
 // ---------------------------------------------------------------------------
 
 void initSensors() {
-    // _imu.begin();          // Wire1.begin(), dmpInitialize, load EEPROM offsets
-    // Serial.println("IMU ready.");
-    
+    _imu.begin();          // Wire1.begin(), dmpInitialize, settle, zeroAttitude
+    Serial.println("IMU ready.");
+
   pinMode(_touchfront, INPUT_PULLUP);
   pinMode(_conductPin0, INPUT_PULLUP);
   pinMode(_conductPin1, INPUT_PULLUP);
@@ -35,15 +35,15 @@ void initSensors() {
 
 // Called every loop iteration — returns immediately when no DMP packet is ready.
 void updateSensors() {
-    // _imu.update();
-    // pitch = _imu.getPitch();
-    // roll  = _imu.getRoll();
-    // yaw   = _imu.getYaw();
-    // Serial.print("pitch:"); Serial.print(pitch); 
-    // Serial.print("roll:"); Serial.print(roll);
-    // Serial.print("yaw:"); Serial.println(yaw);
+    _imu.update();
+    pitch = _imu.getPitch();
+    roll  = _imu.getRoll();
+    yaw   = _imu.getYaw();
+    Serial.print("pitch:"); Serial.print(pitch);
+    Serial.print("roll:"); Serial.print(roll);
+    Serial.print("yaw:"); Serial.println(yaw);
 
-    // HIGH(1) is OFF and LOW(0) is Touching 
+    // HIGH(1) is OFF and LOW(0) is Touching
     touchfront = !digitalRead(_touchfront);
     conduct0 = digitalRead(_conductPin0);
     conduct1 = !digitalRead(_conductPin1);
