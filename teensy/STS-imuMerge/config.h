@@ -65,7 +65,7 @@ enum XiaoMode : uint8_t {
 // --- IMU ---
 // Set CALIBRATE_IMU 1 to run calibration and print offsets to Serial,
 // then hardcode the printed values in yacheMPU6050.h and set back to 0.
-#define CALIBRATE_IMU       1
+#define CALIBRATE_IMU       0
 #define IMU_SAMPLE_RATE     200.0f   // Hz for Madgwick filter (unused; DMP runs at 100 Hz)
 #define IMU_PITCH_GAIN      0.0f
 #define IMU_EMA_ALPHA       0.25f    // EMA smoothing: lower = smoother but slower (0.1–0.5)

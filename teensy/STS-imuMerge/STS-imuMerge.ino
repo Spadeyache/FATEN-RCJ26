@@ -103,8 +103,8 @@ void loop() {
         static unsigned long lastTouch = 0;    // ------ THOUCH -------------
         if(touchfront && millis() - lastTouch >= 20){
             Serial.println("touch - detected");
-            motor(0,0);
-            delay(800);
+            // motor(0,0);
+            delay(50);
             updateSensors();
             if(touchfront){
                 execForward(-70, 50);
@@ -146,7 +146,7 @@ void loop() {
                 disableGreen = true;
             }
             else if (xiaoCommand == 4) { robotState = STALLED_RED;  }  // red
-            else if (xiaoCommand == 5) { enterEvacuationZone();     }  // silver
+            else if (xiaoCommand == 5) { motor(0,0); enterEvacuationZone();}  // silver
             else if ((xiaoCommand == 6 || xiaoCommand == 7) && !disableGreen) {
                 Serial.printf("CmdFilter votes | U:%u L:%u R:%u Red:%u Slv:%u Blk:%u | Cmd:%u Err:%.1f\n",
                     cmdFilter.votesUturn, cmdFilter.votesLeft, cmdFilter.votesRight,
@@ -212,7 +212,7 @@ void loop() {
         //               k230Running ? "RUN" : "IDL", detectionCount);
 
 
-        
+
         // Serial.printf("CmdFilter votes | U:%u L:%u R:%u Red:%u Slv:%u Blk:%u | Cmd:%u Err:%.1f\n",
         //               cmdFilter.votesUturn, cmdFilter.votesLeft, cmdFilter.votesRight,
         //               cmdFilter.votesRed, cmdFilter.votesSilver, cmdFilter.votesBlack,

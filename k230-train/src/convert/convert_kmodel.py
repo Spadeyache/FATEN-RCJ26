@@ -116,7 +116,7 @@ def onnx_simplify(model_file: str, out_path: str, input_shape):
 # Calibration data loader.
 # ---------------------------------------------------------------------------
 def load_calibration_batch(calib_dir: str, count: int, width: int, height: int,
-                           scale: float) -> list:
+                           scale: float, use_letterbox: bool = True) -> list:
     """Return Canaan's expected format: list of [ndarray_NCHW_uint8].
 
     When CompileOptions has `preprocess=True` and `input_type="uint8"`,
@@ -124,6 +124,11 @@ def load_calibration_batch(calib_dir: str, count: int, width: int, height: int,
     preprocess (dequant via input_range, then mean/std subtraction) during
     calibration to compute layer activation ranges in the post-preprocess
     distribution. We must NOT pre-apply `scale` here -- nncase does it.
+
+    `use_letterbox=True` mirrors the K230 ai2d on-device path (114-pad).
+    `use_letterbox=False` uses naive resize -- closer to how AI Cube
+    probably trained, and avoids wasting calibration range on the
+    constant 114 padding strip.
     """
     import cv2
     files = []
@@ -144,18 +149,23 @@ def load_calibration_batch(calib_dir: str, count: int, width: int, height: int,
         bgr = cv2.imread(str(fp), cv2.IMREAD_COLOR)
         if bgr is None:
             raise IOError(f"cv2.imread failed: {fp}")
-        ratio = min(width / bgr.shape[1], height / bgr.shape[0])
-        new_w = int(round(bgr.shape[1] * ratio))
-        new_h = int(round(bgr.shape[0] * ratio))
-        resized = cv2.resize(bgr, (new_w, new_h),
-                             interpolation=cv2.INTER_LINEAR)
-        top = (height - new_h) // 2
-        bottom = height - new_h - top
-        left = (width - new_w) // 2
-        right = width - new_w - left
-        letter = cv2.copyMakeBorder(resized, top, bottom, left, right,
-                                    cv2.BORDER_CONSTANT,
-                                    value=(114, 114, 114))
+        if use_letterbox:
+            ratio = min(width / bgr.shape[1], height / bgr.shape[0])
+            new_w = int(round(bgr.shape[1] * ratio))
+            new_h = int(round(bgr.shape[0] * ratio))
+            resized = cv2.resize(bgr, (new_w, new_h),
+                                 interpolation=cv2.INTER_LINEAR)
+            top = (height - new_h) // 2
+            bottom = height - new_h - top
+            left = (width - new_w) // 2
+            right = width - new_w - left
+            letter = cv2.copyMakeBorder(resized, top, bottom, left, right,
+                                        cv2.BORDER_CONSTANT,
+                                        value=(114, 114, 114))
+        else:
+            # Naive resize -- distorts aspect but matches AI Cube training.
+            letter = cv2.resize(bgr, (width, height),
+                                interpolation=cv2.INTER_LINEAR)
         rgb = cv2.cvtColor(letter, cv2.COLOR_BGR2RGB)
         chw = rgb.transpose(2, 0, 1).astype(np.uint8)
         data.append([chw[np.newaxis, ...]])
@@ -169,8 +179,18 @@ def compile_one(onnx_path: str, output_dir: str, calib_dir: str,
                 input_width: int, input_height: int, calib_count: int,
                 ptq: int, preprocess_mode: str,
                 mean_imagenet, std_imagenet,
-                swapRB: bool = False, dump: bool = False) -> dict:
-    """Compile one kmodel; returns a summary dict."""
+                swapRB: bool = False, dump: bool = False,
+                finetune_weights: str = "UseSquant",
+                use_letterbox: bool = True) -> dict:
+    """Compile one kmodel; returns a summary dict.
+
+    finetune_weights: 'UseSquant' (AdaRound-like, default and recommended),
+                      'UseAdaRound' (alternative), or 'NoFineTuneWeights'
+                      (only useful as a baseline -- destroys MobileNet-style
+                      backbones).
+    use_letterbox:    True = ai2d-matching letterbox(114) padding for calib;
+                      False = naive cv2.resize.
+    """
     import nncase
 
     # K230 requires width/height divisible by 32.
@@ -186,7 +206,9 @@ def compile_one(onnx_path: str, output_dir: str, calib_dir: str,
     print(f"[CFG] preprocess_mode={preprocess_mode}: "
           f"range={pp['input_range']} mean={pp['mean']} std={pp['std']}")
     print(f"[CFG] swapRB={swapRB}, dump={dump}")
-    print(f"[CFG] calib_dir={calib_dir}, calib_count={calib_count}")
+    print(f"[CFG] calib_dir={calib_dir}, calib_count={calib_count}, "
+          f"use_letterbox={use_letterbox}")
+    print(f"[CFG] finetune_weights_method={finetune_weights}")
 
     os.makedirs(output_dir, exist_ok=True)
     dump_dir = os.path.join(output_dir, "dump")
@@ -220,8 +242,17 @@ def compile_one(onnx_path: str, output_dir: str, calib_dir: str,
     ptq_opts.calibrate_method = calib_method
     ptq_opts.quant_type = act_type
     ptq_opts.w_quant_type = weight_type
+    # Canaan's AdaRound -- critical for PTQ recovery on MobileNet-style nets.
+    # Default in this project's convert_to_kmodel3.py:336 is "UseSquant".
+    if hasattr(ptq_opts, "finetune_weights_method"):
+        ptq_opts.finetune_weights_method = finetune_weights
+    else:
+        print(f"WARN: nncase build has no finetune_weights_method; ignoring "
+              f"finetune_weights={finetune_weights}")
     ptq_opts.set_tensor_data(
-        load_calibration_batch(calib_dir, calib_count, iw, ih, pp["calib_scale"])
+        load_calibration_batch(calib_dir, calib_count, iw, ih,
+                                pp["calib_scale"],
+                                use_letterbox=use_letterbox)
     )
     compiler.use_ptq(ptq_opts)
 
@@ -253,6 +284,8 @@ def compile_one(onnx_path: str, output_dir: str, calib_dir: str,
         f.write(f"quant_type = {ptq_opts.quant_type}\n")
         f.write(f"w_quant_type = {ptq_opts.w_quant_type}\n")
         f.write(f"samples_count = {ptq_opts.samples_count}\n")
+        f.write(f"finetune_weights_method = {finetune_weights}\n")
+        f.write(f"use_letterbox = {use_letterbox}\n")
 
     summary = {
         "kmodel_path": kmodel_path,
@@ -268,6 +301,8 @@ def compile_one(onnx_path: str, output_dir: str, calib_dir: str,
         "quant_type": act_type,
         "w_quant_type": weight_type,
         "calib_count": calib_count,
+        "finetune_weights_method": finetune_weights,
+        "use_letterbox": use_letterbox,
     }
     with open(os.path.join(output_dir, "summary.json"), "w") as f:
         json.dump(summary, f, indent=2)

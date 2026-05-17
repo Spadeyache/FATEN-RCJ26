@@ -178,7 +178,51 @@ void handleTurnTick() {
 // ---------------------------------------------------------------------------
 void enterEvacuationZone() {
     Serial.println("Action: Entering evacuation zone");
+    
+    _HS45HB0.attach(HS45HB0_PIN, 1000, 2000);
+    _HS45HB1.attach(HS45HB1_PIN, 1000, 2000);
+
+    liftARM(4050);
+    grabARM(true); // Open gripper on boot
+    execForward(190, 100);
+    executeTurn(-80, true);
+    execForward(100, 1150);
+    motor(0,0);
+    grabARM(false);
+    liftARM(10050);
+    liftARM(10050);
+    executeTurn(82, true);
+    
+    execForward(-100, 450);
+    executeTurn(120, true);
+
+    updateSensors();
+    motor(70,70);
+    while(!touchfront){
+        delay(10);
+        updateSensors();
+    }
+    
+    
+    liftARM(7050);
+
+    analogWrite(BUZZER_PIN, 160); 
+    execForward(-50, 50);
+
+    motor(70,70);
+    while(!touchfront){
+        delay(10);
+        updateSensors();
+    }
+    motor(0,0);
+    executeTurn(-45, true);
+    execForward(50, 40);
+    grabARM(true);
+    
+
+
     motor(0, 0);
+    while(true){}
     robotState    = EVACUATION_ZONE;
 }
 
@@ -218,8 +262,8 @@ void handleEvacuationZone() {
 // ---------------------------------------------------------------------------
 void grabARM(bool closed) {
     if (closed) {
-        _HS45HB0.writeMicroseconds(2000);
-        _HS45HB1.writeMicroseconds(1000);
+        _HS45HB0.writeMicroseconds(1700);
+        _HS45HB1.writeMicroseconds(1300);
     } else {
         _HS45HB0.writeMicroseconds(1000);
         _HS45HB1.writeMicroseconds(2000);

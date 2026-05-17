@@ -1,0 +1,54 @@
+# Phase A quantization recovery matrix.
+#
+# All previous v04/v06/v09/v10 variants ran with the default
+# `ptq.finetune_weights_method = NoFineTuneWeights` and were broken.
+# These Phase A variants add Canaan's AdaRound (`UseSquant`) which is
+# the standard PTQ recovery technique for MobileNet-style backbones.
+#
+# Run order: q1 first; if it passes the success criteria, stop.
+
+defaults:
+  onnx_path: data/anchorbasedet_reconstructed.onnx
+  calib_dir: data/calibration
+  calib_count: 16
+  input_width: 640
+  input_height: 480
+  swapRB: false
+
+variants:
+
+  - name: q1_squant_kld_u8u8
+    preprocess_mode: baked_imagenet
+    ptq:
+      code: 3
+      calibrate_method: Kld
+      w_quant_type: uint8
+      quant_type: uint8
+    mode: direct
+    finetune_weights: UseSquant
+    use_letterbox: true
+    purpose: "Squant + Kld u8/u8 -- adds AdaRound to the v06 settings that previously gave 0.092 recall@0.05."
+
+  - name: q2_squant_kld_u8u8_noletter
+    preprocess_mode: baked_imagenet
+    ptq:
+      code: 3
+      calibrate_method: Kld
+      w_quant_type: uint8
+      quant_type: uint8
+    mode: direct
+    finetune_weights: UseSquant
+    use_letterbox: false
+    purpose: "Squant + naive resize calibration -- matches AI Cube training distribution."
+
+  - name: q3_squant_kld_i16act_u8w
+    preprocess_mode: baked_imagenet
+    ptq:
+      code: 5
+      calibrate_method: Kld
+      w_quant_type: uint8
+      quant_type: int16
+    mode: direct
+    finetune_weights: UseSquant
+    use_letterbox: true
+    purpose: "Squant + int16 activations -- last resort PTQ-only attempt before pivoting to QAT."

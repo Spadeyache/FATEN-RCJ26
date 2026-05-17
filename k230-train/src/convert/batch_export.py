@@ -84,6 +84,10 @@ def process_variant(variant: dict, defaults: dict, exports_dir: str,
     mean = variant.get("mean", [0.485, 0.456, 0.406])
     std = variant.get("std", [0.229, 0.224, 0.225])
 
+    # Per-variant PTQ knobs introduced in plan v2.
+    finetune_weights = variant.get("finetune_weights", "UseSquant")
+    use_letterbox = variant.get("use_letterbox", True)
+
     if mode == "direct":
         summary = compile_one(
             onnx_path=onnx_path, output_dir=out_dir, calib_dir=calib_dir,
@@ -92,6 +96,8 @@ def process_variant(variant: dict, defaults: dict, exports_dir: str,
             preprocess_mode=preprocess_mode,
             mean_imagenet=mean, std_imagenet=std,
             swapRB=swapRB, dump=dump,
+            finetune_weights=finetune_weights,
+            use_letterbox=use_letterbox,
         )
     elif mode == "mixquant":
         # Step 1: run diagnose on the reference variant if not already done.
@@ -149,6 +155,8 @@ def process_variant(variant: dict, defaults: dict, exports_dir: str,
                 preprocess_mode=preprocess_mode,
                 mean_imagenet=mean, std_imagenet=std,
                 swapRB=swapRB, dump=dump,
+                finetune_weights=finetune_weights,
+                use_letterbox=use_letterbox,
             )
     else:
         raise ValueError(f"Unknown mode: {mode}")
