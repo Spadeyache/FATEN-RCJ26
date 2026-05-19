@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -c \"import onnx; m=onnx.load\\('data/yolov8_simplified.onnx'\\); print\\('Inputs:'\\); [print\\(' ', i.name, [d.dim_value for d in i.type.tensor_type.shape.dim], i.type.tensor_type.elem_type\\) for i in m.graph.input]; print\\('Outputs:'\\); [print\\(' ', o.name, [d.dim_value for d in o.type.tensor_type.shape.dim]\\) for o in m.graph.output]\")"
+    ]
+  }
+}

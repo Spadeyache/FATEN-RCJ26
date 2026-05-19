@@ -1,0 +1,15 @@
+GNNEConv2D
+B,OC,IC,OH,OW,KH,KW
+1,64,256,15,20,3,3
+GNNEActivation
+ , , , 
+1,64,15,20
+GNNEConv2D
+B,OC,IC,OH,OW,KH,KW
+1,64,64,15,20,3,3
+GNNEActivation
+ , , , 
+1,64,15,20
+GNNEConv2D
+B,OC,IC,OH,OW,KH,KW
+1,2,72,15,20,1,1

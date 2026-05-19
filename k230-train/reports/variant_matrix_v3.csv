@@ -1,0 +1,8 @@
+variant,model,backbone,head,kmodel_size_mb,preprocess,ptq,calib_n,classifier_max,recall@0.05,recall@0.2,recall@0.4,avg_best_iou,avg_best_iou_score,avg_best_score_iou,notes
+v00_aicube_baseline,AnchorBaseDet,can3_5_s,YOLOv5 anchor-based,1.35,baked_imagenet,Kld u8/u8 (AI Cube),?,n/a,0.026,0.013,0.000,0.622,0.001,0.022,Original broken AI Cube export
+v_float32 (can3 float),AnchorBaseDet,can3_5_s,YOLOv5 anchor-based,3.98,baked_imagenet,float32,n/a,0.81,0.987,0.987,0.987,0.839,0.524,0.532,can3 float reconstruction; works
+q1p_qat_squant_kld_u8u8,AnchorBaseDet,can3_5_s,YOLOv5 anchor-based,1.35,baked_imagenet,Kld u8/u8 + QAT distill + Squant,16,~0.1,0.276,0.184,0.184,0.501,0.099,0.006,Best quantized can3; bad for single-best
+yolov8_existing_mix,AnchorFreeDet,YOLOv8n CSP,YOLOv8 anchor-free,2.93,raw_01,Kld u8/u8 + MixQuant i16 promotions,8,0.0004,0.000,0.000,0.000,0.000,0.001,0.000,YOLOv8 MixQuant; classifier head dead
+yolov8_existing_squant,AnchorFreeDet,YOLOv8n CSP,YOLOv8 anchor-free,6.39,raw_01,Kld u8/u8 + Squant (convert_to_kmodel3),100,0.0011,0.000,0.000,0.000,0.000,0.001,0.000,YOLOv8 Kld+Squant; classifier head dead
+yolov8_squant_raw01_calib128,AnchorFreeDet,YOLOv8n CSP,YOLOv8 anchor-free,2.93,raw_01,Kld u8/u8 + Squant (our pipeline),128,0.0005,0.000,0.000,0.000,0.000,0.0002,0.000,YOLOv8 with 8x more calib data; still dead
+yolov8_existing_float,AnchorFreeDet,YOLOv8n CSP,YOLOv8 anchor-free,11.55,raw_01,float32,n/a,0.81,1.000,1.000,1.000,0.838,0.772,0.739,*** WINNER for single-best deployment ***

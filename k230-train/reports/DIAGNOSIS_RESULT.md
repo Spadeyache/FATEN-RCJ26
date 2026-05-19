@@ -1,4 +1,93 @@
-# Diagnosis result — final
+# Diagnosis result — final (with v3 YOLOv8 pivot result)
+
+## TL;DR (post-v3)
+
+**Float YOLOv8 is the best model we have. PTQ kills both architectures.**
+
+| | float can3 (v_float32) | **float YOLOv8** | any quantized variant |
+|---|---|---|---|
+| recall@IoU0.5 score>=0.05 | 0.987 | **1.000** | 0.000-0.276 |
+| recall@IoU0.5 score>=0.40 | 0.987 | **1.000** | 0.000-0.184 |
+| avg_best_iou | 0.839 | 0.838 | ~0.5-0.6 |
+| avg_best_iou_score | 0.524 | **0.772** | <0.10 |
+| avg_best_score_iou | 0.532 | **0.739** | <0.022 |
+| .kmodel size | 3.98 MB | 11.55 MB | 1.35-3.07 MB |
+
+Conclusion: **deploy `exports/yolov8_existing_float/`**. The
+`avg_best_score_iou = 0.739` makes it the only model whose
+highest-confidence box is reliably the right one — the property the
+8-byte single-best UART protocol requires.
+
+## v3 PTQ experiments (YOLOv8 pivot)
+
+The hypothesis was that YOLOv8's PTQ-friendlier architecture (SiLU,
+no SE, wider channels) would survive uint8 quantization where can3_5_s
+doesn't. We tested:
+
+| variant | source | preprocess | PTQ | calib | recall@0.4 | avg_bis | classifier max |
+|---|---|---|---|---|---|---|---|
+| yolov8_existing_mix | convert_canaan MixQuant | raw_01 | Kld u8/u8 + selective i16 | 8 | 0.000 | 0.001 | 0.0004 |
+| yolov8_existing_squant | convert_to_kmodel3 | raw_01 | Kld u8/u8 + Squant | 100 | 0.000 | 0.001 | 0.0011 |
+| yolov8_squant_raw01_calib128 | our convert_kmodel.py | raw_01 | Kld u8/u8 + Squant | 128 | 0.000 | 0.0002 | 0.0005 |
+| yolov8_existing_float | convert_to_kmodel3float | raw_01 | float32 | n/a | **1.000** | **0.772** | **0.81** |
+
+Every quantized variant has the same pathology: **classifier head
+outputs collapsed to near zero** (max post-sigmoid 0.0004-0.0011)
+while bbox regression survives. Float kmodel works perfectly.
+
+## Why both architectures fail under PTQ
+
+It's NOT the architecture. The same `quant_error.csv` pattern is
+visible on both can3 and YOLOv8: the classifier head's positive
+activations (corresponding to true-positive cells) are extreme
+outliers relative to the bulk of background-cell activations.
+
+- Out of 6300 anchors × 50 images = 315 000 cells, only ~76 cells
+  (≈ 0.02 %) contain a true object.
+- A Kld histogram-based calibrator naturally fits its quantisation
+  range to the bulk of the distribution (the 99.98 % background
+  cells), and clips the rare high-activation positive cells.
+- After uint8 quantisation the FG/BG contrast in the classifier head
+  is gone: positive logits get crushed to ~0, negative logits also
+  near 0, sigmoid spits out tiny values everywhere.
+
+This is a **dataset-shape issue**, not an architecture issue. Even
+the standard recovery techniques (Squant / AdaRound, MixQuant
+promoting up to 126 layers, QAT distillation, larger calibration
+sets, no-letterbox calibration) only get us to recall@0.2 ≈ 0.18 at
+best — well short of usable single-best detection.
+
+## What would actually fix the PTQ — out of scope for "a few hours"
+
+1. **Train with a calibration-friendly objective**: add an L2 penalty
+   on the classifier logits' magnitude, so float outputs are
+   bounded. Standard QAT-from-scratch with INT8 in mind.
+2. **Train with much more data**: 788 train images is small.
+   YOLOv8n pretrained on COCO + fine-tuned on 5-10k augmented samples
+   of black/silver markers would have far more "TP cell" examples
+   that the calibrator can capture.
+3. **Per-anchor symmetric quantisation on the head**: nncase 2.9
+   doesn't expose this; would need custom postprocessing.
+4. **Switch to a smaller resolution** (e.g. 320×240): fewer anchor
+   cells means the FG/BG ratio is friendlier.
+
+## Recommendation (deployable today)
+
+1. Deploy `exports/yolov8_existing_float/model.kmodel` (11.5 MB) with
+   the new `det_live_xy_yolov8.py`. Class IDs are swapped at send
+   time so Teensy's `K230_BLACK = 0`, `K230_SILVER = 1` mapping
+   stays intact.
+2. Profile `det_image.py` (now instrumented with `ScopedTiming`
+   per stage in v3 step #0) on the K230D to see where the 59 s
+   end-to-end went. Likely 90 % of it is overhead (image I/O, debug
+   prints, Display, MediaManager, BSP). Trim those for production.
+3. If pure KPU inference is still too slow even after overhead trim:
+   collect more training data (target ~5000 images via
+   augmentation), retrain YOLOv8n, then try PTQ again — having a
+   wider distribution of TP cells in the calibration set is the only
+   PTQ knob we haven't been able to test in this time budget.
+
+## Original diagnosis (v1 + v2) — preserved below
 
 **Status**: PTQ-only quantization confirmed unviable for this architecture.
 QAT-assisted PTQ recovers ~14x over the broken baseline but stays

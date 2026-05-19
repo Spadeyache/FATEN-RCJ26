@@ -1,0 +1,25 @@
+{
+  "backend": "nncase Simulator",
+  "kmodel": "exports/yolov8_existing_mix/model.kmodel",
+  "model_type": "YOLOv8 anchor-free",
+  "images_evaluated": 50,
+  "num_gt": 76,
+  "avg_best_iou": 0.0,
+  "avg_best_iou_score": 0.0008830020302220395,
+  "avg_best_score_iou": 0.0,
+  "categories": [
+    "silver",
+    "black"
+  ],
+  "conf_threshold": 0.001,
+  "nms_threshold": 0.5,
+  "apply_histeq": false,
+  "recall@IoU0.5_score>=0.003": 0.0,
+  "recall@IoU0.5_score>=0.005": 0.0,
+  "recall@IoU0.5_score>=0.01": 0.0,
+  "recall@IoU0.5_score>=0.03": 0.0,
+  "recall@IoU0.5_score>=0.05": 0.0,
+  "recall@IoU0.5_score>=0.1": 0.0,
+  "recall@IoU0.5_score>=0.2": 0.0,
+  "recall@IoU0.5_score>=0.4": 0.0
+}

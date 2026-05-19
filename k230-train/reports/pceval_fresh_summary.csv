@@ -1,0 +1,7 @@
+model,avg_best_iou,avg_best_iou_score,avg_best_score_iou,r@0.05,r@0.4
+yolov8_existing_float,0.8012,0.7488,0.7285,1.0,0.9697
+yolov8_existing_mix,0.792,0.4927,0.7158,1.0,0.9697
+yolov8_existing_squant,0.7898,0.4839,0.7144,1.0,0.9091
+yolov8_kld_i16act_u8w_calib74,0.803,0.7047,0.7318,1.0,0.9697
+yolov8_kld_u8u8_calib74,0.7822,0.657,0.7041,1.0,0.9697
+yolov8_squant_raw01_calib128,0.786,0.4811,0.7115,0.9697,0.9091

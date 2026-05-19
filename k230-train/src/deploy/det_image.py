@@ -131,7 +131,9 @@ def detection():
     if "_meta" in cfg:
         print("_meta:      ", cfg["_meta"])
 
-    ai2d_input = read_img(IMAGE_PATH)
+    # --- one-time setup (counts toward end-to-end but not per-frame loop) ---
+    with ScopedTiming("setup read_img + to CHW"):
+        ai2d_input = read_img(IMAGE_PATH)
     ori_w = ai2d_input.shape[2]
     ori_h = ai2d_input.shape[1]
     frame_size = [ori_w, ori_h]
@@ -154,89 +156,106 @@ def detection():
     left   = int(round(dw - 0.1))
     right  = int(round(dw + 0.1))
 
-    kpu = nn.kpu()
-    kpu.load_kmodel(kmodel_path)
+    with ScopedTiming("setup kpu.load_kmodel"):
+        kpu = nn.kpu()
+        kpu.load_kmodel(kmodel_path)
 
-    ai2d = nn.ai2d()
-    ai2d.set_dtype(nn.ai2d_format.NCHW_FMT, nn.ai2d_format.NCHW_FMT,
-                   np.uint8, np.uint8)
-    ai2d.set_pad_param(True, [0, 0, 0, 0, top, bottom, left, right], 0,
-                       [114, 114, 114])
-    ai2d.set_resize_param(True, nn.interp_method.tf_bilinear,
-                          nn.interp_mode.half_pixel)
-    ai2d_builder = ai2d.build([1, 3, ori_h, ori_w],
-                              [1, 3, model_h, model_w])
+    with ScopedTiming("setup ai2d.build"):
+        ai2d = nn.ai2d()
+        ai2d.set_dtype(nn.ai2d_format.NCHW_FMT, nn.ai2d_format.NCHW_FMT,
+                       np.uint8, np.uint8)
+        ai2d.set_pad_param(True, [0, 0, 0, 0, top, bottom, left, right], 0,
+                           [114, 114, 114])
+        ai2d.set_resize_param(True, nn.interp_method.tf_bilinear,
+                              nn.interp_mode.half_pixel)
+        ai2d_builder = ai2d.build([1, 3, ori_h, ori_w],
+                                  [1, 3, model_h, model_w])
 
-    with ScopedTiming("total"):
-        ai2d_builder.run(ai2d_input_tensor, ai2d_out)
-        kpu.set_input_tensor(0, ai2d_out)
-        kpu.run()
+    # Per-stage profiling so we can see where the 59 s end-to-end went.
+    # Each stage is timed independently. Run once; the first run includes
+    # JIT/cache warm-up so a second run will be faster on KPU-bound stages.
+    with ScopedTiming("TOTAL end-to-end"):
+        with ScopedTiming("  stage ai2d preprocess (resize+letterbox)"):
+            ai2d_builder.run(ai2d_input_tensor, ai2d_out)
+        with ScopedTiming("  stage KPU set_input + run"):
+            kpu.set_input_tensor(0, ai2d_out)
+            kpu.run()
         del ai2d_input_tensor
         del ai2d_out
 
-        results = []
-        for i in range(kpu.outputs_size()):
-            data = kpu.get_output_tensor(i)
-            r = data.to_numpy()
-            if DEBUG:
-                print("out[{}] raw shape: {}".format(i, r.shape))
-            total = 1
-            for s in r.shape:
-                total *= s
-            results.append(r.reshape((total,)))
-            del data
+        with ScopedTiming("  stage KPU get_output_tensor x3"):
+            results = []
+            for i in range(kpu.outputs_size()):
+                data = kpu.get_output_tensor(i)
+                r = data.to_numpy()
+                if DEBUG:
+                    print("out[{}] raw shape: {}".format(i, r.shape))
+                total = 1
+                for s in r.shape:
+                    total *= s
+                results.append(r.reshape((total,)))
+                del data
 
-        gc.collect()
+        with ScopedTiming("  stage gc.collect"):
+            gc.collect()
 
-        image_draw = image.Image(IMAGE_PATH).to_rgb565()
-        if len(results) >= 3:
-            det_boxes = aicube.anchorbasedet_post_process(
-                results[0], results[1], results[2],
-                img_size, frame_size, STRIDES,
-                num_classes, conf_thr, nms_thr,
-                anchors_flat, nms_option,
-            )
-        else:
-            det_boxes = aicube.anchorbasedet_post_process(
-                results[0], results[0], results[0],
-                img_size, frame_size, [STRIDES[0]] * 3,
-                num_classes, conf_thr, nms_thr,
-                anchors_flat, nms_option,
-            )
+        with ScopedTiming("  stage image.Image load + to_rgb565 (for draw canvas)"):
+            image_draw = image.Image(IMAGE_PATH).to_rgb565()
+
+        with ScopedTiming("  stage aicube.anchorbasedet_post_process"):
+            if len(results) >= 3:
+                det_boxes = aicube.anchorbasedet_post_process(
+                    results[0], results[1], results[2],
+                    img_size, frame_size, STRIDES,
+                    num_classes, conf_thr, nms_thr,
+                    anchors_flat, nms_option,
+                )
+            else:
+                det_boxes = aicube.anchorbasedet_post_process(
+                    results[0], results[0], results[0],
+                    img_size, frame_size, [STRIDES[0]] * 3,
+                    num_classes, conf_thr, nms_thr,
+                    anchors_flat, nms_option,
+                )
+
+        with ScopedTiming("  stage draw boxes on image_draw"):
+            if det_boxes:
+                print("Detections:", len(det_boxes))
+                try:
+                    det_boxes = sorted(det_boxes, key=lambda d: -d[1])
+                except Exception:
+                    pass
+                img_h = image_draw.height()
+                for d in det_boxes:
+                    cls_id = d[0]
+                    score = d[1]
+                    x1, y1, x2, y2 = d[2], d[3], d[4], d[5]
+                    if APPLY_VFLIP:
+                        y1, y2 = img_h - y2, img_h - y1
+                    w = float(x2 - x1)
+                    h = float(y2 - y1)
+                    color = COLOR_PALETTE[cls_id % len(COLOR_PALETTE)]
+                    image_draw.draw_rectangle(int(x1), int(y1), int(w), int(h),
+                                              color=color)
+                    name = labels[cls_id] if cls_id < len(labels) else "c{}".format(cls_id)
+                    image_draw.draw_string_advanced(
+                        int(x1), max(0, int(y1) - 50), 20,
+                        "{} {:.2f}".format(name, score), color=color,
+                    )
+                    cx = int((x1 + x2) / 2)
+                    cy = int((y1 + y2) / 2)
+                    print("  {:>7s} {:.3f}  box=({:>4d},{:>4d})-({:>4d},{:>4d})  center=({},{})  size={}x{}".format(
+                        name, score, int(x1), int(y1), int(x2), int(y2),
+                        cx, cy, int(w), int(h)))
+            else:
+                print("No objects above conf={}".format(conf_thr))
 
         if det_boxes:
-            print("Detections:", len(det_boxes))
-            try:
-                det_boxes = sorted(det_boxes, key=lambda d: -d[1])
-            except Exception:
-                pass
-            img_h = image_draw.height()
-            for d in det_boxes:
-                cls_id = d[0]
-                score = d[1]
-                x1, y1, x2, y2 = d[2], d[3], d[4], d[5]
-                if APPLY_VFLIP:
-                    y1, y2 = img_h - y2, img_h - y1
-                w = float(x2 - x1)
-                h = float(y2 - y1)
-                color = COLOR_PALETTE[cls_id % len(COLOR_PALETTE)]
-                image_draw.draw_rectangle(int(x1), int(y1), int(w), int(h),
-                                          color=color)
-                name = labels[cls_id] if cls_id < len(labels) else "c{}".format(cls_id)
-                image_draw.draw_string_advanced(
-                    int(x1), max(0, int(y1) - 50), 20,
-                    "{} {:.2f}".format(name, score), color=color,
-                )
-                cx = int((x1 + x2) / 2)
-                cy = int((y1 + y2) / 2)
-                print("  {:>7s} {:.3f}  box=({:>4d},{:>4d})-({:>4d},{:>4d})  center=({},{})  size={}x{}".format(
-                    name, score, int(x1), int(y1), int(x2), int(y2),
-                    cx, cy, int(w), int(h)))
-            image_draw.compress_for_ide()
-            image_draw.save(RESULT_PATH)
+            with ScopedTiming("  stage image_draw.compress_for_ide()"):
+                image_draw.compress_for_ide()
+            with ScopedTiming("  stage image_draw.save(RESULT_PATH)"):
+                image_draw.save(RESULT_PATH)
             print("Saved annotated ->", RESULT_PATH)
-        else:
-            print("No objects above conf={}".format(conf_thr))
 
         del results
         del ai2d
