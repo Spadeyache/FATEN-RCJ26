@@ -7,75 +7,22 @@
     "nms_threshold": 0.5,
     "calibrate_method": "Kld",
     "ptq_option": "w:uint8 d:int16",
-    "model_type": "AnchorBaseDet",
-    "img_size": [
-        640,
-        480
-    ],
-    "anchors": [
-        [
-            33,
-            43,
-            41,
-            56,
-            55,
-            63
-        ],
-        [
-            59,
-            81,
-            72,
-            92,
-            87,
-            111
-        ],
-        [
-            103,
-            134,
-            161,
-            121,
-            134,
-            157
-        ]
-    ],
-    "mean": [
-        0.485,
-        0.456,
-        0.406
-    ],
-    "std": [
-        0.229,
-        0.224,
-        0.225
-    ],
-    "categories": [
-        "black",
-        "silver"
-    ],
+    "model_type": "AnchorFreeDet",
+    "img_size": [640, 480],
+    "mean": [0.0, 0.0, 0.0],
+    "std": [1.0, 1.0, 1.0],
+    "categories": ["silver", "black"],
     "nms_option": false,
     "kmodel_path": "model.kmodel",
     "num_classes": 2,
     "_meta": {
         "variant": "yolov8_kld_i16act_u8w_calib74",
         "preprocess_mode": "raw_01",
-        "input_range": [
-            0.0,
-            1.0
-        ],
+        "input_range": [0.0, 1.0],
         "swapRB": false,
         "input_type": "uint8",
         "input_layout": "NCHW",
-        "notes": "YOLOv8n PTQ: Kld + int16 activations + u8 weights -- diagnose score-collapse fix.",
-        "mean": [
-            0.0,
-            0.0,
-            0.0
-        ],
-        "std": [
-            1.0,
-            1.0,
-            1.0
-        ],
+        "notes": "YOLOv8n PTQ: Kld + int16 activations + u8 weights. categories[] matches Ultralytics training data.yaml (0=silver, 1=black). Feed raw uint8 [0,255] RGB on K230D; the /255 dequant is baked into the kmodel.",
         "compile_seconds": 62.142513036727905,
         "kmodel_size_bytes": 3353408
     }

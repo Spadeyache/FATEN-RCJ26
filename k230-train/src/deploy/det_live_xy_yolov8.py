@@ -3,6 +3,14 @@
 # Live grayscale + histeq inference using a YOLOv8 .kmodel. Sends the
 # single highest-confidence detection's center over UART to the Teensy.
 #
+# Preprocessing MUST match calibration. The calibration JPGs in
+# data/calibration_74/ are grayscale-histeq stored as 3-channel JPG (B=G=R
+# at every pixel; checked with cv2.split). So the model was trained and
+# calibrated on histeq'd-grayscale images replicated to 3 channels. The
+# on-device pipeline reproduces that:
+#   sensor = Sensor.GRAYSCALE -> img.histeq() -> replicate single plane
+#   to 3 channels -> ai2d letterbox114 -> CHW uint8 -> kmodel /255
+#
 # Differences from det_live_xy.py:
 #   - Uses aicube.anchorfreedet_post_process (NOT anchorbasedet_*).
 #   - No anchors list in deploy_config.json.
@@ -27,8 +35,13 @@ import ujson
 
 import nncase_runtime as nn
 import ulab.numpy as np
-import aicube
 import image
+
+# Shared decoder lives in the same directory on the K230D SD card.
+from yolov8_decode import (
+    decode_yolov8_anchorfree, nms_class_wise, unletterbox_box,
+    NUM_ANCHORS_640x480,
+)
 from machine import UART, FPIOA
 from media.sensor import *
 from media.display import *
@@ -39,11 +52,12 @@ ROOT_PATH          = "/data/k230-train"
 DEPLOY_CONFIG_PATH = ROOT_PATH + "/deploy_config.json"
 
 SENSOR_FRAMESIZE = Sensor.VGA
-APPLY_HISTEQ     = True
+APPLY_HISTEQ     = True     # Matches calibration: training/calib JPGs are histeq'd gray-3ch.
 
 CONF_THRESHOLD   = 0.30
 NMS_THRESHOLD    = 0.50
 STRIDES          = [8, 16, 32]
+NUM_ANCHORS      = NUM_ANCHORS_640x480
 
 UART_DEVICE      = UART.UART1
 UART_BAUD        = 115200
@@ -217,31 +231,28 @@ def main():
                 results.append(arr.reshape((total,)))
                 del d
 
-            # YOLOv8 anchor-free postprocess. AICube's helper expects
-            # exactly 3 outputs (the un-concatenated per-stride heads).
-            # Our exported ONNX produces a single concatenated output,
-            # so we feed the same array three times -- aicube ignores the
-            # extras when it sees the concatenated layout (per Canaan's
-            # Yolov8nlive_canaan.py:97-101 pattern). If your kmodel was
-            # exported per-stride, change to results[0], results[1],
-            # results[2] directly.
+            # YOLOv8 anchor-free postprocess. Our Ultralytics ONNX export
+            # produces a SINGLE concatenated output (1, 4+nc, 6300) with
+            # cx,cy,w,h in MODEL pixel coords + sigmoided cls scores -- NOT
+            # the 3 per-stride raw heads that aicube.anchorfreedet_post_process
+            # is designed for. We decode in Python (yolov8_decode.py) so the
+            # output stays consistent with the PC simulator path and the
+            # det_image_yolov8.py diagnostic.
             try:
-                if len(results) == 1:
-                    det = aicube.anchorfreedet_post_process(
-                        results[0], results[0], results[0],
-                        img_size, [sensor_w, sensor_h], STRIDES,
-                        num_classes, CONF_THRESHOLD, NMS_THRESHOLD,
-                        False,
-                    )
-                elif len(results) >= 3:
-                    det = aicube.anchorfreedet_post_process(
-                        results[0], results[1], results[2],
-                        img_size, [sensor_w, sensor_h], STRIDES,
-                        num_classes, CONF_THRESHOLD, NMS_THRESHOLD,
-                        False,
-                    )
-                else:
+                if not results:
                     det = []
+                else:
+                    letter = decode_yolov8_anchorfree(
+                        results[0], num_classes, CONF_THRESHOLD,
+                        num_anchors=NUM_ANCHORS,
+                    )
+                    letter = nms_class_wise(letter, NMS_THRESHOLD)
+                    det = []
+                    for b in letter:
+                        xyxy = unletterbox_box(b[2:6], ratio, left, top,
+                                                sensor_w, sensor_h)
+                        det.append([b[0], b[1],
+                                    xyxy[0], xyxy[1], xyxy[2], xyxy[3]])
             except Exception as e:
                 if frame < 3:
                     print("postprocess error:", e)

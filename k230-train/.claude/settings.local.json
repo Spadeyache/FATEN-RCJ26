@@ -1,7 +1,13 @@
 {
   "permissions": {
     "allow": [
-      "Bash(python -c \"import onnx; m=onnx.load\\('data/yolov8_simplified.onnx'\\); print\\('Inputs:'\\); [print\\(' ', i.name, [d.dim_value for d in i.type.tensor_type.shape.dim], i.type.tensor_type.elem_type\\) for i in m.graph.input]; print\\('Outputs:'\\); [print\\(' ', o.name, [d.dim_value for d in o.type.tensor_type.shape.dim]\\) for o in m.graph.output]\")"
+      "Bash(python -c \"import onnx; m=onnx.load\\('data/yolov8_simplified.onnx'\\); print\\('Inputs:'\\); [print\\(' ', i.name, [d.dim_value for d in i.type.tensor_type.shape.dim], i.type.tensor_type.elem_type\\) for i in m.graph.input]; print\\('Outputs:'\\); [print\\(' ', o.name, [d.dim_value for d in o.type.tensor_type.shape.dim]\\) for o in m.graph.output]\")",
+      "Bash(git ls-tree *)",
+      "Bash(powershell -NoProfile -Command \"Get-Item src/eval/pc_eval_yolov8.py, src/eval/pc_eval.py, src/eval/diagnose_yolov8_quant.py, src/eval/draw_yolov8_boxes.py, exports/yolov8_existing_float/eval_summary.json, exports/yolov8_existing_mix/eval_summary.json, exports/yolov8_squant_raw01_calib128/eval_summary.json, exports/yolov8_existing_float/eval.csv | Format-Table FullName, LastWriteTime -AutoSize\")",
+      "Bash(powershell -NoProfile -Command \"Get-Item 'C:\\\\Users\\\\magic\\\\Documents\\\\robocup\\\\RoboCupJunior_RescueLine\\\\k230-train\\\\src\\\\eval\\\\pc_eval_yolov8.py','C:\\\\Users\\\\magic\\\\Documents\\\\robocup\\\\RoboCupJunior_RescueLine\\\\k230-train\\\\src\\\\eval\\\\pc_eval.py','C:\\\\Users\\\\magic\\\\Documents\\\\robocup\\\\RoboCupJunior_RescueLine\\\\k230-train\\\\exports\\\\yolov8_existing_float\\\\eval_summary.json','C:\\\\Users\\\\magic\\\\Documents\\\\robocup\\\\RoboCupJunior_RescueLine\\\\k230-train\\\\exports\\\\yolov8_existing_mix\\\\eval_summary.json','C:\\\\Users\\\\magic\\\\Documents\\\\robocup\\\\RoboCupJunior_RescueLine\\\\k230-train\\\\exports\\\\yolov8_squant_raw01_calib128\\\\eval_summary.json' | Select-Object Name, LastWriteTime, Length | Format-Table -Wrap\")",
+      "Bash(powershell -NoProfile -Command \"Get-Content 'exports/yolov8_squant_raw01_calib128/eval.csv' | Select-Object -First 30\")",
+      "Read(//c/Users/magic/Documents/robocup/RoboCupJunior_RescueLine/k230-training/datasets/IR-2026-05-07-18-52/labels/**)",
+      "Bash(powershell -NoProfile -Command \"Get-Content 'reports/repro_pceval/squant128_now.csv' | Select-Object -First 20\")"
     ]
   }
 }
