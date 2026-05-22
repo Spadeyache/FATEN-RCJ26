@@ -7,7 +7,19 @@
       "Bash(powershell -NoProfile -Command \"Get-Item 'C:\\\\Users\\\\magic\\\\Documents\\\\robocup\\\\RoboCupJunior_RescueLine\\\\k230-train\\\\src\\\\eval\\\\pc_eval_yolov8.py','C:\\\\Users\\\\magic\\\\Documents\\\\robocup\\\\RoboCupJunior_RescueLine\\\\k230-train\\\\src\\\\eval\\\\pc_eval.py','C:\\\\Users\\\\magic\\\\Documents\\\\robocup\\\\RoboCupJunior_RescueLine\\\\k230-train\\\\exports\\\\yolov8_existing_float\\\\eval_summary.json','C:\\\\Users\\\\magic\\\\Documents\\\\robocup\\\\RoboCupJunior_RescueLine\\\\k230-train\\\\exports\\\\yolov8_existing_mix\\\\eval_summary.json','C:\\\\Users\\\\magic\\\\Documents\\\\robocup\\\\RoboCupJunior_RescueLine\\\\k230-train\\\\exports\\\\yolov8_squant_raw01_calib128\\\\eval_summary.json' | Select-Object Name, LastWriteTime, Length | Format-Table -Wrap\")",
       "Bash(powershell -NoProfile -Command \"Get-Content 'exports/yolov8_squant_raw01_calib128/eval.csv' | Select-Object -First 30\")",
       "Read(//c/Users/magic/Documents/robocup/RoboCupJunior_RescueLine/k230-training/datasets/IR-2026-05-07-18-52/labels/**)",
-      "Bash(powershell -NoProfile -Command \"Get-Content 'reports/repro_pceval/squant128_now.csv' | Select-Object -First 20\")"
+      "Bash(powershell -NoProfile -Command \"Get-Content 'reports/repro_pceval/squant128_now.csv' | Select-Object -First 20\")",
+      "Bash(ls ../)",
+      "Bash(python -c \"import sys; print\\(sys.executable\\)\")",
+      "PowerShell(python --version)",
+      "PowerShell(python -c \"import sys; print\\(sys.executable\\)\")",
+      "PowerShell(python -c \"import nncase; print\\('nncase', getattr\\(nncase,'__version__','OK'\\)\\)\" 2>&1)",
+      "PowerShell(python -c \"import torch; print\\('torch', torch.__version__\\)\" 2>&1)",
+      "PowerShell(python -c \"import onnx; print\\('onnx', onnx.__version__\\)\" 2>&1)",
+      "PowerShell(python -c \"import onnxruntime; print\\('ort', onnxruntime.__version__\\)\" 2>&1)",
+      "PowerShell(python -c \"import cv2; print\\('cv2', cv2.__version__\\)\" 2>&1)",
+      "PowerShell(python -c \"import numpy; print\\('numpy', numpy.__version__\\)\" 2>&1)",
+      "PowerShell($py = \"python\"; & $py --version; & $py -c \"import sys, platform; print\\(sys.executable\\); print\\('py', platform.python_version\\(\\)\\)\"; foreach \\($pkg in @\\('nncase','nncase_kpu','torch','onnx','onnxsim','onnxruntime','cv2','numpy','yaml','PIL'\\)\\) { try { & $py -c \"import $pkg, sys; v=getattr\\($pkg,'__version__','?'\\); print\\('$pkg', v\\)\" } catch { Write-Output \"$pkg : import failed\" } })",
+      "Bash(python -c \"import sys, platform; print\\(sys.executable\\); print\\(platform.python_version\\(\\)\\)\")"
     ]
   }
 }
