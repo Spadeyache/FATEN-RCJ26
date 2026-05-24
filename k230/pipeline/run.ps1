@@ -36,8 +36,8 @@ function Assert-Ok {
 
 function Invoke-Train([string]$Script, [string[]]$ScriptArgs = @()) {
     Write-Host ">> train: $Script $($ScriptArgs -join ' ')" -ForegroundColor Cyan
-    & docker compose -f $ComposeFile run --rm train python $Script @ScriptArgs 2>&1 |
-        ForEach-Object { "$_" }
+    # Stream stderr to stdout, but DON'T pipe through ForEach — that clobbers $LASTEXITCODE.
+    & docker compose -f $ComposeFile run --rm train python $Script @ScriptArgs 2>&1 | Out-Host
     Assert-Ok
 }
 
@@ -45,8 +45,7 @@ function Invoke-Nncase([string]$Cmd) {
     # Ensure pip deps + PATH inside the nncase container before running the python step
     $wrap = "pip install -q opencv-python-headless pyyaml >/dev/null 2>&1; export PATH=/usr/local/lib/python3.10/dist-packages:`$PATH; cd /pipeline && $Cmd"
     Write-Host ">> nncase: $Cmd" -ForegroundColor Cyan
-    & docker compose -f $ComposeFile run --rm nncase bash -c $wrap 2>&1 |
-        ForEach-Object { "$_" }
+    & docker compose -f $ComposeFile run --rm nncase bash -c $wrap 2>&1 | Out-Host
     Assert-Ok
 }
 
@@ -71,7 +70,7 @@ switch ($Target) {
         Write-Host "  .\run.ps1 all-skip-train"
         Write-Host "  .\run.ps1 calibrate; .\run.ps1 compile; .\run.ps1 eval"
     }
-    'build'          { & docker compose -f $ComposeFile build 2>&1 | ForEach-Object { "$_" }; Assert-Ok }
+    'build'          { & docker compose -f $ComposeFile build 2>&1 | Out-Host; Assert-Ok }
     'smoke'          { Invoke-Train 'stages/01_train.py' @('--smoke') }
     'train'          { Invoke-Train 'stages/01_train.py' }
     'export'         { Invoke-Train 'stages/02_export.py' }

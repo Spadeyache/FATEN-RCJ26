@@ -20,6 +20,8 @@ services:
       dockerfile: Dockerfile.train
     image: k230-train:latest
     container_name: k230-train
+    # PyTorch DataLoader workers use shared memory; default 64MB is too small.
+    shm_size: '8gb'
     environment:
       - NVIDIA_VISIBLE_DEVICES=all
     deploy:

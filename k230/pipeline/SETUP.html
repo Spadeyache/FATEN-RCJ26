@@ -347,6 +347,11 @@ det_live_xy_yolov8.live()</code></pre>
 <p>Not baked into the nncase image. Install inside the container:</p>
 <pre><code>docker exec k230-nncase pip install --quiet opencv-python-headless pyyaml</code></pre>
 
+<h3>Train fails with "DataLoader worker killed by signal: Bus error"</h3>
+<p>PyTorch DataLoader workers ran out of shared memory. Docker's default <code>/dev/shm</code> is 64 MB. The <code>docker-compose.yml</code> in this repo already sets <code>shm_size: '8gb'</code> for the train service — if you customized it, restore that line, then:</p>
+<pre><code>docker compose down train
+.\run.ps1 train       # or: ./run.sh train</code></pre>
+
 <h3>Eval recall ≈ 0 with non-zero IoU</h3>
 <p>Score saturation from uint8 PTQ. Use the int16-activation variant — already in <code>configs/pipeline.yaml</code> as <code>yolov8_kld_i16act_u8w</code>.</p>
 
