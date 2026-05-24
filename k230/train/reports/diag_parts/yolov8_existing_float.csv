@@ -1,0 +1,14 @@
+model,image,raw_max,n_unique_top20,n_above_0.1,n_above_0.3,n_above_0.5,n_gts,mean_best_iou,mean_best_iou_score,mean_best_score,mean_best_score_iou
+yolov8_existing_float,003a746b-1s1b_0216.jpg,0.8066,20,21,19,18,2,0.8425,0.7703,0.7703,0.8425
+yolov8_existing_float,0148e2fc-2s1b_0030.jpg,0.8321,20,33,30,28,3,0.8766,0.7836,0.8060,0.5993
+yolov8_existing_float,01e56103-1s0b_0026.jpg,0.7503,20,12,11,11,1,0.8758,0.7503,0.7503,0.8758
+yolov8_existing_float,024b8494-0s1b_0068.jpg,0.4879,16,9,7,0,1,0.9035,0.4879,0.4879,0.9035
+yolov8_existing_float,031cf63e-2s1b_0123.jpg,0.8425,20,31,27,26,3,0.8477,0.8000,0.8353,0.5649
+yolov8_existing_float,03588042-1s1b_0018.jpg,0.8156,18,21,20,20,2,0.9094,0.8087,0.8087,0.9094
+yolov8_existing_float,03cb1869-1s1b_0028.jpg,0.8169,20,23,20,20,2,0.9084,0.7967,0.7967,0.9084
+yolov8_existing_float,04885a34-1s0b_0009.jpg,0.7699,19,11,9,8,1,0.8608,0.7699,0.7699,0.8608
+yolov8_existing_float,049a61de-1s1b_0112.jpg,0.8483,20,20,20,20,2,0.8854,0.8455,0.8455,0.8854
+yolov8_existing_float,04a01ca9-0s1b_0177.jpg,0.6372,18,9,8,7,1,0.8144,0.6372,0.6372,0.8144
+yolov8_existing_float,04f0c278-1s1b_0187.jpg,0.8408,20,20,19,17,2,0.8659,0.8125,0.8125,0.8659
+yolov8_existing_float,064d33e6-1s0b_0260.jpg,0.8156,20,16,12,10,1,0.8403,0.8156,0.8156,0.8403
+yolov8_existing_float,c27f5e94-2s1b_0031.jpg,0.8239,20,32,29,27,3,0.8879,0.8039,0.8043,0.5879

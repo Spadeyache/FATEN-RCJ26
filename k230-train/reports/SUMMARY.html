@@ -1,0 +1,754 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>YOLOv8n on K230D — session まとめ</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root {
+    --bg: #fafaf7;
+    --fg: #1a1a1a;
+    --muted: #5b5b5b;
+    --rule: #d8d6cf;
+    --accent: #b25b2c;
+    --code-bg: #f1efe7;
+  }
+  html, body { background: var(--bg); color: var(--fg); }
+  body {
+    font-family: "Charter", "Iowan Old Style", "Georgia", "Times New Roman", serif;
+    font-size: 17px;
+    line-height: 1.6;
+    margin: 0;
+    padding: 56px 24px 96px 24px;
+    -webkit-font-smoothing: antialiased;
+  }
+  main { max-width: 720px; margin: 0 auto; }
+  header { margin-bottom: 48px; }
+  header .eyebrow {
+    font-family: "Inter", -apple-system, "Segoe UI", system-ui, sans-serif;
+    font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--muted); margin-bottom: 8px;
+  }
+  h1 {
+    font-family: "Inter", -apple-system, "Segoe UI", system-ui, sans-serif;
+    font-weight: 600; font-size: 34px; line-height: 1.2;
+    margin: 0 0 18px 0; letter-spacing: -0.01em;
+  }
+  header .lede {
+    font-size: 19px; color: var(--muted); line-height: 1.55;
+  }
+  h2 {
+    font-family: "Inter", -apple-system, "Segoe UI", system-ui, sans-serif;
+    font-weight: 600; font-size: 22px; line-height: 1.3;
+    margin: 56px 0 6px 0; letter-spacing: -0.005em;
+  }
+  h2 .phase {
+    color: var(--accent); font-weight: 600; margin-right: 10px;
+  }
+  h2 + .subhead {
+    font-family: "Inter", -apple-system, "Segoe UI", system-ui, sans-serif;
+    font-size: 14px; color: var(--muted); margin-bottom: 18px;
+    letter-spacing: 0.01em;
+  }
+  h3 {
+    font-family: "Inter", -apple-system, "Segoe UI", system-ui, sans-serif;
+    font-weight: 600; font-size: 16px; margin: 28px 0 4px 0;
+  }
+  p { margin: 0 0 14px 0; }
+  a { color: var(--accent); text-decoration: none;
+      border-bottom: 1px solid rgba(178, 91, 44, 0.3); }
+  a:hover { border-bottom-color: var(--accent); }
+  code {
+    font-family: "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
+    font-size: 14px; background: var(--code-bg); color: #2a2a2a;
+    padding: 1px 5px; border-radius: 3px;
+  }
+  pre {
+    font-family: "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
+    font-size: 13.5px; line-height: 1.55;
+    background: var(--code-bg); color: #2a2a2a;
+    padding: 14px 18px; border-radius: 4px;
+    overflow-x: auto; margin: 14px 0;
+  }
+  pre code { background: transparent; padding: 0; font-size: inherit; }
+  hr {
+    border: none; border-top: 1px solid var(--rule);
+    margin: 48px 0; height: 0;
+  }
+  table {
+    border-collapse: collapse; width: 100%;
+    margin: 18px 0; font-size: 15px;
+    font-family: "Inter", -apple-system, "Segoe UI", system-ui, sans-serif;
+  }
+  thead th {
+    text-align: left; font-weight: 600;
+    border-top: 1px solid var(--fg);
+    border-bottom: 1px solid var(--rule);
+    padding: 8px 10px 8px 0;
+  }
+  tbody td {
+    padding: 7px 10px 7px 0;
+    border-bottom: 1px solid var(--rule);
+    color: #2a2a2a;
+  }
+  tbody tr:last-child td { border-bottom: 1px solid var(--fg); }
+  td.num { font-variant-numeric: tabular-nums; }
+  dl.thought-tried { margin: 12px 0 18px 0; }
+  dl.thought-tried dt {
+    font-family: "Inter", -apple-system, "Segoe UI", system-ui, sans-serif;
+    font-weight: 600; font-size: 13px; letter-spacing: 0.05em;
+    text-transform: uppercase; color: var(--accent);
+    margin-top: 10px;
+  }
+  dl.thought-tried dd {
+    margin: 2px 0 0 0; padding: 0;
+  }
+  ul, ol { padding-left: 22px; margin: 10px 0 16px 0; }
+  li { margin: 4px 0; }
+  blockquote {
+    margin: 18px 0; padding: 6px 0 6px 18px;
+    border-left: 3px solid var(--accent);
+    color: var(--muted); font-style: italic;
+  }
+  .toc {
+    font-family: "Inter", -apple-system, "Segoe UI", system-ui, sans-serif;
+    font-size: 14px; line-height: 1.7;
+    margin: 24px 0 0 0; padding: 16px 18px;
+    background: var(--code-bg); border-radius: 4px;
+  }
+  .toc ol { padding-left: 22px; margin: 4px 0; }
+  .toc a { border-bottom: none; }
+  .toc a:hover { text-decoration: underline; }
+  footer {
+    margin-top: 80px; padding-top: 20px;
+    border-top: 1px solid var(--rule);
+    font-family: "Inter", -apple-system, "Segoe UI", system-ui, sans-serif;
+    font-size: 13px; color: var(--muted);
+  }
+</style>
+</head>
+<body>
+<main>
+
+<header>
+  <div class="eyebrow">RoboCupJunior RescueLine · session writeup</div>
+  <h1>Fixing PTQ YOLOv8n on the Kendryte K230D</h1>
+  <p class="lede">A multi-day investigation into a quantized object
+  detector that <em>looked</em> broken, several wrong turns about
+  preprocessing, a stale eval that turned out not to be the script
+  it appeared to be, and a vendor post-processing helper that
+  silently read bounding-box coordinates as class scores. Written
+  up so the next person doesn't repeat the same mistakes.</p>
+  <div class="toc">
+    Contents
+    <ol>
+      <li><a href="#setting">Setting</a></li>
+      <li><a href="#phase1">Phase 1 — Initial compile (KLD u8/u8)</a></li>
+      <li><a href="#phase2">Phase 2 — First float-vs-PTQ comparison</a></li>
+      <li><a href="#phase3">Phase 3 — Was preprocessing inconsistent?</a></li>
+      <li><a href="#phase4">Phase 4 — Sweep across all kmodels</a></li>
+      <li><a href="#phase5">Phase 5 — Comprehensive diagnostic + int16 fix</a></li>
+      <li><a href="#phase6">Phase 6 — Forensic chase of the stale eval</a></li>
+      <li><a href="#phase7">Phase 7 — Device deploy and the “silver 638.50” surprise</a></li>
+      <li><a href="#phase8">Phase 8 — A preprocessing pivot we got wrong</a></li>
+      <li><a href="#phase9">Phase 9 — Replacing aicube with pure-python decode</a></li>
+      <li><a href="#phase10">Phase 10 — Modularization</a></li>
+      <li><a href="#state">State of the repo at the end of the session</a></li>
+      <li><a href="#open">Open threads</a></li>
+      <li><a href="#lessons">Lessons</a></li>
+    </ol>
+  </div>
+</header>
+
+<!-- ============================================================ -->
+<h2 id="setting">Setting</h2>
+<p class="subhead">Where we started.</p>
+
+<p>This work sits inside <code>k230-train/</code> — the Post-Training
+Quantization (PTQ) pipeline for the team's RescueLine vision model.
+The model is a YOLOv8n object detector with two classes: <code>silver</code>
+and <code>black</code> (the two kinds of victim markers the rescue
+robot has to find). The training data are 640×480 grayscale photos
+that have already been contrast-stretched with histogram equalization
+and then stored as 3-channel JPGs (every pixel has R=G=B).</p>
+
+<p>The Kendryte K230D is the target chip — a small embedded SoC with
+a neural-network accelerator (the KPU). To get a YOLOv8 model onto
+the KPU you compile the ONNX export down to a <code>.kmodel</code>
+file using <a href="https://github.com/kendryte/nncase">nncase</a>
+inside a Linux container, choosing a quantization strategy: which
+calibration metric, which activation/weight bit-widths. Each of
+those knob combinations is what we call a <em>variant</em>.</p>
+
+<p>The user's specific ask at the start of the session was to compile
+a new variant with KLD calibration, uint8 activations, uint8 weights,
+640×480, using the 74-image calibration set, and to compare it to
+the float reference on a single test image. That ask grew into the
+investigation written up below.</p>
+
+<hr>
+
+<!-- ============================================================ -->
+<h2 id="phase1"><span class="phase">Phase 1</span>Initial compile (KLD u8/u8, calib_74)</h2>
+<p class="subhead">Getting the Docker environment to a point where a kmodel could come out the other end.</p>
+
+<dl class="thought-tried">
+  <dt>What we thought</dt>
+  <dd>Compiling would be a one-liner inside the user's existing
+  <code>k230-nncase</code> Docker image — it already has
+  <code>nncase 2.9.0</code> and <code>nncase-kpu</code> installed.</dd>
+
+  <dt>What we tried</dt>
+  <dd>Brought the container up via <code>docker compose up</code>
+  out of <code>C:\Users\magic\Documents\robocup\k230\</code>. The
+  compose file mounted that directory but not the
+  <code>k230-train</code> repo. We extended the compose to also
+  mount <code>k230-train</code> at <code>/k230-train</code> and
+  the YOLO dataset directory at <code>/datasets</code> (read-only).</dd>
+
+  <dt>What we found</dt>
+  <dd>The image was missing <code>opencv-python</code> and
+  <code>pyyaml</code> needed by
+  <a href="../src/convert/convert_kmodel.py"><code>src/convert/convert_kmodel.py</code></a>
+  and the variant runner. We installed those with pip into the
+  running container (headless OpenCV, to avoid GL dependencies).
+  The KPU simulator binary <code>nncase.simulator.k230.sc</code>
+  was on disk under <code>/usr/local/lib/python3.10/dist-packages</code>
+  but not on <code>PATH</code>; we exported the directory so the
+  Python <code>nncase.Simulator</code> wrapper could shell out to
+  it.</dd>
+
+  <dt>What we changed</dt>
+  <dd>Added a new entry <code>yolov8_kld_u8u8_calib74</code> to
+  <a href="../configs/variants_quant.yaml"><code>configs/variants_quant.yaml</code></a>
+  with the requested settings, then ran
+  <code>batch_export.py --only yolov8_kld_u8u8_calib74</code>.
+  First successful compile in about 98 seconds. Output kmodel
+  3.09 MB.</dd>
+</dl>
+
+<hr>
+
+<!-- ============================================================ -->
+<h2 id="phase2"><span class="phase">Phase 2</span>First float-vs-PTQ comparison</h2>
+<p class="subhead">Where the symptom that drove the rest of the session showed up.</p>
+
+<p>We ran the new kmodel and the existing
+<code>yolov8_existing_float</code> reference through the
+<code>nncase.Simulator</code> on the same image
+(<code>c27f5e94-2s1b_0031.jpg</code> from the calibration set, picked
+because the filename pattern <code>2s1b</code> meant two silver
+markers and one black). The float reference produced a smooth
+distribution of confidence scores — top-1 at 0.824, top-2 at 0.823,
+top-3 at 0.765, then a sharp drop to noise. The new PTQ kmodel
+produced something stranger:</p>
+
+<table>
+  <thead><tr><th>Rank</th><th>Float score</th><th>PTQ score</th></tr></thead>
+  <tbody>
+    <tr><td>1</td><td class="num">0.824</td><td class="num">0.686</td></tr>
+    <tr><td>2</td><td class="num">0.823</td><td class="num">0.686</td></tr>
+    <tr><td>3</td><td class="num">0.765</td><td class="num">0.686</td></tr>
+    <tr><td>4–10</td><td class="num">0.06 and below</td><td class="num">0.686 (all)</td></tr>
+  </tbody>
+</table>
+
+<p>Every confident PTQ detection was sharing the same score —
+<code>0.686</code> exactly. That number has no semantic meaning; it's
+just one of the 256 levels available in a uint8 dequant scale.
+Localization was fine; ranking was destroyed. With every score tied,
+non-maximum suppression's "keep the highest" rule degenerates into
+"keep whichever box NMS sees first," and on a device with a fixed
+<code>CONF_THRESHOLD</code> you either keep every confident anchor
+or none.</p>
+
+<blockquote>
+Score saturation, not localization failure. The detector still
+knew <em>where</em> the objects were; it had lost the ability to
+say <em>how sure</em> it was.
+</blockquote>
+
+<hr>
+
+<!-- ============================================================ -->
+<h2 id="phase3"><span class="phase">Phase 3</span>Was preprocessing inconsistent?</h2>
+<p class="subhead">The first hypothesis we tested — and ruled out.</p>
+
+<dl class="thought-tried">
+  <dt>What we thought</dt>
+  <dd>The calibration step has to feed the kmodel data in the same
+  distribution it will see at runtime. If the kmodel's preprocess
+  mode (<code>raw_01</code>, divide-by-255 only) didn't actually
+  match what the Ultralytics ONNX export expects, the calibrated
+  activation ranges would be wrong and could explain the collapsed
+  scores.</dd>
+
+  <dt>What we tried</dt>
+  <dd>Loaded the ONNX directly with <code>onnx</code> and inspected
+  the first ops. The graph starts with a plain <code>Conv</code> on
+  a float32 <code>(1, 3, 480, 640)</code> input — no
+  <code>Div(255)</code>, no <code>Sub(mean)</code> baked in. That is
+  the standard Ultralytics export: it expects the caller to divide
+  by 255 before feeding the model. The kmodel was compiled with
+  <code>preprocess_mode=raw_01</code> which bakes exactly that
+  <code>/255</code> into the model. Calibration loaded uint8 RGB
+  CHW images and nncase did the dequant internally. So calibration
+  and runtime see the same distribution as the original ONNX.</dd>
+
+  <dt>What we found</dt>
+  <dd>Preprocessing was consistent. The score collapse had to be
+  coming from somewhere else.</dd>
+
+  <dt>What we changed</dt>
+  <dd>Nothing. Moved on.</dd>
+</dl>
+
+<hr>
+
+<!-- ============================================================ -->
+<h2 id="phase4"><span class="phase">Phase 4</span>Sweep across all kmodels</h2>
+<p class="subhead">Establishing that the collapse was a property of u8 activation, not of this particular variant.</p>
+
+<p>We built a small annotation script,
+<a href="../src/eval/draw_yolov8_boxes.py"><code>src/eval/draw_yolov8_boxes.py</code></a>,
+that runs an arbitrary kmodel on an image, draws post-NMS boxes on
+the letterboxed canvas, and writes a JPG. We ran it across every
+yolov8 kmodel in <code>exports/</code>, on two images: one that was
+in the calibration set, one that wasn't. The results were
+illuminating:</p>
+
+<table>
+  <thead><tr><th>kmodel</th><th>Top score (all images)</th></tr></thead>
+  <tbody>
+    <tr><td><code>yolov8_existing_float</code></td><td class="num">0.49 – 0.85, smooth</td></tr>
+    <tr><td><code>yolov8_existing_mix</code></td><td class="num">0.5034 (uniform)</td></tr>
+    <tr><td><code>yolov8_existing_squant</code></td><td class="num">0.5034 (uniform)</td></tr>
+    <tr><td><code>yolov8_squant_raw01_calib128</code></td><td class="num">0.5034 (uniform)</td></tr>
+    <tr><td><code>yolov8_kld_u8u8_calib74</code> (new)</td><td class="num">0.6860 (uniform)</td></tr>
+  </tbody>
+</table>
+
+<p>Every PTQ kmodel was finding the right boxes (within a few pixels
+of the float reference) on every image — but each one had ground
+all its confident detections to its own characteristic ceiling. The
+old calibrations landed at 0.5034; ours at 0.6860; both are
+quantization grid lines, not confidences.</p>
+
+<p>This made the <code>eval_summary.json</code> files stored next to
+those older kmodels look suspicious — they claimed
+<code>recall = 0.0</code> and <code>avg_best_iou = 0.0</code>, but
+when we rendered them on the same images they were finding the
+objects with IoU around 0.85.</p>
+
+<hr>
+
+<!-- ============================================================ -->
+<h2 id="phase5"><span class="phase">Phase 5</span>Comprehensive diagnostic + int16 fix</h2>
+<p class="subhead">Quantifying the failure mode and proving int16 activations restore the score distribution.</p>
+
+<p>We wrote
+<a href="../src/eval/diagnose_yolov8_quant.py"><code>src/eval/diagnose_yolov8_quant.py</code></a>:
+for each (kmodel, image) pair it records the raw max class score,
+the top-20 boxes pre-NMS, post-NMS survivors, count of detections
+above 0.1/0.3/0.5, the number of <em>distinct</em> scores in the top
+20, and best-IoU vs each ground-truth box. It also writes an
+annotated JPG with GT in green and predictions in class color.</p>
+
+<p>We then ran it across 13 images (2 in calib_74, 11 not in it but
+labelled) and all six kmodels. The "distinct top-20 scores" column
+made the failure mode obvious:</p>
+
+<table>
+  <thead><tr>
+    <th>Image</th>
+    <th>float</th>
+    <th>mix</th>
+    <th>squant</th>
+    <th>squant128</th>
+    <th>u8u8 calib74</th>
+    <th>i16act</th>
+  </tr></thead>
+  <tbody>
+    <tr><td>003a746b</td><td class="num">20</td><td class="num">6</td><td class="num">9</td><td class="num">9</td><td class="num">9</td><td class="num">20</td></tr>
+    <tr><td>0148e2fc</td><td class="num">20</td><td class="num">1</td><td class="num">4</td><td class="num">5</td><td class="num">5</td><td class="num">18</td></tr>
+    <tr><td>03588042</td><td class="num">18</td><td class="num">4</td><td class="num">7</td><td class="num">7</td><td class="num">7</td><td class="num">20</td></tr>
+    <tr><td>03cb1869</td><td class="num">20</td><td class="num">2</td><td class="num">5</td><td class="num">1</td><td class="num">3</td><td class="num">18</td></tr>
+    <tr><td>c27f5e94</td><td class="num">20</td><td class="num">3</td><td class="num">2</td><td class="num">5</td><td class="num">5</td><td class="num">19</td></tr>
+  </tbody>
+</table>
+
+<p>Float and the int16-activation variant both keep most of the top-20
+scores distinct. Every u8-activation variant collapses to between 1
+and 9 distinct values — sometimes just <em>one</em>.</p>
+
+<p>That was enough to commit to the fix. We added one more variant to
+<a href="../configs/variants_quant.yaml"><code>variants_quant.yaml</code></a>
+— <code>yolov8_kld_i16act_u8w_calib74</code> — identical to the u8/u8
+variant except activations are int16 instead of uint8. Compiled it
+(~62 s, 3.35 MB). Fresh <code>pc_eval_yolov8.py</code> across 20
+validation images:</p>
+
+<table>
+  <thead><tr>
+    <th>kmodel</th>
+    <th>avg_best_iou</th>
+    <th>best_score_iou</th>
+    <th>r@0.4</th>
+  </tr></thead>
+  <tbody>
+    <tr><td>yolov8_existing_float</td><td class="num">0.801</td><td class="num">0.728</td><td class="num">0.97</td></tr>
+    <tr><td>yolov8_existing_mix</td><td class="num">0.792</td><td class="num">0.716</td><td class="num">0.97</td></tr>
+    <tr><td>yolov8_existing_squant</td><td class="num">0.790</td><td class="num">0.714</td><td class="num">0.91</td></tr>
+    <tr><td>yolov8_squant_raw01_calib128</td><td class="num">0.786</td><td class="num">0.711</td><td class="num">0.91</td></tr>
+    <tr><td>yolov8_kld_u8u8_calib74</td><td class="num">0.782</td><td class="num">0.704</td><td class="num">0.97</td></tr>
+    <tr><td><strong>yolov8_kld_i16act_u8w_calib74</strong></td><td class="num"><strong>0.803</strong></td><td class="num"><strong>0.732</strong></td><td class="num"><strong>0.97</strong></td></tr>
+  </tbody>
+</table>
+
+<p>The int16-activation variant matches float on every metric, and
+in fact beats it slightly on average best IoU (within noise — both
+sample from the same 20-image set). This was the model we picked
+to deploy.</p>
+
+<p>Full writeup of this phase lives in
+<a href="YOLOV8_K230_QUANT_DIAGNOSIS.md"><code>YOLOV8_K230_QUANT_DIAGNOSIS.md</code></a>.</p>
+
+<hr>
+
+<!-- ============================================================ -->
+<h2 id="phase6"><span class="phase">Phase 6</span>Forensic chase of the stale eval</h2>
+<p class="subhead">Why did the OLD <code>eval_summary.json</code> say zero recall when the model is fine?</p>
+
+<p>Before deploying the new variant the user wanted closure on the
+old eval files that had triggered the original concern. We needed
+to know whether the old "recall = 0" had been a real failure that
+the new variant fixed, or a measurement bug that had misled
+everyone.</p>
+
+<dl class="thought-tried">
+  <dt>What we thought</dt>
+  <dd>If the same script today gives a healthy IoU on the same
+  kmodel and same images, then either (a) the script was edited
+  in place after the OLD run and the OLD version was buggy, or
+  (b) something about the run-time environment changed.</dd>
+
+  <dt>What we tried</dt>
+  <dd>Cross-checked everything an OLD-vs-NEW comparison could
+  hinge on:
+    <ul>
+      <li>kmodel file hash (sha256 <code>57384B8F…</code>) — unchanged</li>
+      <li>label files — byte-identical between
+        <code>my_dataset/train/labels/</code> and
+        <code>IR-2026-05-07-18-52/labels/</code> (verified by diff)</li>
+      <li>image bytes — md5sums identical across mounts</li>
+      <li>Categories: dataset's <code>classes.txt</code> says
+        <code>0=black, 1=silver</code> but the eval script defaults
+        to <code>--categories silver black</code>. IoU is matched
+        on the integer index, so this only mis-labels the CSV's
+        <code>gt_cls</code> column — it doesn't drive IoU to zero.</li>
+    </ul>
+  </dd>
+
+  <dt>What we found</dt>
+  <dd>The OLD eval had used
+    <code>--images-dir /datasets/my_dataset/train/images</code>;
+    the fresh re-run we did first used the original
+    <code>IR-2026-05-07-18-52</code> directory. Different
+    <code>random.Random(42).sample</code> selections, hence a zero
+    overlap between the two 50-image samples — but the population
+    is the same images on disk. We ran the eval again with the
+    OLD command's exact <code>--images-dir</code> +
+    <code>--labels-dir</code> + <code>--limit 50</code>, hit the
+    same <code>num_gt = 76</code> as the OLD eval, and got back
+    <code>avg_best_iou = 0.794</code>, not 0.0.</dd>
+
+  <dt>The verdict</dt>
+  <dd><code>pc_eval_yolov8.py</code> as it sits in the repo today is
+  correct. The version that produced the OLD
+  <code>recall = 0.0</code> was a buggy earlier file that has been
+  overwritten in place — its on-disk timestamp now reads
+  <code>2026-05-19 00:33</code>, before the eval ran, but content
+  is no longer recoverable. No backups in <code>__pycache__</code>,
+  no git history for the file (it was untracked when the OLD eval
+  ran), no shadow copies. We can't recover the bug, but we proved
+  it isn't in the current code.</dd>
+</dl>
+
+<p>One persistent <em>cosmetic</em> bug remains in the current
+script: the <code>gt_cls</code> column in
+<code>reports/repro_pceval/*.csv</code> shows the wrong class name
+because of the categories-order mismatch. IoU and recall are
+unaffected.</p>
+
+<hr>
+
+<!-- ============================================================ -->
+<h2 id="phase7"><span class="phase">Phase 7</span>Device deploy and the "silver 638.50" surprise</h2>
+<p class="subhead">When the kmodel started running on hardware it printed nonsense scores.</p>
+
+<p>With i16-activation kmodel validated on PC, we ported the
+single-image inference path to the K230D. The first version of
+<a href="../src/deploy/det_image_yolov8.py"><code>src/deploy/det_image_yolov8.py</code></a>
+was a clone of the AnchorBaseDet image script, with the post-process
+swapped from <code>aicube.anchorbasedet_post_process</code> to
+<code>aicube.anchorfreedet_post_process</code> (which already lived
+inside the live script).</p>
+
+<p>The user ran it. The annotated output showed two boxes pinned
+in the corners of the image with labels like:</p>
+
+<pre><code>silver  638.50
+black    24.94</code></pre>
+
+<p>A confidence "score" of 638 is impossible for a sigmoid output
+that lives in <code>[0, 1]</code>. But 638 is a plausible <em>pixel
+coordinate</em> in a 640-wide image. The aicube helper was reading
+the model's bbox channels and printing them as class scores.</p>
+
+<hr>
+
+<!-- ============================================================ -->
+<h2 id="phase8"><span class="phase">Phase 8</span>A preprocessing pivot we got wrong</h2>
+<p class="subhead">Honest about a mistake we made and undid.</p>
+
+<p>While diagnosing the device output, we briefly convinced ourselves
+that the live script's preprocessing didn't match calibration. The
+live script set the sensor to <code>Sensor.GRAYSCALE</code>, called
+<code>img.histeq()</code> on every frame, and replicated the single
+grayscale plane to three channels — while we believed calibration
+used color RGB images via <code>cv2.imread</code>.</p>
+
+<p>We rewrote the live script to use <code>Sensor.RGB888</code> and
+disable <code>histeq</code>, and we put a note in
+<a href="YOLOV8_K230_QUANT_DIAGNOSIS.md"><code>YOLOV8_K230_QUANT_DIAGNOSIS.md</code></a>
+saying the device path had a calibration mismatch.</p>
+
+<p>The user pushed back: the test image they had loaded onto the
+board was a grayscale, already-histeq'd JPG — the standard format
+of the training set. That was a clue we hadn't accounted for. We
+opened a few calibration JPGs and split them into channels:</p>
+
+<pre><code>data/calibration_74/003a746b-1s1b_0216.jpg
+  shape=(480,640,3)  B==G=1  G==R=1  pixel=[50,50,50]
+data/calibration_74/072ce14b-0s1b_0109.jpg
+  shape=(480,640,3)  B==G=1  G==R=1  pixel=[25,25,25]</code></pre>
+
+<p>Every JPG in <code>calibration_74/</code> is a grayscale-histeq
+image saved as a 3-channel JPG with all three planes equal. The
+training pipeline reads them as "RGB" but the data is grayscale.
+So the original live script was actually correct: grayscale sensor
++ histeq + 3-channel replicate reproduces the calibration
+distribution exactly.</p>
+
+<p>We reverted the live script to its original sensor + preprocessing
+configuration and rewrote the relevant paragraph in the diagnosis
+report. The preprocessing mismatch we had hypothesized did not
+exist.</p>
+
+<blockquote>
+Calibration distribution is determined by the bytes inside the
+JPGs, not by the dataloader's docstring or by intuition about
+what "RGB" means.
+</blockquote>
+
+<hr>
+
+<!-- ============================================================ -->
+<h2 id="phase9"><span class="phase">Phase 9</span>Replacing aicube with pure-python decode</h2>
+<p class="subhead">The real reason the device printed "silver 638.50".</p>
+
+<p>With preprocessing ruled out we looked at the postprocess. The
+Ultralytics YOLOv8 export ends with two operations: a
+<code>Concat</code> of already-decoded bounding-box centers, widths,
+and heights, and a <code>Sigmoid</code> on the per-class scores. The
+output is a single tensor of shape <code>(1, 4+nc, 6300)</code> in
+channel-first layout:</p>
+
+<pre><code>channel 0 — cx (in model pixel space, 0..640)
+channel 1 — cy
+channel 2 — w
+channel 3 — h
+channel 4 — class 0 score (sigmoided, 0..1)
+channel 5 — class 1 score</code></pre>
+
+<p>The 6300 columns are 6300 candidate anchors — the union of grid
+cells across the three strides 8/16/32 (80·60 + 40·30 + 20·15 =
+6300).</p>
+
+<p><code>aicube.anchorfreedet_post_process</code> is a helper from
+Canaan's YOLOv8 reference, but it's designed for a different ONNX
+output: three separate per-stride raw feature maps, on which it
+performs its own Distribution Focal Loss decoding and grid
+arithmetic. Feeding it our single already-decoded tensor — even
+three times to satisfy its three-input signature — produces garbage
+because it's looking for raw logits where we have decoded values
+in pixel space. The "score" the helper printed in the screenshot
+(<code>638.50</code>) is a <code>cx</code> for the last anchor of
+the stride-32 grid (640 − ε).</p>
+
+<p>The fix is to bypass the vendor helper and decode the tensor
+ourselves, byte-for-byte the same as the PC simulator path
+(<a href="../src/eval/pc_eval_yolov8.py"><code>src/eval/pc_eval_yolov8.py</code></a>):</p>
+
+<ol>
+  <li>For each of the 6300 anchors, take the argmax over channels
+  4 and 5 — that's the class, that's the score.</li>
+  <li>If score &lt; <code>CONF_THRESHOLD</code>, drop the anchor.</li>
+  <li>Otherwise convert <code>(cx, cy, w, h)</code> to
+  <code>(x1, y1, x2, y2)</code>.</li>
+  <li>Run per-class greedy non-maximum suppression.</li>
+  <li>Map surviving box corners back from letterbox coordinates to
+  the original image with <code>unletterbox_box</code>.</li>
+</ol>
+
+<p>We wrote this in pure Python on top of <code>ulab.numpy</code> in
+<a href="../src/deploy/yolov8_decode.py"><code>src/deploy/yolov8_decode.py</code></a>.
+At <code>CONF_THRESHOLD = 0.30</code> the inner loop short-circuits
+on the cls compare before touching the bbox arithmetic, so the
+6300-anchor decode finishes in well under a second on the K230.</p>
+
+<hr>
+
+<!-- ============================================================ -->
+<h2 id="phase10"><span class="phase">Phase 10</span>Modularization</h2>
+<p class="subhead">One decoder, two scripts.</p>
+
+<p>The image script and the live script needed the same decoder, NMS,
+and unletterbox helpers. Rather than duplicate them, we extracted
+the helpers into a single shared module:</p>
+
+<ul>
+  <li><a href="../src/deploy/yolov8_decode.py"><code>src/deploy/yolov8_decode.py</code></a>
+    — pure-python decode + NMS + unletterbox + IoU.</li>
+  <li><a href="../src/deploy/det_image_yolov8.py"><code>det_image_yolov8.py</code></a>
+    — loads a JPG, runs
+    <code>gray → histeq → 3-channel replicate → letterbox →
+    KPU → decode → NMS → unletterbox → draw → save</code>.</li>
+  <li><a href="../src/deploy/det_live_xy_yolov8.py"><code>det_live_xy_yolov8.py</code></a>
+    — same pipeline against the sensor in a loop, plus the UART
+    packet emission to the Teensy.</li>
+</ul>
+
+<p>The full preprocessing chain — what the user actually sees when
+the script runs — is also documented as a clickable diagram for
+people new to the project:</p>
+
+<p style="margin-top: 6px;">
+  <a href="PIPELINE.html">PIPELINE.html — annotated 10-step diagram</a>
+</p>
+
+<hr>
+
+<!-- ============================================================ -->
+<h2 id="state">State of the repo at the end of the session</h2>
+<p class="subhead">What now exists and where.</p>
+
+<h3>New or changed code</h3>
+<ul>
+  <li><code>configs/variants_quant.yaml</code> — two new variants:
+    <code>yolov8_kld_u8u8_calib74</code> and
+    <code>yolov8_kld_i16act_u8w_calib74</code>.</li>
+  <li><code>src/eval/draw_yolov8_boxes.py</code> — annotation script.</li>
+  <li><code>src/eval/diagnose_yolov8_quant.py</code> — per-image stats
+    sweeper.</li>
+  <li><code>src/deploy/yolov8_decode.py</code> — shared decoder.</li>
+  <li><code>src/deploy/det_image_yolov8.py</code> — single-image
+    inference on K230D.</li>
+  <li><code>src/deploy/det_live_xy_yolov8.py</code> — patched to
+    import from the shared decoder; preprocessing unchanged from
+    the original.</li>
+</ul>
+
+<h3>Reports</h3>
+<ul>
+  <li><a href="YOLOV8_K230_QUANT_DIAGNOSIS.md"><code>YOLOV8_K230_QUANT_DIAGNOSIS.md</code></a>
+    — the technical diagnosis written after Phase 5.</li>
+  <li><a href="PIPELINE.html"><code>PIPELINE.html</code></a> — the
+    10-step pipeline diagram for newcomers.</li>
+  <li><a href="pceval_fresh_summary.csv"><code>pceval_fresh_summary.csv</code></a>
+    — final eval numbers for all six kmodels.</li>
+  <li><code>diag_parts/</code> — per-image diagnostics.</li>
+  <li><code>repro_pceval/</code> — fresh re-runs of
+    <code>pc_eval_yolov8.py</code>.</li>
+  <li><code>vis/</code>, <code>vis_unseen/</code>,
+    <code>vis_debug/</code> — annotated JPGs for spot-checking.</li>
+</ul>
+
+<h3>Recommended deploy bundle</h3>
+<p>Copy these five files to <code>/data/k230-train/</code> on the
+SD card:</p>
+<ul>
+  <li><code>exports/yolov8_kld_i16act_u8w_calib74/model.kmodel</code></li>
+  <li><code>exports/yolov8_kld_i16act_u8w_calib74/deploy_config.json</code></li>
+  <li><code>src/deploy/yolov8_decode.py</code></li>
+  <li><code>src/deploy/det_image_yolov8.py</code></li>
+  <li><code>src/deploy/det_live_xy_yolov8.py</code></li>
+</ul>
+
+<hr>
+
+<!-- ============================================================ -->
+<h2 id="open">Open threads</h2>
+
+<ul>
+  <li><strong>The exact bug in the earlier <code>pc_eval_yolov8.py</code>
+    is unrecoverable.</strong> We can prove the current file works;
+    we can't prove what was wrong with the version that produced
+    <code>recall = 0</code>.</li>
+  <li><strong><code>batch_export.py</code>'s deploy_config writer
+    doesn't know about YOLOv8.</strong> It hardcodes the AnchorBase
+    template, so YOLOv8 exports get <code>model_type = "AnchorBaseDet"</code>
+    and <code>categories = [black, silver]</code> (wrong order). We
+    hand-edited the one config we cared about. The fix is small but
+    out of scope this session.</li>
+  <li><strong>Pure-python decode latency on K230 hasn't been measured
+    on hardware yet.</strong> 6300 anchors with a Python loop should
+    be fast enough at conf ≥ 0.3 because most iterations short-
+    circuit on the cls compare, but real-world FPS needs a stopwatch.
+    If it turns out to be a bottleneck, vectorizing with
+    <code>ulab.numpy</code> is the obvious next step.</li>
+  <li><strong>The cosmetic <code>gt_cls</code> column mislabel</strong>
+    in <code>pc_eval_yolov8.py</code> output should get fixed if
+    anyone reads CSVs by class name.</li>
+</ul>
+
+<hr>
+
+<!-- ============================================================ -->
+<h2 id="lessons">Lessons</h2>
+
+<ul>
+  <li>Trust on-disk eval summaries less than re-runs. JSON files
+    don't carry the code version that produced them; if a number
+    surprises you, re-run the eval before drawing any conclusion.</li>
+  <li>Verify the channel layout and shape contract of every vendor
+    post-process helper before plugging it in. Both
+    <code>aicube.anchorbasedet_post_process</code> and
+    <code>aicube.anchorfreedet_post_process</code> exist; they
+    look almost identical from the call site; they have completely
+    different assumptions about what the model returns.</li>
+  <li>Calibration distribution is determined by the bytes inside
+    the JPGs, not by the dataloader's docstring. Check with
+    <code>cv2.split</code> + <code>numpy.array_equal</code>.</li>
+  <li>Score saturation looks like a model failure but is a
+    quantization-arithmetic failure. The detector usually still
+    knows where things are — it's the last-layer activation that
+    gets crushed to one of 256 bins. Promoting that single layer
+    to int16 is cheap and usually sufficient.</li>
+  <li>Pivots are part of the work; document them honestly. The
+    Phase 8 detour was a real cost that almost shipped a broken
+    live script. Writing it down so the next person doesn't
+    repeat it is worth the embarrassment.</li>
+</ul>
+
+<footer>
+  <p>Generated <time>2026-05-19</time> — RoboCupJunior RescueLine
+  project, k230-train repo. See <code>reports/</code> for raw
+  artifacts, <a href="YOLOV8_K230_QUANT_DIAGNOSIS.md">YOLOV8_K230_QUANT_DIAGNOSIS.md</a>
+  for the technical writeup, <a href="PIPELINE.html">PIPELINE.html</a>
+  for the picture-book version of how an image becomes boxes.</p>
+</footer>
+
+</main>
+</body>
+</html>

@@ -19,7 +19,10 @@
       "PowerShell(python -c \"import cv2; print\\('cv2', cv2.__version__\\)\" 2>&1)",
       "PowerShell(python -c \"import numpy; print\\('numpy', numpy.__version__\\)\" 2>&1)",
       "PowerShell($py = \"python\"; & $py --version; & $py -c \"import sys, platform; print\\(sys.executable\\); print\\('py', platform.python_version\\(\\)\\)\"; foreach \\($pkg in @\\('nncase','nncase_kpu','torch','onnx','onnxsim','onnxruntime','cv2','numpy','yaml','PIL'\\)\\) { try { & $py -c \"import $pkg, sys; v=getattr\\($pkg,'__version__','?'\\); print\\('$pkg', v\\)\" } catch { Write-Output \"$pkg : import failed\" } })",
-      "Bash(python -c \"import sys, platform; print\\(sys.executable\\); print\\(platform.python_version\\(\\)\\)\")"
+      "Bash(python -c \"import sys, platform; print\\(sys.executable\\); print\\(platform.python_version\\(\\)\\)\")",
+      "Bash(docker exec *)",
+      "Read(//c/Users/magic/Documents/robocup/RoboCupJunior_RescueLine/k230/docker/**)",
+      "Bash(docker compose *)"
     ]
   }
 }

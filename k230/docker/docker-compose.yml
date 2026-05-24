@@ -1,0 +1,12 @@
+services:
+  nncase:
+    build: .
+    image: k230-nncase:latest
+    container_name: k230-nncase
+    ports:
+      - "8888:8888"
+    volumes:
+      - .:/workspace
+      - ../train:/k230-train
+      - ../data/datasets:/datasets:ro
+    working_dir: /workspace

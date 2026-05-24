@@ -1,0 +1,7 @@
+gmodel_dump_dir/40/gmodel.bin
+1704712
+1706326
+8750
+"gmodel_dump_dir/40"
+4
+wait-key

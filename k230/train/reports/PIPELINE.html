@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>K230 YOLOv8 detection pipeline</title>
+<style>
+  body { font-family: -apple-system, Segoe UI, Roboto, sans-serif;
+         background: #0e1116; color: #d6dae0; margin: 0; padding: 32px;
+         line-height: 1.55; }
+  h1 { font-weight: 600; margin-top: 0; }
+  h2 { margin-top: 36px; font-weight: 600; color: #9ec5ff; }
+  p { max-width: 760px; }
+  code { background: #1a1f29; padding: 1px 5px; border-radius: 3px;
+         font-size: 0.92em; color: #ffd29c; }
+  .pipeline { display: flex; flex-direction: column; align-items: stretch;
+              gap: 0; max-width: 920px; margin: 0 auto; }
+  .step { display: grid; grid-template-columns: 80px 1fr 1fr; gap: 16px;
+          align-items: stretch; padding: 14px 18px;
+          background: #161b22; border: 1px solid #2a313c;
+          border-radius: 10px; margin: 6px 0; }
+  .step.host { border-left: 4px solid #56d364; }
+  .step.kpu  { border-left: 4px solid #f0883e; background: #1c1410; }
+  .step.host_out { border-left: 4px solid #58a6ff; }
+  .num { font-size: 28px; font-weight: 700; color: #9da7b3;
+         display: flex; align-items: center; justify-content: center; }
+  .name { font-weight: 600; font-size: 1.05em; }
+  .name small { display: block; color: #8d99a6; font-weight: 400;
+                font-size: 0.85em; margin-top: 3px; }
+  .what { color: #c0c8d3; font-size: 0.95em; }
+  .what code { font-size: 0.88em; }
+  .arrow { text-align: center; color: #586069; font-size: 22px;
+           line-height: 1; padding: 2px 0; }
+  .badge { display: inline-block; padding: 1px 7px; border-radius: 3px;
+           font-size: 0.75em; margin-left: 8px;
+           background: #2a313c; color: #9ec5ff;}
+  .badge.kpu { background: #4d2a14; color: #ffae73; }
+  .key { background: #1a1f29; padding: 12px 16px; border-radius: 8px;
+         border-left: 3px solid #9ec5ff; max-width: 760px;
+         margin: 18px 0; }
+  .key strong { color: #9ec5ff; }
+  table { border-collapse: collapse; max-width: 760px; margin-top: 16px; }
+  th, td { text-align: left; padding: 6px 14px;
+           border-bottom: 1px solid #2a313c; font-size: 0.95em; }
+  th { color: #9ec5ff; font-weight: 600; }
+  .glossary dt { color: #9ec5ff; font-weight: 600; margin-top: 10px; }
+  .glossary dd { margin-left: 0; color: #c0c8d3; }
+  .footer { margin-top: 40px; color: #6b7785; font-size: 0.85em; }
+</style>
+</head>
+<body>
+
+<h1>How a single image becomes coloured boxes on screen</h1>
+
+<p>This is the full path a frame travels on the K230 board, from camera/JPG
+to the rectangles drawn around silver and black objects. It applies to
+both <code>det_image_yolov8.py</code> (one image off disk) and
+<code>det_live_xy_yolov8.py</code> (camera frames in a loop). They share
+preprocessing and decode logic; the only differences are the source
+(file vs sensor) and what happens with the result (save jpg vs send
+UART packet).</p>
+
+<div class="key">
+<strong>Why grayscale + histeq?</strong> The model was trained on
+greyscale photos that had their contrast stretched with histogram
+equalization (basically: spread dark pixels darker and bright pixels
+brighter so detail in shadows is visible). To get accurate predictions
+the input you feed the trained model has to look like the inputs it was
+trained on. So every frame, regardless of source, is forced through the
+same grayscale + histeq + 3-channel-replicate steps.
+</div>
+
+<div class="pipeline">
+
+  <div class="step host">
+    <div class="num">1</div>
+    <div class="name">Source <span class="badge">CPU</span>
+      <small>JPG file or one sensor frame</small></div>
+    <div class="what">A single image arrives. It can be a colour photo
+      or a greyscale frame; could be 640×480 or any size.</div>
+  </div>
+  <div class="arrow">▼</div>
+
+  <div class="step host">
+    <div class="num">2</div>
+    <div class="name">To grayscale
+      <small>collapse RGB into one channel</small></div>
+    <div class="what">If the image is colour, average/weight the
+      R,G,B planes into a single brightness plane. Now each pixel is
+      one number 0–255.</div>
+  </div>
+  <div class="arrow">▼</div>
+
+  <div class="step host">
+    <div class="num">3</div>
+    <div class="name">Histogram equalization (<code>histeq</code>)
+      <small>stretch contrast to the trained distribution</small></div>
+    <div class="what">Remap pixel intensities so the dark/bright
+      ranges fill the full 0–255 span more evenly. Without this, a dim
+      photo would look different from training data and the model would
+      under-perform.</div>
+  </div>
+  <div class="arrow">▼</div>
+
+  <div class="step host">
+    <div class="num">4</div>
+    <div class="name">Replicate to 3 channels
+      <small>R = G = B = the grayscale plane</small></div>
+    <div class="what">The model's input layer expects 3 channels (it
+      was trained when the dataset stored grayscale photos as RGB JPGs
+      with all three planes equal). So we copy the single plane into
+      slots R, G, B.</div>
+  </div>
+  <div class="arrow">▼</div>
+
+  <div class="step host">
+    <div class="num">5</div>
+    <div class="name">Letterbox to 640 × 480
+      <small>resize with aspect-ratio preserved, gray pad 114</small></div>
+    <div class="what">The model expects exactly 640 wide × 480 tall. If
+      the source is a different shape, it's scaled by the largest factor
+      that fits inside the box and the leftover strip is filled with
+      grey (value 114). This is done by the K230's <code>ai2d</code>
+      hardware unit. Output layout is uint8 tensor <code>(1, 3, 480,
+      640)</code>.</div>
+  </div>
+  <div class="arrow">▼</div>
+
+  <div class="step kpu">
+    <div class="num">6</div>
+    <div class="name">KPU runs the kmodel <span class="badge kpu">accelerator</span>
+      <small>~3 MB int16-activation YOLOv8n</small></div>
+    <div class="what">
+      Internally divides the uint8 input by 255 → float [0,1], runs a
+      neural network (a stack of small convolutions + a detection
+      head), and writes one output tensor of shape
+      <code>(1, 6, 6300)</code>:
+      <table>
+        <tr><th>row</th><th>meaning</th></tr>
+        <tr><td>0</td><td>box center x (pixels in 640×480 model space)</td></tr>
+        <tr><td>1</td><td>box center y</td></tr>
+        <tr><td>2</td><td>box width</td></tr>
+        <tr><td>3</td><td>box height</td></tr>
+        <tr><td>4</td><td>"silver" class confidence (already sigmoid'd, 0–1)</td></tr>
+        <tr><td>5</td><td>"black" class confidence</td></tr>
+      </table>
+      The 6300 columns are 6300 candidate detections — three different
+      grid sizes overlaid on the image
+      (80×60 + 40×30 + 20×15 = 6300). Most of these candidates are noise
+      and will be thrown away.
+    </div>
+  </div>
+  <div class="arrow">▼</div>
+
+  <div class="step host">
+    <div class="num">7</div>
+    <div class="name">Decode the 6300 candidates
+      <small>pick a class + threshold by confidence</small></div>
+    <div class="what">
+      For each of 6300 columns: compare row 4 vs row 5, pick the
+      larger as the class, that value is the score. Drop the column if
+      score &lt; <code>CONF_THRESHOLD</code> (default 0.30). Convert
+      <code>(cx, cy, w, h)</code> → corner coordinates
+      <code>(x1, y1, x2, y2)</code>.
+    </div>
+  </div>
+  <div class="arrow">▼</div>
+
+  <div class="step host">
+    <div class="num">8</div>
+    <div class="name">Class-wise non-maximum suppression (NMS)
+      <small>drop overlapping duplicates</small></div>
+    <div class="what">
+      Multiple grid cells often "vote" for the same object. NMS keeps
+      the highest-score box and discards any other box of the same
+      class that overlaps it by more than <code>NMS_THRESHOLD</code>
+      (default IoU &gt; 0.5). Result: usually 1–3 boxes per object.
+    </div>
+  </div>
+  <div class="arrow">▼</div>
+
+  <div class="step host">
+    <div class="num">9</div>
+    <div class="name">Un-letterbox
+      <small>undo step 5: model coords → original image coords</small></div>
+    <div class="what">
+      Step 5 may have scaled and padded. Each surviving box's corners
+      get the same scaling reversed (and pad offset subtracted) so the
+      rectangle lands on the actual pixel positions of the original
+      image / camera frame.
+    </div>
+  </div>
+  <div class="arrow">▼</div>
+
+  <div class="step host_out">
+    <div class="num">10</div>
+    <div class="name">Output
+      <small>depends on which script</small></div>
+    <div class="what">
+      <b><code>det_image_yolov8.py</code></b> — draws coloured
+      rectangles + class name + score on a copy of the source image,
+      saves to <code>det_result.jpg</code>.<br>
+      <b><code>det_live_xy_yolov8.py</code></b> — picks the
+      highest-confidence box, computes its centre <code>(cx, cy)</code>
+      in original pixels, packs into an 8-byte UART packet
+      <code>[0xAA 0x55 class score xHI xLO yHI yLO]</code>, and (if
+      <code>SHOW_DISPLAY</code>) draws the rectangle on the live feed.
+      Repeats at sensor framerate.
+    </div>
+  </div>
+
+</div>
+
+<h2>Key parameters you may need to tune</h2>
+<table>
+  <tr><th>Name</th><th>Default</th><th>Effect of raising</th></tr>
+  <tr><td><code>CONF_THRESHOLD</code></td><td>0.30</td>
+      <td>Fewer false positives, may miss low-contrast objects.</td></tr>
+  <tr><td><code>NMS_THRESHOLD</code> (IoU)</td><td>0.50</td>
+      <td>Allow more overlapping boxes per object (rarely needed).</td></tr>
+  <tr><td><code>APPLY_HISTEQ</code> (live only)</td><td>True</td>
+      <td>Must stay True — matches training distribution.</td></tr>
+</table>
+
+<h2>Glossary for newcomers</h2>
+<dl class="glossary">
+  <dt>kmodel</dt>
+  <dd>A compiled neural network for the K230 chip. Contains the
+  numbers (weights) the model learned during training, plus an
+  execution schedule the KPU follows.</dd>
+
+  <dt>KPU (Kendryte Processing Unit)</dt>
+  <dd>The K230 chip's hardware accelerator dedicated to neural network
+  math. Runs convolutions ~100× faster than the CPU.</dd>
+
+  <dt>ai2d</dt>
+  <dd>The K230's image-pre-processing hardware. Does resize, crop,
+  pad, format conversion without using the CPU. We use it for the
+  letterbox in step 5.</dd>
+
+  <dt>Letterbox</dt>
+  <dd>The trick to feed a non-640×480 image to a 640×480 model
+  without squashing it: scale by the largest factor that fits, then
+  fill the leftover edges with a constant grey.</dd>
+
+  <dt>Anchor / grid cell</dt>
+  <dd>YOLO splits the image into cells; each cell may predict one box
+  centered near it. The 6300 candidates in step 6 are these cells across
+  three grid sizes. YOLOv8 "anchor-free" means cells predict boxes
+  directly (no anchor templates), unlike older YOLO versions.</dd>
+
+  <dt>Sigmoid</dt>
+  <dd>A function that squashes any number into the range 0–1, used to
+  turn raw network outputs into a probability-like confidence.</dd>
+
+  <dt>NMS</dt>
+  <dd>Non-Maximum Suppression. Step 8. Removes near-duplicate boxes
+  pointing at the same object.</dd>
+
+  <dt>histeq / histogram equalization</dt>
+  <dd>Pixel-intensity remapping that makes a photo's histogram closer
+  to uniform — boosts contrast. Step 3.</dd>
+
+  <dt>NCHW</dt>
+  <dd>Memory layout for a 4D image tensor: Batch, Channels, Height,
+  Width. Step 5's output is <code>(1, 3, 480, 640)</code> in NCHW.</dd>
+
+  <dt>int16 activation</dt>
+  <dd>Internal numbers inside the kmodel are stored as 16-bit
+  integers (vs 8-bit). Twice the precision, slightly bigger model,
+  much better at preserving small confidence differences — why we
+  picked the <code>kld_i16act_u8w_calib74</code> variant.</dd>
+</dl>
+
+<p class="footer">Generated for the K230-RescueLine project. Pipeline
+verified against PC simulator on <code>data/calibration_74/</code> images:
+top-3 detections come back with smooth scores in the 0.6–0.85 range and
+IoU ≈ 0.85 vs ground truth.</p>
+
+</body>
+</html>

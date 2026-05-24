@@ -1,0 +1,3066 @@
+{
+  "Version": "1.0",
+  "Model": null,
+  "Outputs": [
+    {
+      "Name": "input_PreDequantize",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -6.1035156e-05,
+          "Max": 1.000061,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "Mean",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -2.9602052e-05,
+          "Max": 0.45471713,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "input_SubMean",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -0.48506588,
+          "Max": 0.5940658,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "Std",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -1.3977051e-05,
+          "Max": 0.22185773,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "input_DivStd",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -2.1181943,
+          "Max": 2.6402905,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "onnx::Conv_694",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -5.205713,
+          "Max": 7.4028707,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/backbone/features.0/features.0.0/Conv_output_0",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -147.90765,
+          "Max": 103.84169,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/backbone/features.0/features.0.2/Mul_output_0",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -0.38420483,
+          "Max": 56.1887,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "onnx::Conv_697",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -37.900177,
+          "Max": 55.68452,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/backbone/features.1/block.0/block.0.2/Relu_output_0",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -0.007010803,
+          "Max": 39.491856,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/backbone/features.1/block.1/GlobalAveragePool_output_0",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -0.0006607809,
+          "Max": 10.826895,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "backbone.model.features.1.block.1.fc1.weight",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -1.3009324,
+          "Max": 1.1209679,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/backbone/features.1/block.1/Relu_output_0",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -0.0003527311,
+          "Max": 5.779499,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "backbone.model.features.1.block.1.fc2.weight",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -0.7671553,
+          "Max": 1.14568,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/backbone/features.1/block.1/fc2/Conv_output_0",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -7.3742447,
+          "Max": 2.6486878,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/backbone/features.1/block.1/HardSigmoid_output_0",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -5.7455207e-05,
+          "Max": 0.94140357,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/backbone/features.1/block.1/Mul_output_0",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -0.004934019,
+          "Max": 20.214676,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "onnx::Conv_700",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -9.004593,
+          "Max": 4.239273,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/backbone/features.1/block.2/block.2.0/Conv_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -130.51215,
+          "Max": 35.24756,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "onnx::Conv_703",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -0.84754235,
+          "Max": 1.4986396,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/backbone/features.2/block.0/block.0.2/Relu_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -0.037584677,
+          "Max": 77.011,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "onnx::Conv_706",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -52.612343,
+          "Max": 97.48738,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/backbone/features.2/block.1/block.1.2/Relu_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -0.053061068,
+          "Max": 108.72213,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "onnx::Conv_709",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -1.6193231,
+          "Max": 1.3844098,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/backbone/features.2/block.2/block.2.0/Conv_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -177.99023,
+          "Max": 117.8512,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "onnx::Conv_712",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -0.48515633,
+          "Max": 0.4075801,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/backbone/features.3/block.0/block.0.2/Relu_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -0.014057185,
+          "Max": 57.592285,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "onnx::Conv_715",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -12.69142,
+          "Max": 14.449187,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/backbone/features.3/block.1/block.1.2/Relu_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -0.03639987,
+          "Max": 74.583336,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "onnx::Conv_718",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -0.81783086,
+          "Max": 0.7723791,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/backbone/features.3/block.2/block.2.0/Conv_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -108.39703,
+          "Max": 97.31018,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/backbone/features.3/Add_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -250.24994,
+          "Max": 143.31104,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "onnx::Conv_721",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -1.1063665,
+          "Max": 1.1588446,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/backbone/features.4/block.0/block.0.0/Conv_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -177.03204,
+          "Max": 231.98615,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/backbone/features.4/block.0/block.0.2/Mul_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -0.42660457,
+          "Max": 158.20584,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "onnx::Conv_724",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -6.5502877,
+          "Max": 3.9998236,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/backbone/features.4/block.1/block.1.0/Conv_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -101.09798,
+          "Max": 155.34451,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/backbone/features.4/block.1/block.1.2/Mul_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -0.42361146,
+          "Max": 124.11896,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/backbone/features.4/block.2/GlobalAveragePool_output_0",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -0.35705256,
+          "Max": 15.175654,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "backbone.model.features.4.block.2.fc1.weight",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -1.2901529,
+          "Max": 1.1902019,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/backbone/features.4/block.2/Relu_output_0",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -0.0005653692,
+          "Max": 9.263575,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "backbone.model.features.4.block.2.fc2.weight",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -0.74018794,
+          "Max": 1.0062554,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/backbone/features.4/block.2/fc2/Conv_output_0",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -7.914656,
+          "Max": 8.972742,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/backbone/features.4/block.2/HardSigmoid_output_0",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -6.1035156e-05,
+          "Max": 1.000061,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/backbone/features.4/block.2/Mul_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -0.3860425,
+          "Max": 39.21235,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "onnx::Conv_727",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -2.8710299,
+          "Max": 2.7016668,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/backbone/features.4/block.3/block.3.0/Conv_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -176.3143,
+          "Max": 126.31128,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "onnx::Conv_730",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -2.011982,
+          "Max": 2.4113533,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/backbone/features.5/block.0/block.0.0/Conv_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -108.16751,
+          "Max": 64.7442,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/backbone/features.5/block.0/block.0.2/Mul_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -0.3985604,
+          "Max": 72.02612,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "onnx::Conv_733",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -25.951603,
+          "Max": 28.716469,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/backbone/features.5/block.1/block.1.0/Conv_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -219.6199,
+          "Max": 113.75867,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/backbone/features.5/block.1/block.1.2/Mul_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -0.42553863,
+          "Max": 103.178665,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/backbone/features.5/block.2/GlobalAveragePool_output_0",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -0.32482427,
+          "Max": 16.838587,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "backbone.model.features.5.block.2.fc1.weight",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -1.2910774,
+          "Max": 1.6305659,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/backbone/features.5/block.2/Relu_output_0",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -0.001097185,
+          "Max": 17.977375,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "backbone.model.features.5.block.2.fc2.weight",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -1.3903726,
+          "Max": 2.0670362,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/backbone/features.5/block.2/fc2/Conv_output_0",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -28.808582,
+          "Max": 19.848886,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/backbone/features.5/block.2/HardSigmoid_output_0",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -6.1035156e-05,
+          "Max": 1.000061,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/backbone/features.5/block.2/Mul_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -0.3875841,
+          "Max": 31.852818,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "onnx::Conv_736",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -2.0584757,
+          "Max": 3.0093613,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/backbone/features.5/block.3/block.3.0/Conv_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -100.29906,
+          "Max": 72.91232,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/backbone/features.5/Add_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -227.95703,
+          "Max": 120.30701,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "onnx::Conv_739",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -0.5422963,
+          "Max": 0.44360882,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/backbone/features.6/block.0/block.0.0/Conv_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -74.131805,
+          "Max": 59.52957,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/backbone/features.6/block.0/block.0.2/Mul_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -0.39496243,
+          "Max": 50.74875,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "onnx::Conv_742",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -24.788935,
+          "Max": 23.034035,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/backbone/features.6/block.1/block.1.0/Conv_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -187.97449,
+          "Max": 111.851135,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/backbone/features.6/block.1/block.1.2/Mul_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -0.4115681,
+          "Max": 93.27592,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/backbone/features.6/block.2/GlobalAveragePool_output_0",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -0.30655274,
+          "Max": 9.321476,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "backbone.model.features.6.block.2.fc1.weight",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -1.6569251,
+          "Max": 1.1703787,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/backbone/features.6/block.2/Relu_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -0.0007558714,
+          "Max": 12.3849535,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "backbone.model.features.6.block.2.fc2.weight",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -1.3996476,
+          "Max": 0.9349221,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/backbone/features.6/block.2/fc2/Conv_output_0",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -25.609938,
+          "Max": 15.504473,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/backbone/features.6/block.2/HardSigmoid_output_0",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -6.1035156e-05,
+          "Max": 1.000061,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/backbone/features.6/block.2/Mul_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -0.4115681,
+          "Max": 55.830177,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "onnx::Conv_745",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -1.3689432,
+          "Max": 1.4120605,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/backbone/features.6/block.3/block.3.0/Conv_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -158.87125,
+          "Max": 175.40204,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/backbone/features.6/Add_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -210.27185,
+          "Max": 150.71143,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "onnx::Conv_748",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -0.4777227,
+          "Max": 0.5386679,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/backbone/features.7/block.0/block.0.0/Conv_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -128.5419,
+          "Max": 60.203094,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/backbone/features.7/block.0/block.0.2/Mul_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -0.3953278,
+          "Max": 51.684475,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "onnx::Conv_751",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -16.631626,
+          "Max": 11.228294,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/backbone/features.7/block.1/block.1.0/Conv_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -102.32776,
+          "Max": 105.024445,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/backbone/features.7/block.1/block.1.2/Mul_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -0.41515574,
+          "Max": 102.46382,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/backbone/features.7/block.2/GlobalAveragePool_output_0",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -0.3076749,
+          "Max": 13.320691,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "backbone.model.features.7.block.2.fc1.weight",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -1.1071639,
+          "Max": 1.3054531,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/backbone/features.7/block.2/Relu_output_0",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -0.001197147,
+          "Max": 19.615253,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "backbone.model.features.7.block.2.fc2.weight",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -1.100552,
+          "Max": 1.1889876,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/backbone/features.7/block.2/fc2/Conv_output_0",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -16.625624,
+          "Max": 22.595669,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/backbone/features.7/block.2/HardSigmoid_output_0",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -6.1035156e-05,
+          "Max": 1.000061,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/backbone/features.7/block.2/Mul_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -0.41135904,
+          "Max": 55.508865,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "onnx::Conv_754",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -2.0874178,
+          "Max": 2.3041003,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/backbone/features.7/block.3/block.3.0/Conv_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -99.1344,
+          "Max": 100.595276,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/backbone/features.7/Add_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -231.6188,
+          "Max": 189.4314,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "onnx::Conv_757",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -0.26931155,
+          "Max": 0.3836033,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/backbone/features.8/block.0/block.0.0/Conv_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -159.87445,
+          "Max": 60.308228,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/backbone/features.8/block.0/block.0.2/Mul_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -0.39045382,
+          "Max": 47.114586,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "onnx::Conv_760",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -13.982167,
+          "Max": 23.468472,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/backbone/features.8/block.1/block.1.0/Conv_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -150.49707,
+          "Max": 125.06772,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/backbone/features.8/block.1/block.1.2/Mul_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -0.41627416,
+          "Max": 126.460526,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/backbone/features.8/block.2/GlobalAveragePool_output_0",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -0.3183396,
+          "Max": 27.52137,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "backbone.model.features.8.block.2.fc1.weight",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -2.0839374,
+          "Max": 1.4951365,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/backbone/features.8/block.2/Relu_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -0.00079306634,
+          "Max": 12.994392,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "backbone.model.features.8.block.2.fc2.weight",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -1.5855227,
+          "Max": 1.6427535,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/backbone/features.8/block.2/fc2/Conv_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -24.78358,
+          "Max": 14.29307,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/backbone/features.8/block.2/HardSigmoid_output_0",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -6.1035156e-05,
+          "Max": 1.000061,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/backbone/features.8/block.2/Mul_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -0.40009546,
+          "Max": 76.74339,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "onnx::Conv_763",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -1.9372613,
+          "Max": 3.0335588,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/backbone/features.8/block.3/block.3.0/Conv_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -172.38696,
+          "Max": 203.65137,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/backbone/features.8/Add_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -302.23328,
+          "Max": 179.53503,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "onnx::Conv_766",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -0.48504424,
+          "Max": 0.42991638,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/backbone/features.9/block.0/block.0.0/Conv_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -123.18089,
+          "Max": 48.72101,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/backbone/features.9/block.0/block.0.2/Mul_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -0.3896471,
+          "Max": 44.635506,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "onnx::Conv_769",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -6.1565075,
+          "Max": 5.095992,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/backbone/features.9/block.1/block.1.0/Conv_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -95.546234,
+          "Max": 62.856293,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/backbone/features.9/block.1/block.1.2/Mul_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -0.39128014,
+          "Max": 57.989338,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/backbone/features.9/block.2/GlobalAveragePool_output_0",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -0.3156463,
+          "Max": 11.582427,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "backbone.model.features.9.block.2.fc1.weight",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -1.3440082,
+          "Max": 1.7282413,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/backbone/features.9/block.2/Relu_output_0",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -0.00113081,
+          "Max": 18.528322,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "backbone.model.features.9.block.2.fc2.weight",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -2.543618,
+          "Max": 1.3695984,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/backbone/features.9/block.2/fc2/Conv_output_0",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -27.212563,
+          "Max": 22.890879,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/backbone/features.9/block.2/HardSigmoid_output_0",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -6.1035156e-05,
+          "Max": 1.000061,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/backbone/features.9/block.2/Mul_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -0.3806552,
+          "Max": 14.108063,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "onnx::Conv_772",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -2.1911714,
+          "Max": 2.4271028,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/backbone/features.9/block.3/block.3.0/Conv_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -62.500465,
+          "Max": 59.440094,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "onnx::Conv_775",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -0.4342473,
+          "Max": 0.36936024,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/backbone/features.10/block.0/block.0.0/Conv_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -31.76976,
+          "Max": 44.320724,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/backbone/features.10/block.0/block.0.2/Mul_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -0.3839166,
+          "Max": 36.156208,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "onnx::Conv_778",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -16.80338,
+          "Max": 25.693668,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/backbone/features.10/block.1/block.1.0/Conv_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -87.044266,
+          "Max": 153.05865,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/backbone/features.10/block.1/block.1.2/Mul_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -0.4104032,
+          "Max": 144.67189,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/backbone/features.10/block.2/GlobalAveragePool_output_0",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -0.34570402,
+          "Max": 23.427921,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "backbone.model.features.10.block.2.fc1.weight",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -1.0342815,
+          "Max": 1.9679551,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/backbone/features.10/block.2/Relu_output_0",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -0.0036289678,
+          "Max": 59.460636,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "backbone.model.features.10.block.2.fc2.weight",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -0.9775269,
+          "Max": 1.1050209,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/backbone/features.10/block.2/fc2/Conv_output_0",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -69.51607,
+          "Max": 28.069344,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/backbone/features.10/block.2/HardSigmoid_output_0",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -6.1035156e-05,
+          "Max": 1.000061,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/backbone/features.10/block.2/Mul_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -0.40258488,
+          "Max": 27.899492,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "onnx::Conv_781",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -1.1147634,
+          "Max": 1.17074,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/backbone/features.10/block.3/block.3.0/Conv_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -119.41113,
+          "Max": 116.34354,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/backbone/features.10/Add_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -143.37122,
+          "Max": 115.64313,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "onnx::Conv_784",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -0.3551526,
+          "Max": 0.37243927,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/backbone/features.11/block.0/block.0.0/Conv_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -100.23065,
+          "Max": 42.014526,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/backbone/features.11/block.0/block.0.2/Mul_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -0.38539627,
+          "Max": 26.24984,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "onnx::Conv_787",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -14.786501,
+          "Max": 21.962147,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/backbone/features.11/block.1/block.1.0/Conv_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -145.83905,
+          "Max": 181.47955,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/backbone/features.11/block.1/block.1.2/Mul_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -0.41604692,
+          "Max": 104.74619,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/backbone/features.11/block.2/GlobalAveragePool_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -0.3438317,
+          "Max": 24.272043,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "backbone.model.features.11.block.2.fc1.weight",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -1.2272762,
+          "Max": 1.3451648,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/backbone/features.11/block.2/Relu_output_0",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -0.0033274207,
+          "Max": 54.519787,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "backbone.model.features.11.block.2.fc2.weight",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -0.8777438,
+          "Max": 1.0518409,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/backbone/features.11/block.2/fc2/Conv_output_0",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -65.73963,
+          "Max": 38.815117,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/backbone/features.11/block.2/HardSigmoid_output_0",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -6.1035156e-05,
+          "Max": 1.000061,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/backbone/features.11/block.2/Mul_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -0.41604692,
+          "Max": 83.73016,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "onnx::Conv_790",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -1.0318135,
+          "Max": 1.0560362,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/backbone/features.11/block.3/block.3.0/Conv_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -177.73663,
+          "Max": 141.63666,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/backbone/features.11/Add_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -214.8432,
+          "Max": 206.64679,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "onnx::Conv_799",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -0.20300007,
+          "Max": 0.20231426,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/adapt_layers/layer2/conv/Conv_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -105.25015,
+          "Max": 123.783264,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/neck/Resize_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -105.25015,
+          "Max": 123.783264,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "onnx::Conv_796",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -0.21711689,
+          "Max": 0.24773166,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/adapt_layers/layer1/conv/Conv_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -120.70703,
+          "Max": 108.52887,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/neck/Concat_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -120.70703,
+          "Max": 108.52887,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "onnx::Conv_802",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -1.4013265,
+          "Max": 1.4661809,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/neck/P4_1/cv1/conv/Conv_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -521.6858,
+          "Max": 386.27832,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/neck/P4_1/cv1/act/Mul_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -0.34359893,
+          "Max": 266.57678,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "onnx::Conv_805",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -0.8860329,
+          "Max": 1.019813,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/neck/P4_1/m/m.0/cv1/conv/Conv_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -695.29987,
+          "Max": 398.41174,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/neck/P4_1/m/m.0/cv1/act/Mul_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -0.34385625,
+          "Max": 200.67014,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "onnx::Conv_808",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -0.2963018,
+          "Max": 0.2567724,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/neck/P4_1/m/m.0/cv2/conv/Conv_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -558.64246,
+          "Max": 351.00525,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/neck/P4_1/m/m.0/cv2/act/Mul_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -0.32124454,
+          "Max": 218.7976,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "onnx::Conv_811",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -1.1693277,
+          "Max": 1.7289948,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/neck/P4_1/cv2/conv/Conv_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -496.18024,
+          "Max": 367.26733,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/neck/P4_1/cv2/act/Mul_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -0.3392026,
+          "Max": 310.76086,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/neck/P4_1/Concat_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -0.3392026,
+          "Max": 248.56517,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "onnx::Conv_814",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -0.7731371,
+          "Max": 0.9362713,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/neck/P4_1/cv3/conv/Conv_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -514.6889,
+          "Max": 183.08203,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/neck/P4_1/cv3/act/Mul_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -0.30900002,
+          "Max": 156.0935,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "onnx::Conv_817",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -0.85231185,
+          "Max": 0.9148576,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/neck/P4_2/conv/Conv_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -280.76346,
+          "Max": 215.73267,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/neck/P4_2/act/Mul_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -0.33102238,
+          "Max": 215.05089,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/pan/Resize_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -0.33102238,
+          "Max": 215.05089,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "onnx::Conv_793",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -0.3296369,
+          "Max": 0.3933683,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/adapt_layers/layer0/conv/Conv_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -132.77136,
+          "Max": 128.98022,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/pan/Concat_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -140.3146,
+          "Max": 220.22522,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "onnx::Conv_820",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -0.4325425,
+          "Max": 0.59861547,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/pan/P3/cv1/conv/Conv_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -158.7351,
+          "Max": 142.3428,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/pan/P3/cv1/act/Mul_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -0.30553606,
+          "Max": 69.05155,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "onnx::Conv_823",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -1.1345229,
+          "Max": 1.4583391,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/pan/P3/m/m.0/cv1/conv/Conv_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -110.56858,
+          "Max": 104.0228,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/pan/P3/m/m.0/cv1/act/Mul_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -0.29268545,
+          "Max": 57.984417,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "onnx::Conv_826",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -0.36382547,
+          "Max": 0.4815353,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/pan/P3/m/m.0/cv2/conv/Conv_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -66.58723,
+          "Max": 37.37857,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/pan/P3/m/m.0/cv2/act/Mul_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -0.28657684,
+          "Max": 32.95742,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "onnx::Conv_829",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -0.8123091,
+          "Max": 1.0100439,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/pan/P3/cv2/conv/Conv_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -181.58047,
+          "Max": 74.66699,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/pan/P3/cv2/act/Mul_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -0.30179667,
+          "Max": 59.47492,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/pan/P3/Concat_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -0.30179667,
+          "Max": 59.47492,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "onnx::Conv_832",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -2.90044,
+          "Max": 1.9580867,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/pan/P3/cv3/conv/Conv_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -159.28644,
+          "Max": 136.20831,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/pan/P3/cv3/act/Mul_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -0.31483433,
+          "Max": 130.10706,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "head.m.0.weight",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -0.23996942,
+          "Max": 0.22543414,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/head/m.0/Conv_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -48.101677,
+          "Max": 37.476746,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/head/Sigmoid_output_0",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -6.1035156e-05,
+          "Max": 1.000061,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "out0_s8",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -6.1035156e-05,
+          "Max": 1.000061,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "onnx::Conv_835",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -0.11828672,
+          "Max": 0.10765849,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/pan/convP3/conv/Conv_output_0",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -29.054497,
+          "Max": 22.662136,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/pan/convP3/act/Mul_output_0",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -0.28388017,
+          "Max": 21.909256,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/pan/Concat_1_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -0.33102238,
+          "Max": 161.23169,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "onnx::Conv_838",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -1.3047695,
+          "Max": 0.49577796,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/pan/P4/cv1/conv/Conv_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -179.63098,
+          "Max": 125.46939,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/pan/P4/cv1/act/Mul_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -0.30188903,
+          "Max": 107.68487,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "onnx::Conv_841",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -0.9955118,
+          "Max": 0.9738854,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/pan/P4/m/m.0/cv1/conv/Conv_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -139.62325,
+          "Max": 97.94525,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/pan/P4/m/m.0/cv1/act/Mul_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -0.29774472,
+          "Max": 78.71214,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "onnx::Conv_844",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -0.31240812,
+          "Max": 0.39430064,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/pan/P4/m/m.0/cv2/conv/Conv_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -153.70706,
+          "Max": 78.52667,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/pan/P4/m/m.0/cv2/act/Mul_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -0.3037367,
+          "Max": 51.504055,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "onnx::Conv_847",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -0.6295408,
+          "Max": 0.586546,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/pan/P4/cv2/conv/Conv_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -154.24219,
+          "Max": 71.53705,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/pan/P4/cv2/act/Mul_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -0.29814988,
+          "Max": 60.214375,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/pan/P4/Concat_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -0.30373672,
+          "Max": 51.504055,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "onnx::Conv_850",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -1.7401328,
+          "Max": 1.770252,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/pan/P4/cv3/conv/Conv_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -136.05908,
+          "Max": 117.44681,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/pan/P4/cv3/act/Mul_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -0.29689616,
+          "Max": 75.235664,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "head.m.1.weight",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -0.18749654,
+          "Max": 0.15860693,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/head/m.1/Conv_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -41.160137,
+          "Max": 41.210564,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/head/Sigmoid_1_output_0",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -6.1035156e-05,
+          "Max": 1.000061,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "out1_s16",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -6.1035156e-05,
+          "Max": 1.000061,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "onnx::Conv_853",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -0.102184415,
+          "Max": 0.07890588,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/pan/convP4/conv/Conv_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -60.763412,
+          "Max": 140.91855,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/pan/convP4/act/Mul_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -0.28872186,
+          "Max": 31.24204,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/pan/Concat_2_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -105.25015,
+          "Max": 82.15561,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "onnx::Conv_856",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -0.55248874,
+          "Max": 0.4920442,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/pan/P5/cv1/conv/Conv_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -182.83026,
+          "Max": 189.86865,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/pan/P5/cv1/act/Mul_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -0.30143523,
+          "Max": 93.83226,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "onnx::Conv_859",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -1.2697921,
+          "Max": 1.4190717,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/pan/P5/m/m.0/cv1/conv/Conv_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -134.22366,
+          "Max": 347.57446,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/pan/P5/m/m.0/cv1/act/Mul_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -0.3241886,
+          "Max": 163.64215,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "onnx::Conv_862",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -0.28279248,
+          "Max": 0.14152807,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/pan/P5/m/m.0/cv2/conv/Conv_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -278.4993,
+          "Max": 116.98822,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/pan/P5/m/m.0/cv2/act/Mul_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -0.32181108,
+          "Max": 132.92534,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "onnx::Conv_865",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -0.376276,
+          "Max": 0.31723648,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/pan/P5/cv2/conv/Conv_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -149.58359,
+          "Max": 122.13953,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/pan/P5/cv2/act/Mul_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -0.29358605,
+          "Max": 61.674194,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/pan/P5/Concat_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -0.32181108,
+          "Max": 88.53851,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "onnx::Conv_868",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -1.7101494,
+          "Max": 2.1965282,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/pan/P5/cv3/conv/Conv_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -378.87103,
+          "Max": 261.61377,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/pan/P5/cv3/act/Mul_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -0.33351845,
+          "Max": 168.90196,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "head.m.2.weight",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -0.17365123,
+          "Max": 0.16922487,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/head/m.2/Conv_output_0",
+      "DataType": "i16",
+      "DataRange": [
+        {
+          "Min": -49.267467,
+          "Max": 22.073067,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "/head/Sigmoid_2_output_0",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -6.1035156e-05,
+          "Max": 1.000061,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    },
+    {
+      "Name": "out2_s32",
+      "DataType": "u8",
+      "DataRange": [
+        {
+          "Min": -6.1035156e-05,
+          "Max": 1.000061,
+          "IsFull": false
+        }
+      ],
+      "DataRangeMode": "by_tensor"
+    }
+  ]
+}
