@@ -30,7 +30,8 @@
       "Bash(tasklist //FI \"IMAGENAME eq docker.exe\")",
       "Read(//c/Users/magic/**)",
       "Bash(jobs -l)",
-      "Bash(DOCKER_BUILDKIT=1 docker build -f Dockerfile.train -t k230-train:latest --progress=plain .)"
+      "Bash(DOCKER_BUILDKIT=1 docker build -f Dockerfile.train -t k230-train:latest --progress=plain .)",
+      "Bash(make --version)"
     ]
   }
 }

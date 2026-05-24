@@ -199,6 +199,7 @@ footer {
   <tr><td>~15 GB free disk</td><td>5 GB nncase image · 8 GB train image · 1 GB datasets · 1 GB artifacts</td></tr>
   <tr><td>NVIDIA GPU + nvidia-container-toolkit <span class="note">(optional)</span></td><td>Only needed if you train from scratch on this PC. Skip if you bring an existing <code>best.pt</code> or train in AI Cube.</td></tr>
   <tr><td>The <code>k230/</code> folder</td><td>Zip it from your current PC or clone the repo</td></tr>
+  <tr><td><strong>No <code>make</code> required</strong></td><td>Use <code>.\run.ps1</code> (Windows) or <code>./run.sh</code> (Linux/Mac). The <code>Makefile</code> is there too if you happen to have <code>make</code> installed.</td></tr>
 </table>
 
 <h2>The path</h2>
@@ -261,21 +262,32 @@ docker compose build train             # only if training on this PC</code></pre
   <div class="step-num">5</div>
   <div class="step-body">
     <h3>Run the pipeline</h3>
-<pre><code>cd k230/pipeline
+    <p>Three equivalent runners — pick whichever fits your shell. They all do the same thing.</p>
 
-# full path (needs train image + GPU)
+<pre><code># --- Windows PowerShell ---
+cd k230\pipeline
+.\run.ps1 all                  # full path (needs train image + GPU)
+.\run.ps1 all-skip-train       # skip training, use existing best.pt
+.\run.ps1 calibrate            # one stage at a time
+.\run.ps1 compile
+.\run.ps1 eval
+
+# --- Linux / Mac / Git Bash ---
+cd k230/pipeline
+chmod +x run.sh                # first time only
+./run.sh all
+./run.sh all-skip-train
+./run.sh calibrate
+./run.sh compile
+./run.sh eval
+
+# --- If you have GNU make installed ---
+cd k230/pipeline
 make all
-
-# OR: skip training, use existing best.pt
 make all-skip-train
-
-# OR: run stages individually
-make calibrate
-make compile
-make eval
-make select
-make package</code></pre>
+make calibrate compile eval</code></pre>
     <p>Each stage prints what it's doing and what it produced. If one fails, fix it and re-run just that target — earlier stages don't redo work.</p>
+    <div class="callout"><strong>Tested:</strong> <code>.\run.ps1 calibrate</code> and <code>.\run.ps1 select</code> verified working on Windows PowerShell 5.1 + Docker Desktop. Stages 03 → 07 measured end-to-end (see <code>artifacts/reports/variant_matrix.csv</code>).</div>
   </div>
 </div>
 
