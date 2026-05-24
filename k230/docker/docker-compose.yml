@@ -1,4 +1,5 @@
 services:
+  # nncase compile + PC eval (Ubuntu 22.04 + .NET 7 + nncase 2.11)
   nncase:
     build: .
     image: k230-nncase:latest
@@ -8,5 +9,30 @@ services:
     volumes:
       - .:/workspace
       - ../train:/k230-train
+      - ../pipeline:/pipeline
       - ../data/datasets:/datasets:ro
     working_dir: /workspace
+
+  # Ultralytics training + ONNX export (torch + CUDA)
+  train:
+    build:
+      context: .
+      dockerfile: Dockerfile.train
+    image: k230-train:latest
+    container_name: k230-train
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    volumes:
+      - ../pipeline:/pipeline
+      - ../data/datasets:/datasets:ro
+      - ../train:/k230-train:ro     # for grabbing yolov8_decode.py during packaging
+    working_dir: /pipeline
+    # default: just open a shell; stages override via `docker compose run train python stages/...`
+    command: ["bash"]

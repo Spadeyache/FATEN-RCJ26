@@ -1,0 +1,7 @@
+# Ultralytics dataset config (container-internal paths)
+path: /datasets/my_dataset
+train: train/images
+val: val/images
+
+nc: 2
+names: ['silver', 'black']

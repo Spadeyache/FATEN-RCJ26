@@ -22,7 +22,15 @@
       "Bash(python -c \"import sys, platform; print\\(sys.executable\\); print\\(platform.python_version\\(\\)\\)\")",
       "Bash(docker exec *)",
       "Read(//c/Users/magic/Documents/robocup/RoboCupJunior_RescueLine/k230/docker/**)",
-      "Bash(docker compose *)"
+      "Bash(docker compose *)",
+      "Bash(docker run *)",
+      "Bash(docker system *)",
+      "Bash(docker manifest *)",
+      "Bash(docker buildx *)",
+      "Bash(tasklist //FI \"IMAGENAME eq docker.exe\")",
+      "Read(//c/Users/magic/**)",
+      "Bash(jobs -l)",
+      "Bash(DOCKER_BUILDKIT=1 docker build -f Dockerfile.train -t k230-train:latest --progress=plain .)"
     ]
   }
 }

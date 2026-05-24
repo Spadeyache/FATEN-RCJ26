@@ -1,0 +1,11 @@
+FROM ultralytics/ultralytics:8.3.0
+
+# Ultralytics image already has torch+CUDA+ultralytics+opencv-headless.
+# Add the few extras the pipeline stages need.
+RUN pip install --no-cache-dir \
+        onnx==1.17.0 \
+        onnxsim==0.4.36 \
+        pyyaml
+
+WORKDIR /pipeline
+ENV PYTHONUNBUFFERED=1

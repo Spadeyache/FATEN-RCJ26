@@ -1,0 +1,57 @@
+# Single source of truth for the end-to-end pipeline.
+# Container-internal paths only. All host mounts are in ../docker/docker-compose.yml.
+
+dataset:
+  # YOLOv8 standard layout: <root>/{train,val}/{images,labels}
+  root: /datasets/my_dataset
+  data_yaml: /pipeline/configs/data.yaml
+  names: ["silver", "black"]
+
+train:
+  model: yolov8n.pt
+  imgsz: [480, 640]    # [H, W] — K230D camera native
+  epochs: 100
+  batch: 16
+  device: 0            # GPU index; "cpu" for CPU
+  patience: 20
+  project: /pipeline/artifacts/runs
+  name: yolov8n_k230
+  # Smoke-test override (used by `make smoke`):
+  smoke_epochs: 1
+  smoke_imgsz: 320
+
+export:
+  pt: /pipeline/artifacts/runs/yolov8n_k230/weights/best.pt
+  onnx: /pipeline/artifacts/best.onnx
+  opset: 13
+  simplify: true
+
+calibrate:
+  src_images: /datasets/my_dataset/train/images
+  out_dir: /pipeline/artifacts/calib
+  count: 74
+
+compile:
+  variants:
+    - name: yolov8_kld_u8u8
+      quant_type: uint8
+      w_quant_type: uint8
+    - name: yolov8_kld_i16act_u8w
+      quant_type: int16
+      w_quant_type: uint8
+  calibrate_method: Kld
+  finetune_weights: UseSquant
+  preprocess_mode: raw_01
+  use_letterbox: true
+  exports_dir: /pipeline/artifacts/exports
+
+eval:
+  images_dir: /datasets/my_dataset/val/images
+  labels_dir: /datasets/my_dataset/val/labels
+  limit: 50
+  report_csv: /pipeline/artifacts/reports/variant_matrix.csv
+
+package:
+  out_dir: /pipeline/artifacts/deploy
+  # Selection rule: highest avg_best_iou across variants (eval picks winner)
+  deploy_scripts_src: /k230-train/src/deploy
