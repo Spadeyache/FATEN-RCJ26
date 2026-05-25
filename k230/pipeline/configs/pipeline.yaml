@@ -5,7 +5,10 @@ dataset:
   # YOLOv8 standard layout: <root>/{train,val}/{images,labels}
   root: /datasets/my_dataset
   data_yaml: /pipeline/configs/data.yaml
-  names: ["silver", "black"]
+  # Order MUST match the model's training class indices, not human alphabetical.
+  # The included best.pt was trained with 0=black, 1=silver. If you retrain on a
+  # dataset whose classes.txt has them in a different order, flip this list too.
+  names: ["black", "silver"]
 
 train:
   model: yolov8n.pt

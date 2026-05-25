@@ -37,19 +37,101 @@ import nncase_runtime as nn
 import ulab.numpy as np
 import image
 
-# Shared decoder lives in the same directory on the K230D SD card.
-from yolov8_decode import (
-    decode_yolov8_anchorfree, nms_class_wise, unletterbox_box,
-    NUM_ANCHORS_640x480,
-)
+# Decoder is INLINED below. CanMV MicroPython lacks sys.path, so importing
+# from a sibling module fails with
+# "AttributeError: 'module' object has no attribute 'path'".
+
 from machine import UART, FPIOA
 from media.sensor import *
 from media.display import *
 from media.media import *
 
 
-ROOT_PATH          = "/data/k230-train"
+NUM_ANCHORS_640x480 = 6300   # 80*60 + 40*30 + 20*15
+
+ROOT_PATH = "/data/k230-train"
 DEPLOY_CONFIG_PATH = ROOT_PATH + "/deploy_config.json"
+
+
+# ---------------------------------------------------------------------------
+# Inlined YOLOv8 anchor-free decoder.
+# ---------------------------------------------------------------------------
+def _iou(a, b):
+    ix1 = a[0] if a[0] > b[0] else b[0]
+    iy1 = a[1] if a[1] > b[1] else b[1]
+    ix2 = a[2] if a[2] < b[2] else b[2]
+    iy2 = a[3] if a[3] < b[3] else b[3]
+    iw = ix2 - ix1
+    ih = iy2 - iy1
+    if iw <= 0 or ih <= 0:
+        return 0.0
+    inter = iw * ih
+    aa = (a[2] - a[0]) * (a[3] - a[1])
+    bb = (b[2] - b[0]) * (b[3] - b[1])
+    union = aa + bb - inter
+    if union <= 0:
+        return 0.0
+    return inter / union
+
+
+def decode_yolov8_anchorfree(flat_out, num_classes, conf_thr,
+                              num_anchors=NUM_ANCHORS_640x480):
+    N = num_anchors
+    off_cx = 0
+    off_cy = N
+    off_w  = 2 * N
+    off_h  = 3 * N
+    off_c  = 4 * N
+    boxes = []
+    for n in range(N):
+        best_c = 0
+        best_s = flat_out[off_c + n]
+        for c in range(1, num_classes):
+            s = flat_out[off_c + c * N + n]
+            if s > best_s:
+                best_s = s
+                best_c = c
+        if best_s < conf_thr:
+            continue
+        cx = flat_out[off_cx + n]
+        cy = flat_out[off_cy + n]
+        bw = flat_out[off_w  + n]
+        bh = flat_out[off_h  + n]
+        hw = bw / 2
+        hh = bh / 2
+        boxes.append([best_c, float(best_s),
+                      float(cx - hw), float(cy - hh),
+                      float(cx + hw), float(cy + hh)])
+    return boxes
+
+
+def nms_class_wise(boxes, iou_thr):
+    kept = []
+    classes = set()
+    for b in boxes:
+        classes.add(b[0])
+    for c in classes:
+        cb = [b for b in boxes if b[0] == c]
+        cb.sort(key=lambda b: -b[1])
+        while cb:
+            head = cb.pop(0)
+            kept.append(head)
+            cb = [b for b in cb if _iou(head[2:6], b[2:6]) < iou_thr]
+    kept.sort(key=lambda b: -b[1])
+    return kept
+
+
+def unletterbox_box(box_xyxy, ratio, left_pad, top_pad, ori_w, ori_h):
+    x1 = (box_xyxy[0] - left_pad) / ratio
+    y1 = (box_xyxy[1] - top_pad)  / ratio
+    x2 = (box_xyxy[2] - left_pad) / ratio
+    y2 = (box_xyxy[3] - top_pad)  / ratio
+    if x1 < 0: x1 = 0.0
+    if y1 < 0: y1 = 0.0
+    if x2 > ori_w: x2 = float(ori_w)
+    if y2 > ori_h: y2 = float(ori_h)
+    return [x1, y1, x2, y2]
+# ---------------------------------------------------------------------------
 
 SENSOR_FRAMESIZE = Sensor.VGA
 APPLY_HISTEQ     = True     # Matches calibration: training/calib JPGs are histeq'd gray-3ch.
@@ -59,7 +141,7 @@ NMS_THRESHOLD    = 0.50
 STRIDES          = [8, 16, 32]
 NUM_ANCHORS      = NUM_ANCHORS_640x480
 
-UART_DEVICE      = UART.UART1
+UART_DEVICE      = UART.UART1   # change to UART.UART2/UART3 to match your wiring
 UART_BAUD        = 115200
 
 SYNC0 = 0xAA
@@ -67,6 +149,17 @@ SYNC1 = 0x55
 TYPE_NONE = 0xFF
 
 SHOW_DISPLAY = True
+
+# If True, start detecting immediately and draw boxes on the live feed.
+# If False (production with a Teensy controller), wait for a 0x01 byte on
+# UART RX before running inference.
+AUTO_RUN_DETECTION = True
+
+# Per-class colors for drawn boxes (matches det_image_yolov8.py palette).
+COLOR_PALETTE = [
+    (220, 20, 60), (119, 11, 32), (0, 0, 142), (0, 0, 230),
+    (106, 0, 228), (0, 60, 100), (0, 80, 100), (0, 0, 70),
+]
 DEBUG_EVERY  = 30
 
 
@@ -77,7 +170,14 @@ def _open_uart():
         fpioa.set_function(12, FPIOA.UART1_RXD)
     except Exception as e:
         print("FPIOA setup skipped:", e)
-    return UART(UART_DEVICE, baudrate=UART_BAUD, bits=8, parity=None, stop=1)
+    # CanMV requires the UART class constants for bits/parity/stop. Plain
+    # Python values (8, None, 1) cause "TypeError: can't convert NoneType to int"
+    # because the binding does `int(parity)` on the keyword argument.
+    return UART(UART_DEVICE,
+                baudrate=UART_BAUD,
+                bits=UART.EIGHTBITS,
+                parity=UART.PARITY_NONE,
+                stop=UART.STOPBITS_ONE)
 
 
 def _send_packet(u, type_id, score_u8, x_px, y_px):
@@ -111,7 +211,9 @@ def load_config():
     with open(DEPLOY_CONFIG_PATH, "r") as f:
         cfg = ujson.load(f)
     if not cfg["kmodel_path"].startswith("/"):
-        cfg["kmodel_path"] = os.path.dirname(DEPLOY_CONFIG_PATH) + "/" + cfg["kmodel_path"]
+        # CanMV MicroPython has no os.path; do the dirname by hand.
+        config_dir = DEPLOY_CONFIG_PATH.rsplit("/", 1)[0] + "/"
+        cfg["kmodel_path"] = config_dir + cfg["kmodel_path"]
     print("Loaded deploy_config:", DEPLOY_CONFIG_PATH)
     print("  kmodel:    ", cfg["kmodel_path"])
     print("  img_size:  ", cfg["img_size"])
@@ -153,7 +255,9 @@ def main():
 
     u = _open_uart()
     print("UART opened.")
-    run_state = False
+    run_state = AUTO_RUN_DETECTION
+    if AUTO_RUN_DETECTION:
+        print("AUTO_RUN_DETECTION=True -- skipping UART start gate.")
 
     sensor = Sensor()
     sensor.reset()
@@ -258,30 +362,44 @@ def main():
                     print("postprocess error:", e)
                 det = []
 
+            # Find the highest-score detection -- that's the one the
+            # Teensy gets over UART (it can only act on one target/frame).
             best = None
             if det:
                 for d in det:
                     if best is None or d[1] > best[1]:
                         best = d
 
+            # UART packet -- only the best detection (or "no target").
             if best is not None:
                 model_cls = int(best[0])
                 wire_cls = MODEL_TO_WIRE[model_cls] if model_cls < len(MODEL_TO_WIRE) else 0xFF
                 score = float(best[1])
-                x1, y1, x2, y2 = best[2], best[3], best[4], best[5]
-                cx = int((x1 + x2) / 2)
-                cy = int((y1 + y2) / 2)
+                cx = int((best[2] + best[4]) / 2)
+                cy = int((best[3] + best[5]) / 2)
                 _send_packet(u, wire_cls, int(score * 255), cx, cy)
-                if SHOW_DISPLAY:
-                    img.draw_rectangle(int(x1), int(y1), int(x2 - x1),
-                                       int(y2 - y1), color=(255,))
-                    name = labels[model_cls] if model_cls < len(labels) else "c"
-                    img.draw_string_advanced(
-                        int(x1), max(0, int(y1) - 20), 16,
-                        "{} {:.2f}".format(name, score), color=(255,),
-                    )
             else:
                 _send_packet(u, TYPE_NONE, 0, 0, 0)
+
+            # Display -- draw EVERY detection that survived NMS, colored by
+            # class. Matches det_image_yolov8.py exactly. No "best"
+            # highlighting; the UART packet above handles that contract.
+            if SHOW_DISPLAY and det:
+                for d in det:
+                    cls_id = int(d[0])
+                    score = float(d[1])
+                    x1, y1, x2, y2 = d[2], d[3], d[4], d[5]
+                    # CanMV requires (R,G,B); (255,) errors with ValueError.
+                    color = COLOR_PALETTE[cls_id % len(COLOR_PALETTE)]
+                    img.draw_rectangle(int(x1), int(y1),
+                                       int(x2 - x1), int(y2 - y1),
+                                       color=color, thickness=2)
+                    name = labels[cls_id] if cls_id < len(labels) else "c{}".format(cls_id)
+                    img.draw_string_advanced(
+                        int(x1), max(0, int(y1) - 20), 16,
+                        "{} {:.2f}".format(name, score),
+                        color=color,
+                    )
 
             if SHOW_DISPLAY:
                 Display.show_image(img)

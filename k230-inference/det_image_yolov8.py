@@ -50,7 +50,8 @@ import image
 
 ROOT_PATH          = "/data/k230-train"
 DEPLOY_CONFIG_PATH = ROOT_PATH + "/deploy_config.json"
-IMAGE_PATH         = ROOT_PATH + "/test.jpg"
+#IMAGE_PATH         = ROOT_PATH + "/test.jpg"
+IMAGE_PATH = "/data/dataset/2s1b/2s1b_0031.jpg"
 RESULT_PATH        = ROOT_PATH + "/det_result.jpg"
 
 CONF_OVERRIDE = 0.30

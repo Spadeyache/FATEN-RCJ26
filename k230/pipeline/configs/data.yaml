@@ -4,4 +4,6 @@ train: train/images
 val: val/images
 
 nc: 2
-names: ['silver', 'black']
+# Class index order — must match the model's training. The included best.pt
+# was trained with 0=black, 1=silver.
+names: ['black', 'silver']

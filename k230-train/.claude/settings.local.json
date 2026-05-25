@@ -31,7 +31,8 @@
       "Read(//c/Users/magic/**)",
       "Bash(jobs -l)",
       "Bash(DOCKER_BUILDKIT=1 docker build -f Dockerfile.train -t k230-train:latest --progress=plain .)",
-      "Bash(make --version)"
+      "Bash(make --version)",
+      "Bash(grep -nA8 \"return UART\" \"C:\\\\Users\\\\magic\\\\Documents\\\\robocup\\\\RoboCupJunior_RescueLine\\\\k230\\\\pipeline\\\\artifacts\\\\deploy\\\\det_live_xy_yolov8.py\")"
     ]
   }
 }
