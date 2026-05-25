@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>K230D pipeline — new PC setup</title>
+<style>
+:root {
+  --bg: #f5f4ee;
+  --panel: #ffffff;
+  --ink: #1f1e1d;
+  --muted: #6b6660;
+  --rule: #e5e1d8;
+  --accent: #cc785c;
+  --accent-soft: #f0e5dc;
+  --code-bg: #f0ede4;
+  --code-ink: #2a2724;
+  --ok: #5a7d4f;
+  --warn: #b8742a;
+}
+* { box-sizing: border-box; }
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: 'Tiempos', 'Charter', 'Iowan Old Style', Georgia, serif;
+  font-size: 17px;
+  line-height: 1.6;
+}
+.wrap {
+  max-width: 820px;
+  margin: 0 auto;
+  padding: 64px 32px 96px;
+}
+header {
+  border-bottom: 1px solid var(--rule);
+  padding-bottom: 32px;
+  margin-bottom: 48px;
+}
+.eyebrow {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent);
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+h1 {
+  font-size: 42px;
+  line-height: 1.15;
+  margin: 0 0 14px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+.lede {
+  font-size: 19px;
+  color: var(--muted);
+  margin: 0;
+  max-width: 640px;
+}
+h2 {
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 14px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-weight: 600;
+  margin: 56px 0 20px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--rule);
+}
+h3 {
+  font-size: 22px;
+  margin: 36px 0 12px;
+  font-weight: 500;
+  letter-spacing: -0.005em;
+}
+.step {
+  display: flex;
+  gap: 22px;
+  padding: 24px 0;
+  border-bottom: 1px solid var(--rule);
+}
+.step:last-child { border-bottom: none; }
+.step-num {
+  flex: 0 0 44px;
+  height: 44px;
+  width: 44px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font-family: 'Inter', sans-serif;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+}
+.step-body { flex: 1; min-width: 0; }
+.step-body h3 { margin-top: 0; }
+.step-body p { margin: 6px 0 12px; }
+pre {
+  background: var(--code-bg);
+  color: var(--code-ink);
+  padding: 16px 20px;
+  border-radius: 6px;
+  border-left: 3px solid var(--accent);
+  font-family: 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 13.5px;
+  line-height: 1.55;
+  overflow-x: auto;
+  margin: 12px 0;
+}
+code {
+  font-family: 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 0.88em;
+  background: var(--code-bg);
+  padding: 2px 6px;
+  border-radius: 3px;
+  color: var(--code-ink);
+}
+pre code { background: transparent; padding: 0; font-size: 1em; }
+.callout {
+  background: var(--accent-soft);
+  border-left: 3px solid var(--accent);
+  padding: 14px 18px;
+  margin: 16px 0;
+  border-radius: 0 6px 6px 0;
+  font-size: 15.5px;
+}
+.callout strong { color: var(--accent); }
+.note {
+  font-size: 14px;
+  color: var(--muted);
+  margin-top: 8px;
+  font-style: italic;
+}
+.check { color: var(--ok); font-weight: 600; }
+.warn  { color: var(--warn); font-weight: 600; }
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 16px 0;
+  font-size: 15px;
+}
+th, td {
+  text-align: left;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--rule);
+}
+th {
+  font-family: 'Inter', sans-serif;
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-weight: 600;
+}
+.divider {
+  height: 1px;
+  background: var(--rule);
+  margin: 56px 0;
+}
+ul, ol { padding-left: 22px; }
+li { margin: 4px 0; }
+footer {
+  margin-top: 64px;
+  padding-top: 24px;
+  border-top: 1px solid var(--rule);
+  font-size: 13px;
+  color: var(--muted);
+  font-family: 'Inter', sans-serif;
+}
+.kbd {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  background: #fff;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  padding: 1px 6px;
+  box-shadow: 0 1px 0 var(--rule);
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="eyebrow">K230D Pipeline · Setup Guide</div>
+  <h1>Setting up on a new PC</h1>
+  <p class="lede">From bare machine to <code>artifacts/deploy/</code> SD-card bundle. Every step you actually have to type, in order, with what to expect at each one.</p>
+</header>
+
+<h2>Before you start</h2>
+<table>
+  <tr><th>Requirement</th><th>Why</th></tr>
+  <tr><td>Docker Desktop (Win/Mac) or Docker Engine (Linux)</td><td>The nncase compile environment lives in a container</td></tr>
+  <tr><td>~15 GB free disk</td><td>5 GB nncase image · 8 GB train image · 1 GB datasets · 1 GB artifacts</td></tr>
+  <tr><td>NVIDIA GPU + nvidia-container-toolkit <span class="note">(optional)</span></td><td>Only needed if you train from scratch on this PC. Skip if you bring an existing <code>best.pt</code> or train in AI Cube.</td></tr>
+  <tr><td>The <code>k230/</code> folder</td><td>Zip it from your current PC or clone the repo</td></tr>
+  <tr><td><strong>No <code>make</code> required</strong></td><td>Use <code>.\run.ps1</code> (Windows) or <code>./run.sh</code> (Linux/Mac). The <code>Makefile</code> is there too if you happen to have <code>make</code> installed.</td></tr>
+</table>
+
+<h2>The path</h2>
+
+<div class="step">
+  <div class="step-num">1</div>
+  <div class="step-body">
+    <h3>Get the code onto the new PC</h3>
+    <p>Either clone (if it's in git) or copy the whole <code>k230/</code> tree. Keep the structure intact — paths inside the pipeline are relative to it.</p>
+<pre><code># option A — git
+git clone &lt;your-repo&gt;
+cd RoboCupJunior_RescueLine/k230
+
+# option B — zip from old PC
+# (on old PC)
+Compress-Archive -Path C:\...\RoboCupJunior_RescueLine\k230 -DestinationPath k230.zip
+# transfer, then on new PC: extract anywhere</code></pre>
+    <div class="callout">After this step you should have <code>k230/docker/</code>, <code>k230/pipeline/</code>, <code>k230/data/datasets/</code>, and <code>k230/train/</code> all present.</div>
+  </div>
+</div>
+
+<div class="step">
+  <div class="step-num">2</div>
+  <div class="step-body">
+    <h3>Verify Docker works</h3>
+<pre><code>docker --version
+docker compose version
+docker run --rm hello-world</code></pre>
+    <p>If the last line prints "Hello from Docker!" you're good. If not, install/start Docker Desktop first.</p>
+    <p class="note">GPU check (only if you'll train): <code>docker run --rm --gpus all nvidia/cuda:12.1.0-base-ubuntu22.04 nvidia-smi</code> — should show your card.</p>
+  </div>
+</div>
+
+<div class="step">
+  <div class="step-num">3</div>
+  <div class="step-body">
+    <h3>Build the Docker images</h3>
+    <p>One-time cost. The nncase image takes ~5 min. The train image pulls a ~6 GB ultralytics base — 10 min on fast internet, an hour or more on slow.</p>
+<pre><code>cd k230/docker
+docker compose build nncase            # always needed
+docker compose build train             # only if training on this PC</code></pre>
+    <div class="callout"><strong>Tip:</strong> if you don't need to train (you have a <code>best.pt</code> already), skip the <code>train</code> build. The convert+eval+deploy half works with just the <code>nncase</code> image.</div>
+  </div>
+</div>
+
+<div class="step">
+  <div class="step-num">4</div>
+  <div class="step-body">
+    <h3>Decide your starting point</h3>
+    <table>
+      <tr><th>I have…</th><th>Drop it here</th><th>Start at stage</th></tr>
+      <tr><td>Labeled images, no model yet</td><td><code>data/datasets/my_dataset/{train,val}/{images,labels}</code></td><td>01 (train)</td></tr>
+      <tr><td>A <code>best.pt</code></td><td><code>pipeline/artifacts/runs/yolov8n_k230/weights/best.pt</code></td><td>02 (export)</td></tr>
+      <tr><td>An <code>.onnx</code></td><td><code>pipeline/artifacts/best.onnx</code></td><td>03 (calibrate)</td></tr>
+    </table>
+  </div>
+</div>
+
+<div class="step">
+  <div class="step-num">5</div>
+  <div class="step-body">
+    <h3>Run the pipeline</h3>
+    <p>Three equivalent runners — pick whichever fits your shell. They all do the same thing.</p>
+
+<pre><code># --- Windows PowerShell ---
+cd k230\pipeline
+.\run.ps1 all                  # full path (needs train image + GPU)
+.\run.ps1 all-skip-train       # skip training, use existing best.pt
+.\run.ps1 calibrate            # one stage at a time
+.\run.ps1 compile
+.\run.ps1 eval
+
+# --- Linux / Mac / Git Bash ---
+cd k230/pipeline
+chmod +x run.sh                # first time only
+./run.sh all
+./run.sh all-skip-train
+./run.sh calibrate
+./run.sh compile
+./run.sh eval
+
+# --- If you have GNU make installed ---
+cd k230/pipeline
+make all
+make all-skip-train
+make calibrate compile eval</code></pre>
+    <p>Each stage prints what it's doing and what it produced. If one fails, fix it and re-run just that target — earlier stages don't redo work.</p>
+    <div class="callout"><strong>Tested:</strong> <code>.\run.ps1 calibrate</code> and <code>.\run.ps1 select</code> verified working on Windows PowerShell 5.1 + Docker Desktop. Stages 03 → 07 measured end-to-end (see <code>artifacts/reports/variant_matrix.csv</code>).</div>
+  </div>
+</div>
+
+<div class="step">
+  <div class="step-num">6</div>
+  <div class="step-body">
+    <h3>Check the matrix</h3>
+<pre><code>cat artifacts/reports/variant_matrix.csv
+cat artifacts/reports/winner.txt</code></pre>
+    <p>You're looking for <code>avg_best_iou ≥ 0.75</code> and <code>recall@IoU0.5_score≥0.05 ≥ 0.95</code> on the winning variant. If both variants fail to clear that, your training is the problem, not the quantization — go back to stage 01.</p>
+    <p class="note">Expected on the included dataset: i16act_u8w wins with ~0.80 IoU, ~0.99 recall.</p>
+  </div>
+</div>
+
+<div class="step">
+  <div class="step-num">7</div>
+  <div class="step-body">
+    <h3>Flash the K230D</h3>
+    <p>The package stage produced <code>artifacts/deploy/</code> — copy all 6 files to the K230D SD card at <code>/data/k230-deploy/</code>.</p>
+<pre><code>artifacts/deploy/
+├── model.kmodel             ← the compiled detector
+├── deploy_config.json       ← labels + thresholds
+├── det_image_yolov8.py      ← single-image inference
+├── det_live_xy_yolov8.py    ← live camera + UART
+├── yolov8_decode.py         ← shared decoder
+└── README.md</code></pre>
+    <p>Then on the CanMV REPL:</p>
+<pre><code>import det_image_yolov8
+det_image_yolov8.detection()
+
+# live camera:
+import det_live_xy_yolov8
+det_live_xy_yolov8.live()</code></pre>
+  </div>
+</div>
+
+<h2>What "done" looks like</h2>
+<ul>
+  <li><span class="check">✓</span> <code>artifacts/exports/</code> contains at least one <code>model.kmodel</code> (~3 MB)</li>
+  <li><span class="check">✓</span> <code>artifacts/reports/variant_matrix.csv</code> has IoU ≥ 0.75 on at least one row</li>
+  <li><span class="check">✓</span> <code>artifacts/reports/winner.txt</code> names a variant</li>
+  <li><span class="check">✓</span> <code>artifacts/deploy/</code> has 6 files totaling ~3.4 MB</li>
+  <li><span class="check">✓</span> On the K230D, <code>det_image_yolov8.detection()</code> draws bounding boxes on the test image</li>
+</ul>
+
+<h2>When something breaks</h2>
+
+<h3 style="margin-top:24px">"docker compose build" hangs with no output</h3>
+<p>BuildKit progress is TTY-formatted and gets eaten by some shells. Use:</p>
+<pre><code>DOCKER_BUILDKIT=1 docker build -f Dockerfile.train -t k230-train:latest --progress=plain .</code></pre>
+
+<h3>"nncase.simulator.k230.sc: not found" in eval</h3>
+<p>PATH not set inside container. The Makefile handles this automatically; if calling stages by hand, prepend:</p>
+<pre><code>export PATH=/usr/local/lib/python3.10/dist-packages:$PATH</code></pre>
+
+<h3>"ModuleNotFoundError: cv2" or "yaml"</h3>
+<p>Not baked into the nncase image. Install inside the container:</p>
+<pre><code>docker exec k230-nncase pip install --quiet opencv-python-headless pyyaml</code></pre>
+
+<h3>Train fails with "DataLoader worker killed by signal: Bus error"</h3>
+<p>PyTorch DataLoader workers ran out of shared memory. Docker's default <code>/dev/shm</code> is 64 MB. The <code>docker-compose.yml</code> in this repo already sets <code>shm_size: '8gb'</code> for the train service — if you customized it, restore that line, then:</p>
+<pre><code>docker compose down train
+.\run.ps1 train       # or: ./run.sh train</code></pre>
+
+<h3>Eval recall ≈ 0 with non-zero IoU</h3>
+<p>Score saturation from uint8 PTQ. Use the int16-activation variant — already in <code>configs/pipeline.yaml</code> as <code>yolov8_kld_i16act_u8w</code>.</p>
+
+<h3>K230D shows "silver 638.50" gibberish</h3>
+<p>The on-device <code>aicube.anchorfreedet_post_process</code> doesn't work for this ONNX export. <code>yolov8_decode.py</code> in the deploy bundle is the working pure-Python decoder — make sure it's on the SD card.</p>
+
+<h2>Where to change things</h2>
+<table>
+  <tr><th>To change</th><th>Edit</th></tr>
+  <tr><td>Image size</td><td><code>configs/pipeline.yaml</code> → <code>train.imgsz</code></td></tr>
+  <tr><td>Number of epochs</td><td><code>configs/pipeline.yaml</code> → <code>train.epochs</code></td></tr>
+  <tr><td>Calibration sample size</td><td><code>configs/pipeline.yaml</code> → <code>calibrate.count</code></td></tr>
+  <tr><td>Which PTQ variants to try</td><td><code>configs/pipeline.yaml</code> → <code>compile.variants</code></td></tr>
+  <tr><td>Dataset path</td><td><code>configs/data.yaml</code></td></tr>
+  <tr><td>Class names / thresholds in deploy</td><td><code>configs/pipeline.yaml</code> → <code>dataset.names</code> · <code>stages/07_package.py</code> → <code>DEPLOY_CONFIG_TEMPLATE</code></td></tr>
+</table>
+
+<footer>
+  Generated for the k230/pipeline reproducibility flow.<br>
+  Open this file in any browser — no internet, no build, no fonts to fetch.
+</footer>
+
+</div>
+</body>
+</html>
