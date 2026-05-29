@@ -1,6 +1,6 @@
-#include "Touch.h"
-#include "config.h"
-#include "pins_teensy.h"
+﻿#include "Touch.h"
+#include "../../config.h"
+#include "../../pins_teensy.h"
 #include <Arduino.h>
 
 namespace Sensors {
@@ -21,7 +21,7 @@ void init() {
 
 void tick() {
     // Front bumper + conduct1 are active-low; conduct0 is reported as-read
-    // (matches the original Sensors.ino convention — preserved verbatim).
+    // (matches the original Sensors.ino convention â€” preserved verbatim).
     _front    = !digitalRead(TOUCH_FRONT_PIN);
     _conduct0 =  digitalRead(CONDUCT0_PIN);
     _conduct1 = !digitalRead(CONDUCT1_PIN);

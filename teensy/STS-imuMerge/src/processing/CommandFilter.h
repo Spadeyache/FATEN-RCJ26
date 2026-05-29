@@ -1,18 +1,18 @@
-#pragma once
+﻿#pragma once
 
 // =============================================================================
-//  Processing::CommandFilter — majority-vote ring buffer for XIAO command byte.
+//  Processing::CommandFilter â€” majority-vote ring buffer for XIAO command byte.
 //
 //  A command is confirmed once it reaches FILTER_THRESHOLD_<kind> votes within
 //  the last FILTER_QUEUE_SIZE frames. Multi-cause logic (U-turn fires when
 //  BOTH left- and right-green are glimpsed in the same window) is embedded in
-//  update() — see comments inside.
+//  update() â€” see comments inside.
 //
 //  Vote totals are exposed as members for debug logging.
 // =============================================================================
 
 #include <stdint.h>
-#include "config.h"
+#include "../../config.h"
 
 class CommandFilter {
 public:

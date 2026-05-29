@@ -1,6 +1,7 @@
-#include "EVAC_Entry.h"
+﻿#include "EVAC_Entry.h"
 #include "StateMachine.h"
-#include "config.h"
+#include "../../config.h"
+#include "../../pins_teensy.h"
 
 #include "../sensors/Touch.h"
 #include "../sensors/IMU.h"
@@ -12,7 +13,7 @@
 #include <Arduino.h>
 
 // =============================================================================
-//  EVAC_Entry — fixed entry sequence into the evacuation zone.
+//  EVAC_Entry â€” fixed entry sequence into the evacuation zone.
 //
 //  This is the verbatim sequence ported from the original enterEvacuationZone():
 //    1. Re-engage grab servos, raise arm, open gripper
@@ -42,7 +43,7 @@ void onEnter() {
 
     Actions::Arm::grab(false);
     Actions::Arm::lift(10050);
-    Actions::Arm::lift(10050);   // intentional duplicate — KRS needs the resend
+    Actions::Arm::lift(10050);   // intentional duplicate â€” KRS needs the resend
 
     Actions::Turn::turn(82.0f);
     Actions::Forward::forward(-100, 450);

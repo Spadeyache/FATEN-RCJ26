@@ -1,6 +1,7 @@
-#include "LINE_Obstacle.h"
+﻿#include "LINE_Obstacle.h"
 #include "StateMachine.h"
-#include "config.h"
+#include "../../config.h"
+#include "../../pins_teensy.h"
 
 #include "../sensors/Touch.h"
 #include "../sensors/XIAO_link.h"
@@ -12,11 +13,11 @@
 #include <Arduino.h>
 
 // =============================================================================
-//  LINE_Obstacle — front-bumper triggered avoidance.
+//  LINE_Obstacle â€” front-bumper triggered avoidance.
 //
 //  Sequence (preserved verbatim from the original FOLLOWING_LINE inline block):
-//    1. Debounce 50 ms — confirm bumper still pressed
-//    2. Back off 50 mm, turn -80°, nudge forward 2 mm
+//    1. Debounce 50 ms â€” confirm bumper still pressed
+//    2. Back off 50 mm, turn -80Â°, nudge forward 2 mm
 //    3. Switch XIAO into EVAC mode (looking for black line) and crawl
 //       forward + conductivity-driven micro-turns until xiaoCommand reports
 //       a black line (cmd 6 or 7).

@@ -1,7 +1,7 @@
-#pragma once
+﻿#pragma once
 
 // =============================================================================
-//  MapPersist — EEPROM persistence for the evac-zone map + pose snapshot.
+//  MapPersist â€” EEPROM persistence for the evac-zone map + pose snapshot.
 //
 //  Layout (starting at EEPROM_MAP_BASE = 0x0020):
 //      MapHeader   header   (40 B: magic, version, pose, P-diag, flags, run_count)
@@ -9,11 +9,11 @@
 //      uint32_t    crc32   (4 B over header + semantic)
 //
 //  Wear minimisation: an in-RAM shadow of the last-saved semantic array drives
-//  byte-level diffing — only changed bytes get EEPROM.update()'d.
+//  byte-level diffing â€” only changed bytes get EEPROM.update()'d.
 // =============================================================================
 
 #include <Arduino.h>
-#include "config.h"
+#include "../../config.h"
 #include "Pose.h"
 #include "MapGrid.h"
 

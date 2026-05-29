@@ -1,17 +1,17 @@
-#pragma once
+﻿#pragma once
 
 // =============================================================================
-//  Recalibrate — pose recovery via stuck-detection + ToF↔map scan matching.
+//  Recalibrate â€” pose recovery via stuck-detection + ToFâ†”map scan matching.
 //
-//  1. StuckDetector  — true once motion has stalled despite a forward command
+//  1. StuckDetector  â€” true once motion has stalled despite a forward command
 //                      for RECAL_STUCK_MS.
-//  2. scanMatchPose() — grid search over (Δx, Δy, Δθ) around `seed`, scoring
+//  2. scanMatchPose() â€” grid search over (Î”x, Î”y, Î”Î¸) around `seed`, scoring
 //                      each candidate against the current map. Returns the
 //                      best-scoring pose and the margin over the seed score.
 // =============================================================================
 
 #include <Arduino.h>
-#include "config.h"
+#include "../../config.h"
 #include "Pose.h"
 #include "MapGrid.h"
 

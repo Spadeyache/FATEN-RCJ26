@@ -1,7 +1,7 @@
-#pragma once
+﻿#pragma once
 
 // =============================================================================
-//  yacheMPU6050 — MPU-6050 + Madgwick filter (no DMP).
+//  yacheMPU6050 â€” MPU-6050 + Madgwick filter (no DMP).
 //
 //  - Raw getMotion6() reads at IMU_SAMPLE_HZ.
 //  - Madgwick.updateIMU() (gyro + accel only, no magnetometer).
@@ -16,7 +16,7 @@
 #include "MPU6050.h"
 #include <MadgwickAHRS.h>
 #include <arm_math.h>
-#include "config.h"
+#include "../../config.h"
 
 #ifndef IMU_SAMPLE_HZ
 #define IMU_SAMPLE_HZ 25.0f

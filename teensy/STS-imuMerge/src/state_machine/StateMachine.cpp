@@ -1,4 +1,4 @@
-#include "StateMachine.h"
+﻿#include "StateMachine.h"
 #include "LINE_Follow.h"
 #include "LINE_Obstacle.h"
 #include "LINE_Gap.h"
@@ -7,7 +7,7 @@
 #include "EVAC_Deploy.h"
 #include "EVAC_Exit.h"
 
-#include "config.h"
+#include "../../config.h"
 #include "../actions/Drive.h"
 #include "../processing/XiaoDecode.h"
 
@@ -74,7 +74,7 @@ void tick() {
             if (Processing::XiaoDecode::command() != 4) {
                 Processing::XiaoDecode::clearFilter();
 #if PRINT_STATE
-                Serial.println("Red cleared → LINE_FOLLOW");
+                Serial.println("Red cleared â†’ LINE_FOLLOW");
 #endif
                 transitionTo(LINE_FOLLOW);
             }

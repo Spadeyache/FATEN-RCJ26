@@ -1,5 +1,5 @@
-#include "Mapping.h"
-#include "config.h"
+﻿#include "Mapping.h"
+#include "../../config.h"
 #include "MapGrid.h"
 #include "MapPersist.h"
 #include "Recalibrate.h"
@@ -100,7 +100,7 @@ static void tofPoll() {
         const float    mdy  = tof.mountDy();
         const float    myaw = tof.mountYaw();
 
-        // Sensor origin in world frame (rotate mount offset by current θ):
+        // Sensor origin in world frame (rotate mount offset by current Î¸):
         const float c  = cosf(_pose.theta);
         const float si = sinf(_pose.theta);
         const float rx = _pose.x_mm + (mdx * c - mdy * si);

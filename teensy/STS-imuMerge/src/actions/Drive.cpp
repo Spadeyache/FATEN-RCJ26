@@ -1,5 +1,6 @@
-#include "Drive.h"
-#include "config.h"
+﻿#include "Drive.h"
+#include "WeightDistribution.h"
+#include "../../config.h"
 #include "../drivers/yacheSTS.h"
 #include "../sensors/IMU.h"
 #include "../processing/XiaoDecode.h"
@@ -19,9 +20,19 @@ namespace {
     volatile float32_t _blGain = 0.0f;
     volatile float32_t _brGain = 0.0f;
 
-    // ISR — pushes current gains to servos every 9 ms.
+    // ISR â€” pushes current gains to servos every 9 ms.
     FASTRUN void motorOutput() {
         _sts.power(_flGain, _frGain, _blGain, _brGain);
+    }
+
+    // Map signed angle (deg) to WeightDistribution table index, then to 0..1 gain.
+    //   table layout: 36 cells, -35°..+35° step 2°, no 0° entry.
+    //   idx = (angle + 35) / 2, clamped to [0, 35].
+    FASTRUN float32_t tiltGain(const uint8_t (&table)[36], float32_t angleDeg) {
+        int idx = (int)((angleDeg + 35.0f) * 0.5f);
+        if (idx < 0)  idx = 0;
+        if (idx > 35) idx = 35;
+        return table[idx] * (1.0f / 255.0f);
     }
 }
 
@@ -31,16 +42,50 @@ void init() {
     _controlTimer.begin(motorOutput, 9000);
 }
 
-FASTRUN void motor(float32_t left, float32_t right) {
+FASTRUN void motor(float32_t left, float32_t right, bool imuCompensation) {
+    float32_t fl = left, fr = right, bl = left, br = right;
+
+    if (imuCompensation) {
+        // Multiplicative tilt compensation. Each table cell is a 0..1 gain
+        // applied to the *unloaded* pair of wheels (the side that has lifted
+        // and would otherwise spin/waste power). The signed table layout lets
+        // you encode different gains for + vs - tilt.
+        //
+        //   Pitch > 0  (nose up)     → front wheels unloaded → scale FL, FR
+        //   Pitch < 0  (nose down)   → back  wheels unloaded → scale BL, BR
+        //   Roll  > 0  (right down)  → left  wheels unloaded → scale FL, BL
+        //   Roll  < 0  (left  down)  → right wheels unloaded → scale FR, BR
+        const float32_t pitch = Sensors::IMU::getPitch();
+        const float32_t pitchGain = tiltGain(pitchDistribution, pitch);
+
+        if (pitch >= 0.0f) { fl *= pitchGain; fr *= pitchGain; }
+        else               { bl *= pitchGain; br *= pitchGain; }
+
+        // Roll compensation disabled — uncomment to re-enable:
+        // const float32_t roll  = Sensors::IMU::getRoll();
+        // const float32_t rollGain  = tiltGain(rollDistribution,  roll);
+        // if (roll  >= 0.0f) { fl *= rollGain;  bl *= rollGain;  }
+        // else               { fr *= rollGain;  br *= rollGain;  }
+    }
+
     cli();
-    _flGain = constrain(left,  -MAX_MOTOR_SPEED, MAX_MOTOR_SPEED);
-    _frGain = constrain(right, -MAX_MOTOR_SPEED, MAX_MOTOR_SPEED);
-    _blGain = constrain(left,  -MAX_MOTOR_SPEED, MAX_MOTOR_SPEED);
-    _brGain = constrain(right, -MAX_MOTOR_SPEED, MAX_MOTOR_SPEED);
+    _flGain = constrain(fl, -MAX_MOTOR_SPEED, MAX_MOTOR_SPEED);
+    _frGain = constrain(fr, -MAX_MOTOR_SPEED, MAX_MOTOR_SPEED);
+    _blGain = constrain(bl, -MAX_MOTOR_SPEED, MAX_MOTOR_SPEED);
+    _brGain = constrain(br, -MAX_MOTOR_SPEED, MAX_MOTOR_SPEED);
     sei();
 }
 
 FASTRUN void stop() { motor(0.0f, 0.0f); }
+
+FASTRUN void motorRaw(float32_t fl, float32_t fr, float32_t bl, float32_t br) {
+    cli();
+    _flGain = constrain(fl, -MAX_MOTOR_SPEED, MAX_MOTOR_SPEED);
+    _frGain = constrain(fr, -MAX_MOTOR_SPEED, MAX_MOTOR_SPEED);
+    _blGain = constrain(bl, -MAX_MOTOR_SPEED, MAX_MOTOR_SPEED);
+    _brGain = constrain(br, -MAX_MOTOR_SPEED, MAX_MOTOR_SPEED);
+    sei();
+}
 
 void runLinePID() {
     static float integral      = 0.0f;
@@ -54,7 +99,7 @@ void runLinePID() {
     lastTime = now;
     if (dt <= 0.0f || dt > 0.5f) dt = 0.02f;   // first call / stall guard
 
-    // Map 0..254 → ±200 so the PID gains match their hand-tuned scale.
+    // Map 0..254 â†’ Â±200 so the PID gains match their hand-tuned scale.
     const float rawError = (Processing::XiaoDecode::lineError() - 127.0f) * (200.0f / 127.0f);
 
     smoothedError = LINE_EMA_ALPHA * rawError + (1.0f - LINE_EMA_ALPHA) * smoothedError;

@@ -1,14 +1,14 @@
-#pragma once
+﻿#pragma once
 
 // =============================================================================
-//  MapGrid — 40x40 occupancy + semantic grid for the evacuation zone.
+//  MapGrid â€” 40x40 occupancy + semantic grid for the evacuation zone.
 //
 //  Two parallel arrays of MAP_DIM*MAP_DIM bytes each:
-//    semantic[]  — CellSemantic enum
-//    logodds[]   — int8 occupancy belief, clamped to [-LO_CLAMP, +LO_CLAMP].
+//    semantic[]  â€” CellSemantic enum
+//    logodds[]   â€” int8 occupancy belief, clamped to [-LO_CLAMP, +LO_CLAMP].
 //                  Negative = free, positive = occupied.
 //
-//  World origin (0, 0) ↔ cell (MAP_ORIGIN_CX, MAP_ORIGIN_CY) = (0, 20).
+//  World origin (0, 0) â†” cell (MAP_ORIGIN_CX, MAP_ORIGIN_CY) = (0, 20).
 //  +x_world = forward into zone (column index +).
 //  +y_world = robot's left at entry (row index +).
 //  Cell size: MAP_CELL_MM (30 mm).
@@ -16,7 +16,7 @@
 
 #include <Arduino.h>
 #include <math.h>
-#include "config.h"
+#include "../../config.h"
 
 constexpr uint8_t  MAP_ORIGIN_CX = 0;
 constexpr uint8_t  MAP_ORIGIN_CY = MAP_DIM / 2;

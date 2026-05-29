@@ -1,6 +1,7 @@
-#include "EVAC_Search.h"
+﻿#include "EVAC_Search.h"
 #include "StateMachine.h"
-#include "config.h"
+#include "../../config.h"
+#include "../../pins_teensy.h"
 
 #include "../actions/Drive.h"
 #include "../processing/Mapping.h"
@@ -9,9 +10,9 @@
 #include <Arduino.h>
 
 // =============================================================================
-//  EVAC_Search — explore the zone, fill the map, detect victims/evac points.
+//  EVAC_Search â€” explore the zone, fill the map, detect victims/evac points.
 //
-//  Phase 1 (current): passive — robot stays parked while Processing::Mapping
+//  Phase 1 (current): passive â€” robot stays parked while Processing::Mapping
 //  integrates ToF + IMU. 1 Hz heartbeat beep so the operator knows we're alive.
 //
 //  Phase 2 (TODO):

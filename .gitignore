@@ -8,3 +8,23 @@ dev-tools/*.img
 *.vscode/
 
 *build/
+
+# Claude local state / worktrees
+.claude/
+**/.claude/
+
+# K230 / NNCase generated outputs
+k230-train/exports/
+**/*_diag/
+**/dump/
+
+# Python / training cache
+__pycache__/
+*.pyc
+
+# Large ML model artifacts
+*.pt
+*.pth
+*.onnx
+*.kmodel
+*.engine

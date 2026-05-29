@@ -14,6 +14,7 @@
 //    runLinePID()  — one tick of the line-follow PID using XiaoDecode::lineError().
 // =============================================================================
 
+#include <Arduino.h>
 #include <arm_math.h>
 
 namespace Actions {
@@ -21,8 +22,14 @@ namespace Drive {
 
 void init();
 
-void motor(float32_t left, float32_t right) FASTRUN;
+// imuCompensation: when true, applies pitch/roll-based per-wheel gain from
+// WeightDistribution.h. Defaults to false (current behaviour).
+void motor(float32_t left, float32_t right, bool imuCompensation = false) FASTRUN;
 void stop() FASTRUN;
+
+// Debug/test only — drives the four wheels independently, no IMU comp,
+// no L/R replication. Used for bench-testing individual motor wiring.
+void motorRaw(float32_t fl, float32_t fr, float32_t bl, float32_t br) FASTRUN;
 
 void runLinePID();
 

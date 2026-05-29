@@ -1,6 +1,6 @@
-#include "LINE_Gap.h"
+﻿#include "LINE_Gap.h"
 #include "StateMachine.h"
-#include "config.h"
+#include "../../config.h"
 
 #include "../processing/XiaoDecode.h"
 #include "../actions/Drive.h"
@@ -8,7 +8,7 @@
 #include <Arduino.h>
 
 // =============================================================================
-//  LINE_Gap — entered when CommandFilter reports cmd == 8 (line lost).
+//  LINE_Gap â€” entered when CommandFilter reports cmd == 8 (line lost).
 //
 //  Current behaviour matches the original: fall through to PID line-follow.
 //  In a future iteration this is where XIAO_MODE_GAP + gap-angle recovery

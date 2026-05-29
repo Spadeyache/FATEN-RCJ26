@@ -1,5 +1,5 @@
-#include "K230_link.h"
-#include "config.h"
+﻿#include "K230_link.h"
+#include "../../config.h"
 
 namespace Sensors {
 namespace K230_link {

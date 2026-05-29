@@ -1,9 +1,9 @@
-#pragma once
+﻿#pragma once
 
 // =============================================================================
-//  Processing::K230Decode — frame parser for K230D AI processor output.
+//  Processing::K230Decode â€” frame parser for K230D AI processor output.
 //
-//  Wire format from the K230D:  [0xAA][COUNT]([TYPE][X][Y]) × COUNT [CHKSUM]
+//  Wire format from the K230D:  [0xAA][COUNT]([TYPE][X][Y]) Ã— COUNT [CHKSUM]
 //      CHKSUM = XOR of (COUNT + all TYPE/X/Y bytes)
 //
 //  Pulls bytes from Sensors::K230_link and exposes the parsed detections.
@@ -12,7 +12,7 @@
 // =============================================================================
 
 #include <stdint.h>
-#include "config.h"
+#include "../../config.h"
 
 namespace Processing {
 namespace K230Decode {
@@ -37,7 +37,7 @@ void tick();
 const Detection* detections();   // pointer to internal array
 uint8_t          count();         // number of valid entries
 
-void setRunning(bool run);        // true → send DETECT command, false → IDLE
+void setRunning(bool run);        // true â†’ send DETECT command, false â†’ IDLE
 bool isRunning();
 
 }  // namespace K230Decode

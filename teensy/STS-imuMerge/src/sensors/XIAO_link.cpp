@@ -1,5 +1,5 @@
-#include "XIAO_link.h"
-#include "config.h"
+﻿#include "XIAO_link.h"
+#include "../../config.h"
 #include "../drivers/yacheEncodedSerial.h"
 
 namespace Sensors {

@@ -1,6 +1,6 @@
-#include "Arm.h"
-#include "config.h"
-#include "pins_teensy.h"
+﻿#include "Arm.h"
+#include "../../config.h"
+#include "../../pins_teensy.h"
 
 #include <Arduino.h>
 #include <Servo.h>

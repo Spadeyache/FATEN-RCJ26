@@ -17,7 +17,7 @@ namespace Actions {
 namespace Turn {
 
 void turn(float angle_deg);
-void uTurn();
+// void uTurn();
 
 }  // namespace Turn
 }  // namespace Actions

@@ -22,12 +22,12 @@
 FLASHMEM void setup() {
     Serial.begin(115200);
 
-    analogWrite(BUZZER_PIN, 30);
+    // analogWrite(BUZZER_PIN, 30);
     pinMode(PIN_74HCT126_EN, OUTPUT);
     digitalWrite(PIN_74HCT126_EN, HIGH);
 
     Actions::Drive::init();
-    Actions::Arm::init();           // servos + KRS, sets initial pose
+    // Actions::Arm::init();           // servos + KRS, sets initial pose
     Sensors::IMU::init();
     Sensors::Touch::init();
     Sensors::XIAO_link::init();
@@ -40,6 +40,14 @@ FLASHMEM void setup() {
 }
 
 void loop() {
+    // // Sample direct-drive call (FL, FR, BL, BR) — uncomment to hold a fixed pose:
+    // // Actions::Drive::motorRaw(40, 40, 40, 40);   // all forward
+    // Actions::Drive::motorRaw(10, -40, 10, -40); // spin right in place
+    // delay(1000);
+    // Actions::Drive::motorRaw(-40, 10, -40, 10); // spin right in place
+    // delay(1000);
+    // // Actions::Drive::motorRaw(0, 0, 0, 0);       // stop
+    // return;
     // 1. Pump sensor I/O (raw bytes in/out).
     Sensors::XIAO_link::tick();
     Sensors::K230_link::tick();

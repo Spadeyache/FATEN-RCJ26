@@ -1,6 +1,7 @@
-#include "LINE_Follow.h"
+﻿#include "LINE_Follow.h"
 #include "StateMachine.h"
-#include "config.h"
+#include "../../config.h"
+#include "../../pins_teensy.h"
 
 #include "../sensors/Touch.h"
 #include "../sensors/XIAO_link.h"
@@ -12,17 +13,17 @@
 #include <Arduino.h>
 
 // =============================================================================
-//  LINE_Follow — default driving state.
+//  LINE_Follow â€” default driving state.
 //
 //  Priority dispatch (highest first):
-//    touch front           → LINE_OBSTACLE
-//    xiaoCommand == 1      → U-turn (inline blocking action, stay in LINE_FOLLOW)
-//    xiaoCommand == 2 or 3 → green turn (forward+turn, disableGreen cooldown)
-//    xiaoCommand == 4      → STALLED_RED
-//    xiaoCommand == 5      → EVAC_ENTRY
-//    xiaoCommand == 6 or 7 → no-green intersection (NGI) sub-sequence
-//    xiaoCommand == 8      → LINE_GAP
-//    (none)                → runLinePID()
+//    touch front           â†’ LINE_OBSTACLE
+//    xiaoCommand == 1      â†’ U-turn (inline blocking action, stay in LINE_FOLLOW)
+//    xiaoCommand == 2 or 3 â†’ green turn (forward+turn, disableGreen cooldown)
+//    xiaoCommand == 4      â†’ STALLED_RED
+//    xiaoCommand == 5      â†’ EVAC_ENTRY
+//    xiaoCommand == 6 or 7 â†’ no-green intersection (NGI) sub-sequence
+//    xiaoCommand == 8      â†’ LINE_GAP
+//    (none)                â†’ runLinePID()
 //
 //  disableGreen is a one-shot cooldown: green turns trigger it; after
 //  DISABLE_GREEN_MS new green commands are accepted again.
@@ -74,7 +75,7 @@ namespace {
         if (Processing::XiaoDecode::command() == 6) {
             Actions::Forward::forward(100, 40);
         }
-        // (cmd == 7 fallthrough: future work — turn to the 90° direction)
+        // (cmd == 7 fallthrough: future work â€” turn to the 90Â° direction)
 
         Processing::XiaoDecode::setMode(XIAO_MODE_LINE);
         delay(200);
@@ -96,7 +97,7 @@ void onEnter() {
 void update() {
     clearGreenIfElapsed();
 
-    // Front bumper has priority — hand off to the obstacle handler.
+    // Front bumper has priority â€” hand off to the obstacle handler.
     if (Sensors::Touch::front()) {
         StateMachine::transitionTo(StateMachine::LINE_OBSTACLE);
         return;
@@ -105,13 +106,30 @@ void update() {
     const uint8_t cmd = Processing::XiaoDecode::command();
 
     // U-turn fires immediately, then loops back.
+    // Inlined hardcoded U-turn: spin in place for TURN_UTURN_MS, draining the
+    // XIAO link so packets don't backlog. Blocking — no state-machine churn.
     if (cmd == 1) {
-        Actions::Turn::uTurn();
+#if PRINT_ACTIONS
+        Serial.println("Action: U-Turn (inline)");
+#endif
+        Actions::Drive::motor(TURN_UTURN_L, TURN_UTURN_R);
+
+        const unsigned long start = millis();
+        unsigned long lastComms = 0;
+        while (millis() - start < (unsigned long)TURN_UTURN_MS) {
+            if (millis() - lastComms >= 20) {
+                Sensors::XIAO_link::tick();
+                Processing::XiaoDecode::tick();
+                lastComms = millis();
+            }
+        }
+
+        Actions::Drive::stop();
         Processing::XiaoDecode::clearFilter();
         return;
     }
 
-    // Green turns: short forward + 90° turn + cooldown.
+    // Green turns: short forward + 90Â° turn + cooldown.
     if (cmd == 2 && !_disableGreen) {
         Actions::Forward::forward(70, 28);
         Actions::Turn::turn(-90.0f);

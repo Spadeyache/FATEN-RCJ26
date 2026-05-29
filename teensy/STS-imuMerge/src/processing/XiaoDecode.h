@@ -1,20 +1,20 @@
-#pragma once
+﻿#pragma once
 
 // =============================================================================
-//  Processing::XiaoDecode — interprets the XIAO register cache.
+//  Processing::XiaoDecode â€” interprets the XIAO register cache.
 //
 //  Reads raw registers via Sensors::XIAO_link::get(reg), feeds the feature
 //  byte through CommandFilter at 50 Hz, and exposes typed getters:
-//      command()    — confirmed XIAO_FEAT_* code (see CommandFilter)
-//      lineError()  — line COM 0..254 (127 = centre)
-//      gapAngle()   — gap angle 0..254 (127 = 0°), mode 3 only
+//      command()    â€” confirmed XIAO_FEAT_* code (see CommandFilter)
+//      lineError()  â€” line COM 0..254 (127 = centre)
+//      gapAngle()   â€” gap angle 0..254 (127 = 0Â°), mode 3 only
 //
 //  Also owns the active XIAO mode (XIAO_MODE_*) so callers can swap modes
 //  via setMode() without reaching into the link layer.
 // =============================================================================
 
 #include <stdint.h>
-#include "config.h"
+#include "../../config.h"
 #include "CommandFilter.h"
 
 namespace Processing {

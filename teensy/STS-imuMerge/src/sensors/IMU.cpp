@@ -1,5 +1,5 @@
-#include "IMU.h"
-#include "config.h"
+﻿#include "IMU.h"
+#include "../../config.h"
 #include "../drivers/yacheMPU6050.h"
 #include <Wire.h>
 
@@ -18,9 +18,9 @@ void init() {
 
 void tick() {
     _imu.update();
-    _pitch = _imu.getPitch();
-    _roll  = _imu.getRoll();
-    _yaw   = _imu.getYaw();
+    _pitch = -_imu.getPitch();   // driver sign inverted vs robot convention
+    _roll  =  _imu.getRoll();
+    _yaw   =  _imu.getYaw();
 
 #if PRINT_IMU
     static uint32_t lastPrint = 0;
