@@ -69,10 +69,14 @@ FASTRUN void motor(float32_t left, float32_t right, bool imuCompensation) {
     }
 
     cli();
-    _flGain = constrain(fl, -MAX_MOTOR_SPEED, MAX_MOTOR_SPEED);
-    _frGain = constrain(fr, -MAX_MOTOR_SPEED, MAX_MOTOR_SPEED);
+    _flGain = constrain(fl /* *0.4 */, -MAX_MOTOR_SPEED, MAX_MOTOR_SPEED);
+    _frGain = constrain(fr/* * 0.4 */, -MAX_MOTOR_SPEED, MAX_MOTOR_SPEED);
     _blGain = constrain(bl, -MAX_MOTOR_SPEED, MAX_MOTOR_SPEED);
     _brGain = constrain(br, -MAX_MOTOR_SPEED, MAX_MOTOR_SPEED);
+    // if(_flGain > 0){_flGain *= 0.6;}
+    // if(_frGain > 0){_frGain *= 0.6;}
+    // if(_blGain > 0){_blGain *= 0.6;}
+    // if(_brGain > 0){_brGain *= 0.6;}
     sei();
 }
 
