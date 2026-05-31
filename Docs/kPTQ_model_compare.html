@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>K230D Quantization Trial — Overview</title>
+<style>
+  :root {
+    --bg:           #FBF8F2;
+    --bg-edge:      #F1ECDF;
+    --text:         #2A2A28;
+    --text-muted:   #5C5A55;
+    --rule:         #E4DCC8;
+    --pink:         #EFCBC9;
+    --pink-strong:  #C97B7B;
+    --pink-bg:      #F7E5E3;
+    --green:        #38543A;
+    --green-soft:   #88A992;
+    --orange:       #E8843D;
+  }
+
+  html, body {
+    margin: 0; padding: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Hiragino Mincho ProN", "Yu Mincho", "Cambria",
+                 "Georgia", "Times New Roman", serif;
+    font-size: 15px; line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .page {
+    max-width: 880px;
+    margin: 64px auto 96px;
+    padding: 0 36px;
+  }
+
+  /* Header */
+  .masthead {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    padding-bottom: 18px;
+    border-bottom: 1px solid var(--rule);
+    margin-bottom: 28px;
+  }
+  .masthead .title {
+    font-size: 28px;
+    letter-spacing: 0.04em;
+    color: var(--green);
+    font-weight: 600;
+  }
+  .masthead .sub {
+    font-size: 12px;
+    color: var(--text-muted);
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+  }
+
+  .preamble {
+    font-family: "Helvetica Neue", "Inter", system-ui, sans-serif;
+    color: var(--text-muted);
+    font-size: 14px;
+    line-height: 1.75;
+    margin-bottom: 40px;
+    border-left: 2px solid var(--pink);
+    padding: 6px 18px;
+    background: var(--pink-bg);
+    border-radius: 1px;
+  }
+  .preamble b { color: var(--green); font-weight: 600; }
+
+  /* Section dividers */
+  .section-label {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin: 56px 0 22px;
+    color: var(--green);
+    font-size: 13px;
+    letter-spacing: 0.32em;
+    text-transform: uppercase;
+    font-weight: 600;
+  }
+  .section-label::before,
+  .section-label::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: var(--rule);
+  }
+  .section-label::after { background: linear-gradient(90deg, var(--rule), transparent); }
+  .section-label::before { background: linear-gradient(90deg, transparent, var(--rule)); }
+
+  /* Method card */
+  .card {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    column-gap: 28px;
+    row-gap: 6px;
+    padding: 20px 22px 22px;
+    margin: 0 0 14px;
+    background: #FFFFFF;
+    border: 1px solid var(--rule);
+    border-left: 3px solid var(--pink);
+    border-radius: 2px;
+    box-shadow: 0 1px 0 rgba(184, 158, 122, 0.05);
+  }
+  .card.broken      { border-left-color: #D8C4B7; opacity: 0.92; }
+  .card.partial     { border-left-color: var(--pink); }
+  .card.solid       { border-left-color: var(--green-soft); }
+  .card.winner {
+    border-left-color: var(--orange);
+    background: linear-gradient(90deg, #FFFCFB 0%, #FFFFFF 65%);
+  }
+  .card.float-ref   { border-left-color: var(--green); background: #FAF7F0; }
+
+  .name-block {
+    grid-column: 1;
+  }
+  .name {
+    font-family: "SF Mono", "Menlo", "Consolas", monospace;
+    font-size: 14px;
+    color: var(--text);
+    font-weight: 600;
+    letter-spacing: 0.01em;
+  }
+  .arch {
+    font-size: 11px;
+    color: var(--text-muted);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    margin-top: 2px;
+  }
+  .summary {
+    grid-column: 1 / -1;
+    font-family: "Helvetica Neue", "Inter", system-ui, sans-serif;
+    font-size: 13.5px;
+    color: var(--text-muted);
+    line-height: 1.6;
+    margin-top: 6px;
+  }
+  .summary b { color: var(--green); font-weight: 600; }
+
+  .metrics {
+    grid-column: 2;
+    grid-row: 1;
+    display: flex;
+    gap: 18px;
+    align-items: flex-start;
+  }
+  .metric {
+    text-align: right;
+    min-width: 64px;
+  }
+  .metric .label {
+    display: block;
+    font-size: 9.5px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+  .metric .value {
+    font-family: "SF Mono", "Menlo", "Consolas", monospace;
+    font-size: 17px;
+    color: var(--text);
+    font-weight: 600;
+    margin-top: 1px;
+  }
+  .metric.dim .value { color: #BFBAA8; }
+  .metric.good .value { color: var(--green); }
+  .metric.crown .value { color: var(--orange); }
+
+  /* Tag for winner */
+  .badge {
+    grid-column: 2;
+    grid-row: 2;
+    align-self: end;
+    justify-self: end;
+    display: inline-block;
+    font-family: "Helvetica Neue", "Inter", system-ui, sans-serif;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.3em;
+    color: var(--orange);
+    border: 1.2px solid var(--orange);
+    padding: 3px 8px 2px;
+    border-radius: 1px;
+    text-transform: uppercase;
+    margin-top: 6px;
+  }
+
+  /* Bottom legend */
+  .legend {
+    margin-top: 56px;
+    padding: 20px 22px;
+    background: #FFFFFF;
+    border: 1px solid var(--rule);
+    font-family: "Helvetica Neue", "Inter", system-ui, sans-serif;
+    font-size: 12px;
+    color: var(--text-muted);
+    line-height: 1.7;
+  }
+  .legend .item { display: flex; gap: 10px; margin: 4px 0; }
+  .legend .swatch {
+    width: 4px; height: 16px; margin-top: 2px;
+    border-radius: 1px;
+  }
+  .legend code {
+    font-family: "SF Mono", "Menlo", "Consolas", monospace;
+    color: var(--green); font-size: 11.5px;
+  }
+  .footer-note {
+    margin-top: 32px;
+    text-align: center;
+    font-family: "Hiragino Mincho ProN", "Yu Mincho", serif;
+    font-size: 11px;
+    color: var(--green-soft);
+    letter-spacing: 0.3em;
+  }
+</style>
+</head>
+<body>
+  <div class="page">
+    <header class="masthead">
+      <div class="title">K230D Quantization — Overview of Methods</div>
+      <div class="sub">2026 / 78 GTs / 50 val</div>
+    </header>
+
+    <p class="preamble">
+      Every quantized AnchorBaseDet (<b>can3_5_s</b>) variant we tried failed structurally
+      — the classifier head saturates under uint8 PTQ. Pivoting to <b>YOLOv8n</b> (SiLU, no SE,
+      DFL head) restored deployable accuracy. The PTQ numbers that previously read "recall = 0"
+      were artifacts of the <b>PC-side nncase 2.9.0 Simulator</b> mis-executing the YOLOv8 DFL
+      head; once the host compiler/sim package was upgraded to <b>nncase 2.11.0</b> (the
+      on-device <code>nncase_runtime</code> in CanMV was not touched), the same kmodel files
+      reveal their real performance, summarised below.
+    </p>
+
+    <!-- ============ ANCHORBASEDET ============ -->
+    <div class="section-label">Anchor-base detector — can3_5_s</div>
+
+    <div class="card broken">
+      <div class="name-block">
+        <div class="name">v00_aicube_baseline</div>
+        <div class="arch">AnchorBaseDet · 1.35 MB · AI Cube Kld u8/u8</div>
+      </div>
+      <div class="metrics">
+        <div class="metric dim"><span class="label">r@0.05</span><span class="value">0.026</span></div>
+        <div class="metric dim"><span class="label">r@0.4</span><span class="value">0.000</span></div>
+        <div class="metric dim"><span class="label">avg_bsi</span><span class="value">0.022</span></div>
+      </div>
+      <div class="summary">
+        The original AI Cube export. Geometry survived; the classifier head collapsed to
+        near-zero scores. Not deployable for single-best detection.
+      </div>
+    </div>
+
+    <div class="card broken">
+      <div class="name-block">
+        <div class="name">v04 · v06 · v09 · v10 (MixQuant family)</div>
+        <div class="arch">AnchorBaseDet · 1.3 – 1.5 MB · uint8 PTQ + selective int16</div>
+      </div>
+      <div class="metrics">
+        <div class="metric dim"><span class="label">r@0.05</span><span class="value">≤ 0.11</span></div>
+        <div class="metric dim"><span class="label">r@0.4</span><span class="value">≤ 0.01</span></div>
+        <div class="metric dim"><span class="label">avg_bsi</span><span class="value">≤ 0.02</span></div>
+      </div>
+      <div class="summary">
+        MixQuant promoted 12 → 126 layers to int16. Each step nudged metrics slightly
+        but never broke through. The damage is distributed across the whole network,
+        not a few hot layers.
+      </div>
+    </div>
+
+    <div class="card partial">
+      <div class="name-block">
+        <div class="name">q1p_qat_squant_kld_u8u8</div>
+        <div class="arch">AnchorBaseDet · 1.35 MB · QAT distill + Squant + Kld u8/u8</div>
+      </div>
+      <div class="metrics">
+        <div class="metric"><span class="label">r@0.05</span><span class="value">0.276</span></div>
+        <div class="metric"><span class="label">r@0.4</span><span class="value">0.184</span></div>
+        <div class="metric"><span class="label">avg_bsi</span><span class="value">0.006</span></div>
+      </div>
+      <div class="summary">
+        400-step QAT distillation from the float teacher + weight baking. 14× better than v00
+        at <code>r@0.2</code>, but <code>avg_bsi</code> stayed near zero — the highest-confidence
+        box still isn't reliably the right object.
+      </div>
+    </div>
+
+    <div class="card float-ref">
+      <div class="name-block">
+        <div class="name">v_float32</div>
+        <div class="arch">AnchorBaseDet · 3.98 MB · no PTQ</div>
+      </div>
+      <div class="metrics">
+        <div class="metric good"><span class="label">r@0.05</span><span class="value">0.987</span></div>
+        <div class="metric good"><span class="label">r@0.4</span><span class="value">0.987</span></div>
+        <div class="metric good"><span class="label">avg_bsi</span><span class="value">0.532</span></div>
+      </div>
+      <div class="summary">
+        Reference float build of the reconstructed AI Cube model. Confirms architecture and
+        decoder are correct; quantization is the only failure mode. Slow on K230D.
+      </div>
+    </div>
+
+    <!-- ============ YOLOV8 ============ -->
+    <div class="section-label">YOLOv8n (anchor-free)</div>
+
+    <div class="card partial">
+      <div class="name-block">
+        <div class="name">yolov8_existing_squant</div>
+        <div class="arch">YOLOv8 · 6.4 MB · Squant Kld u8/u8 · convert_to_kmodel3</div>
+      </div>
+      <div class="metrics">
+        <div class="metric"><span class="label">r@0.05</span><span class="value">1.00</span></div>
+        <div class="metric"><span class="label">r@0.4</span><span class="value">0.909</span></div>
+        <div class="metric"><span class="label">avg_bsi</span><span class="value">0.714</span></div>
+      </div>
+      <div class="summary">
+        Score head saturates onto one quant grid line (0.5034 everywhere); localization
+        intact. Deployable in a pinch but ranking is unreliable.
+      </div>
+    </div>
+
+    <div class="card partial">
+      <div class="name-block">
+        <div class="name">yolov8_existing_mix</div>
+        <div class="arch">YOLOv8 · 2.9 MB · MixQuant Kld u8/u8 + selective i16</div>
+      </div>
+      <div class="metrics">
+        <div class="metric"><span class="label">r@0.05</span><span class="value">1.00</span></div>
+        <div class="metric"><span class="label">r@0.4</span><span class="value">0.970</span></div>
+        <div class="metric"><span class="label">avg_bsi</span><span class="value">0.716</span></div>
+      </div>
+      <div class="summary">
+        Smaller than the Squant build at similar accuracy. Score saturation still present
+        (top-20 scores collapse to a few distinct values). Same single-best-detection risk.
+      </div>
+    </div>
+
+    <div class="card partial">
+      <div class="name-block">
+        <div class="name">yolov8_squant_raw01_calib128</div>
+        <div class="arch">YOLOv8 · 3.1 MB · Squant Kld u8/u8 · raw_01 · 128 calib imgs</div>
+      </div>
+      <div class="metrics">
+        <div class="metric"><span class="label">r@0.05</span><span class="value">0.970</span></div>
+        <div class="metric"><span class="label">r@0.4</span><span class="value">0.909</span></div>
+        <div class="metric"><span class="label">avg_bsi</span><span class="value">0.712</span></div>
+      </div>
+      <div class="summary">
+        Larger calibration set, identical PTQ. Slightly worse than the 74-image build —
+        evidence that PTQ accuracy plateaus and depends on which images are picked,
+        not how many.
+      </div>
+    </div>
+
+    <div class="card solid">
+      <div class="name-block">
+        <div class="name">yolov8_kld_u8u8_calib74</div>
+        <div class="arch">YOLOv8 · 3.1 MB · Squant Kld u8/u8 · 74 calib imgs (deterministic seed)</div>
+      </div>
+      <div class="metrics">
+        <div class="metric"><span class="label">r@0.05</span><span class="value">1.00</span></div>
+        <div class="metric good"><span class="label">r@0.4</span><span class="value">0.970</span></div>
+        <div class="metric good"><span class="label">avg_bsi</span><span class="value">0.704</span></div>
+      </div>
+      <div class="summary">
+        Same family as the existing builds, just a different 74-image draw. Pushed the
+        saturation ceiling from 0.5034 → 0.6860 — useful headroom, but still a single grid line.
+      </div>
+    </div>
+
+    <div class="card winner">
+      <div class="name-block">
+        <div class="name">yolov8_kld_i16act_u8w_calib74</div>
+        <div class="arch">YOLOv8 · 3.4 MB · Kld · int16 act · uint8 weights + Squant</div>
+      </div>
+      <div class="metrics">
+        <div class="metric crown"><span class="label">r@0.05</span><span class="value">1.00</span></div>
+        <div class="metric crown"><span class="label">r@0.4</span><span class="value">0.970</span></div>
+        <div class="metric crown"><span class="label">avg_bsi</span><span class="value">0.732</span></div>
+      </div>
+      <div class="badge">DEPLOY</div>
+      <div class="summary">
+        Int16 activations restore a float-like score distribution: top-20 anchors carry
+        16 – 20 distinct values instead of 1 – 9. Ties float on geometry and on
+        single-best IoU. Only +260 KB over the u8/u8 build.
+      </div>
+    </div>
+
+    <div class="card float-ref">
+      <div class="name-block">
+        <div class="name">yolov8_existing_float</div>
+        <div class="arch">YOLOv8 · 11.6 MB · no PTQ</div>
+      </div>
+      <div class="metrics">
+        <div class="metric good"><span class="label">r@0.05</span><span class="value">1.00</span></div>
+        <div class="metric good"><span class="label">r@0.4</span><span class="value">0.970</span></div>
+        <div class="metric good"><span class="label">avg_bsi</span><span class="value">0.729</span></div>
+      </div>
+      <div class="summary">
+        Reference. Highest accuracy ceiling. Use only if i16-act inference latency turns
+        out to be too high on K230D.
+      </div>
+    </div>
+
+    <!-- ============ Legend ============ -->
+    <div class="legend">
+      <div class="item">
+        <div class="swatch" style="background: var(--orange);"></div>
+        <div><b style="color: var(--orange);">DEPLOY</b> — deployable PTQ winner: matches float on geometry AND single-best ranking.</div>
+      </div>
+      <div class="item">
+        <div class="swatch" style="background: var(--green-soft);"></div>
+        <div>Solid PTQ — accurate boxes but score saturation; deployable with care if you only need "is something there".</div>
+      </div>
+      <div class="item">
+        <div class="swatch" style="background: var(--pink);"></div>
+        <div>Partial — improves on the broken baseline but unreliable for single-best wire protocols.</div>
+      </div>
+      <div class="item">
+        <div class="swatch" style="background: #D8C4B7;"></div>
+        <div>Broken — recall ≈ 0 on single-best, or output collapse.</div>
+      </div>
+      <div class="item">
+        <div class="swatch" style="background: var(--green);"></div>
+        <div>Float reference — accuracy ceiling; not deployable for speed reasons.</div>
+      </div>
+      <br>
+      <div>
+        <code>r@0.05</code>, <code>r@0.4</code>: recall at IoU ≥ 0.5 with score
+        thresholds 0.05 and 0.40.
+        <code>avg_bsi</code> = mean IoU of the <i>highest-scoring</i> same-class box —
+        the metric the single-best UART protocol actually depends on.
+      </div>
+    </div>
+
+    <div class="footer-note">— end of overview —</div>
+  </div>
+</body>
+</html>
