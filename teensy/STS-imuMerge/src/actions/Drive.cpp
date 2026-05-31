@@ -7,6 +7,19 @@
 
 #include <Arduino.h>
 
+// === SLOPE_TEST: hardcoded ~25° sideways-traverse experiment ===========
+//  0 = identical to flat-ground behavior.
+//  1 = soften steering (shrink the L/R turn differential) and slow forward
+//      speed, to test whether gentler/slower corrections stop the nose-up.
+//  No IMU read — the 25° traverse is assumed/hardcoded by enabling this.
+#define SLOPE_TEST 1
+const float CORRECTION_SCALE = 0.3f;  // 1.0 = normal turn, 0.0 = drive straight
+const float SPEED_SCALE      = 0.5f;  // forward speed multiplier on the slope
+const float TURN_REAR_SCALE  = 1.4f;  // turn applied to REAR wheels relative to front:
+                                      // 1.0 = pivot at center, >1.0 = rear out-turns front
+                                      // so the rear bites and the axis shifts back (front
+                                      // slides); <1.0 = axis shifts forward
+
 namespace Actions {
 namespace Drive {
 
@@ -118,10 +131,28 @@ void runLinePID() {
     const float correction = PID_KP * smoothedError + PID_KI * integral + PID_KD * smoothedDeriv;
     const float pitchAdj   = (float)Sensors::IMU::getPitch() * IMU_PITCH_GAIN;
 
+#if SLOPE_TEST
+    const float turn = correction * CORRECTION_SCALE;   // shrink the L/R turn differential
+    const float base = PID_BASE_SPEED * SPEED_SCALE;    // slow down on the slope
+
+    // Move the rotation axis rearward: front wheels get the full turn, rear
+    // wheels get a reduced turn (smaller L/R differential), so the front swings
+    // more and the pivot shifts back toward the rear axle.
+    const float turnF = turn;                    // front L/R differential
+    const float turnR = turn * TURN_REAR_SCALE;  // rear  L/R differential (reduced)
+
+    const float fl = base + turnF * PID_LEFT_SCALE + pitchAdj;
+    const float fr = base - turnF                  + pitchAdj;
+    const float bl = base + turnR * PID_LEFT_SCALE + pitchAdj;
+    const float br = base - turnR                  + pitchAdj;
+
+    motorRaw(fl, fr, bl, br);
+#else
     const float leftSpeed  = PID_BASE_SPEED + correction * PID_LEFT_SCALE + pitchAdj;
     const float rightSpeed = PID_BASE_SPEED - correction                  + pitchAdj;
 
     motor(leftSpeed, rightSpeed);
+#endif
 
 #if PRINT_PID
     Serial.printf("PID err:%.1f sErr:%.1f sDrv:%.1f corr:%.1f L:%.0f R:%.0f\n",

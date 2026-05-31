@@ -40,14 +40,15 @@ FLASHMEM void setup() {
 }
 
 void loop() {
-    // // Sample direct-drive call (FL, FR, BL, BR) — uncomment to hold a fixed pose:
-    // // Actions::Drive::motorRaw(40, 40, 40, 40);   // all forward
-    // Actions::Drive::motorRaw(10, -40, 10, -40); // spin right in place
-    // delay(1000);
-    // Actions::Drive::motorRaw(-40, 10, -40, 10); // spin right in place
-    // delay(1000);
-    // // Actions::Drive::motorRaw(0, 0, 0, 0);       // stop
-    // return;
+    // === Pivot-axis bench test ===============================================
+    // Hold four fixed wheel gains FOREVER (FL, FR, BL, BR), range ±100.
+    // Sweep the numbers one at a time and watch where the robot pivots.
+    //   (+,-,+,-) = in-place spin   (+,-,0,0) = front-only   (0,0,+,-) = rear-only
+    // Comment this block out to return to normal line following.
+    Actions::Drive::motorRaw(0, -0, 100, -100);
+    return;
+    // ========================================================================
+
     // 1. Pump sensor I/O (raw bytes in/out).
     Sensors::XIAO_link::tick();
     Sensors::K230_link::tick();
