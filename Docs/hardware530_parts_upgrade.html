@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Parts &amp; Fabrication — Production Tasks</title>
+<style>
+  :root {
+    --bg:           #FBF8F2;
+    --text:         #2A2A28;
+    --text-muted:   #5C5A55;
+    --rule:         #E4DCC8;
+    --pink:         #EFCBC9;
+    --pink-strong:  #C97B7B;
+    --pink-bg:      #F7E5E3;
+    --green:        #38543A;
+    --green-soft:   #88A992;
+    --green-bg:     #EEF3EE;
+    --orange:       #E8843D;
+  }
+
+  html, body {
+    margin: 0; padding: 0;
+    background: var(--bg); color: var(--text);
+    font-family: "Hiragino Mincho ProN", "Yu Mincho", "Cambria",
+                 "Georgia", "Times New Roman", serif;
+    font-size: 15px; line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .page { max-width: 880px; margin: 64px auto 96px; padding: 0 36px; }
+
+  .masthead {
+    display: flex; align-items: baseline; justify-content: space-between;
+    padding-bottom: 18px; border-bottom: 1px solid var(--rule); margin-bottom: 28px;
+  }
+  .masthead .title { font-size: 28px; letter-spacing: 0.04em; color: var(--green); font-weight: 600; }
+  .masthead .sub {
+    font-size: 12px; color: var(--text-muted);
+    letter-spacing: 0.18em; text-transform: uppercase;
+  }
+
+  .preamble {
+    font-family: "Helvetica Neue", "Inter", system-ui, sans-serif;
+    color: var(--text-muted); font-size: 14px; line-height: 1.75;
+    margin-bottom: 40px; border-left: 2px solid var(--pink);
+    padding: 6px 18px; background: var(--pink-bg); border-radius: 1px;
+  }
+  .preamble b { color: var(--green); font-weight: 600; }
+
+  .section-label {
+    display: flex; align-items: center; gap: 16px; margin: 48px 0 22px;
+    color: var(--green); font-size: 13px; letter-spacing: 0.32em;
+    text-transform: uppercase; font-weight: 600;
+  }
+  .section-label::before, .section-label::after {
+    content: ""; flex: 1; height: 1px; background: var(--rule);
+  }
+  .section-label::after { background: linear-gradient(90deg, var(--rule), transparent); }
+  .section-label::before { background: linear-gradient(90deg, transparent, var(--rule)); }
+
+  .card {
+    padding: 20px 22px 22px; margin: 0 0 14px;
+    background: #FFFFFF; border: 1px solid var(--rule);
+    border-left: 3px solid var(--pink); border-radius: 2px;
+    box-shadow: 0 1px 0 rgba(184, 158, 122, 0.05);
+  }
+  .card .idx {
+    font-family: "SF Mono", "Menlo", "Consolas", monospace;
+    font-size: 11px; color: var(--pink-strong); letter-spacing: 0.1em;
+  }
+  .card .name { font-size: 18px; color: var(--text); font-weight: 600; }
+  .card .arch {
+    font-size: 11px; color: var(--text-muted); letter-spacing: 0.12em;
+    text-transform: uppercase; margin-top: 3px;
+  }
+  .card .body {
+    font-family: "Helvetica Neue", "Inter", system-ui, sans-serif;
+    font-size: 13.5px; color: var(--text-muted); line-height: 1.6; margin-top: 12px;
+  }
+  .card .body p { margin: 7px 0; }
+  .card .body b { color: var(--green); font-weight: 600; }
+  .lab {
+    display: inline-block; font-size: 9px; font-weight: 700;
+    letter-spacing: 0.2em; padding: 2px 7px 1px; border-radius: 1px;
+    margin-right: 10px; vertical-align: 1.5px; text-transform: uppercase;
+  }
+  .lab.why  { color: var(--pink-strong); border: 1px solid var(--pink);      background: var(--pink-bg); }
+  .lab.do   { color: var(--green);       border: 1px solid var(--green-soft); background: var(--green-bg); }
+  .card code {
+    font-family: "SF Mono", "Menlo", "Consolas", monospace;
+    color: var(--green); font-size: 12px;
+    background: var(--green-bg); padding: 0 4px; border-radius: 2px;
+  }
+
+  .footer-note {
+    margin-top: 40px; text-align: center;
+    font-family: "Hiragino Mincho ProN", "Yu Mincho", serif;
+    font-size: 11px; color: var(--green-soft); letter-spacing: 0.3em;
+  }
+</style>
+</head>
+<body>
+  <div class="page">
+    <header class="masthead">
+      <div class="title">Parts &amp; Fabrication</div>
+      <div class="sub">RCJ RescueLine / Off-design tasks</div>
+    </header>
+
+    <p class="preamble">
+      Outside the design work, two <b>fabrication tasks</b> gate the build:
+      validating the <b>new PCB</b> and casting the <b>new tires</b> from a fresh mold.
+      Kept simple on purpose — these are make-and-check items, not design decisions.
+    </p>
+
+    <div class="section-label">Production tasks</div>
+
+    <div class="card">
+      <div class="idx">01 · PCB</div>
+      <div class="name">PCB test</div>
+      <div class="arch">Bench-verify the new board</div>
+      <div class="body">
+        <p><span class="lab why">Why</span>
+          The upgrades (in-wheel servo wiring, ToF, arm) ride on a revised board — it must be
+          <b>proven on the bench before assembly</b>.</p>
+        <p><span class="lab do">Do</span>
+          Check power rails, the <b>servo bus</b> and every sensor header
+          (ToF, IMU, camera), then confirm a clean motor + sensor bring-up.</p>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="idx">02 · TIRE MOLD</div>
+      <div class="name">Tire mold creation</div>
+      <div class="arch">Same size · new material &amp; shape</div>
+      <div class="body">
+        <p><span class="lab why">Why</span>
+          New tires drive <b>two</b> upgrades at once:
+          <b>off-road capability</b> (more compliance and bite over bumps) and
+          <b>rotational-axis adjustment</b> (the pivot is set by <b>front/rear grip balance</b>,
+          so the tire material/tread is what makes the axis controllable).</p>
+        <p><span class="lab do">Do</span>
+          Make a new <b>mold</b> — keep the size, change the <b>material and tread shape</b> —
+          and cast the tires.</p>
+      </div>
+    </div>
+
+    <div class="footer-note">— fabrication plan · see hardware design plan for the why —</div>
+  </div>
+</body>
+</html>

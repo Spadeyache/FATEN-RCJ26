@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Hardware Design Upgrade — 2026 Build Plan</title>
+<style>
+  :root {
+    --bg:           #FBF8F2;
+    --bg-edge:      #F1ECDF;
+    --text:         #2A2A28;
+    --text-muted:   #5C5A55;
+    --rule:         #E4DCC8;
+    --pink:         #EFCBC9;
+    --pink-strong:  #C97B7B;
+    --pink-bg:      #F7E5E3;
+    --green:        #38543A;
+    --green-soft:   #88A992;
+    --green-bg:     #EEF3EE;
+    --orange:       #E8843D;
+  }
+
+  html, body {
+    margin: 0; padding: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Hiragino Mincho ProN", "Yu Mincho", "Cambria",
+                 "Georgia", "Times New Roman", serif;
+    font-size: 15px; line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .page { max-width: 880px; margin: 64px auto 96px; padding: 0 36px; }
+
+  /* Header */
+  .masthead {
+    display: flex; align-items: baseline; justify-content: space-between;
+    padding-bottom: 18px; border-bottom: 1px solid var(--rule); margin-bottom: 28px;
+  }
+  .masthead .title {
+    font-size: 28px; letter-spacing: 0.04em; color: var(--green); font-weight: 600;
+  }
+  .masthead .sub {
+    font-size: 12px; color: var(--text-muted);
+    letter-spacing: 0.18em; text-transform: uppercase;
+  }
+
+  .preamble {
+    font-family: "Helvetica Neue", "Inter", system-ui, sans-serif;
+    color: var(--text-muted); font-size: 14px; line-height: 1.75;
+    margin-bottom: 18px; border-left: 2px solid var(--pink);
+    padding: 6px 18px; background: var(--pink-bg); border-radius: 1px;
+  }
+  .preamble b { color: var(--green); font-weight: 600; }
+
+  /* Quick index chips */
+  .chips {
+    display: flex; flex-wrap: wrap; gap: 8px;
+    font-family: "Helvetica Neue", "Inter", system-ui, sans-serif;
+    margin-bottom: 8px;
+  }
+  .chip {
+    font-size: 11px; letter-spacing: 0.08em; color: var(--green);
+    border: 1px solid var(--green-soft); background: var(--green-bg);
+    padding: 4px 11px; border-radius: 100px;
+  }
+  .chip span { color: var(--text-muted); }
+
+  /* Section dividers */
+  .section-label {
+    display: flex; align-items: center; gap: 16px; margin: 50px 0 22px;
+    color: var(--green); font-size: 13px; letter-spacing: 0.32em;
+    text-transform: uppercase; font-weight: 600;
+  }
+  .section-label::before, .section-label::after {
+    content: ""; flex: 1; height: 1px; background: var(--rule);
+  }
+  .section-label::after { background: linear-gradient(90deg, var(--rule), transparent); }
+  .section-label::before { background: linear-gradient(90deg, transparent, var(--rule)); }
+
+  /* Card */
+  .card {
+    display: grid; grid-template-columns: 1fr auto; column-gap: 28px; row-gap: 6px;
+    padding: 20px 22px 22px; margin: 0 0 14px;
+    background: #FFFFFF; border: 1px solid var(--rule);
+    border-left: 3px solid var(--pink); border-radius: 2px;
+    box-shadow: 0 1px 0 rgba(184, 158, 122, 0.05);
+  }
+  .card.keep  { border-left-color: var(--green-soft); background: #FAF7F0; }
+  .card.flag  { border-left-color: var(--orange); background: linear-gradient(90deg, #FFFCFB 0%, #FFFFFF 65%); }
+
+  .name-block { grid-column: 1; }
+  .idx {
+    font-family: "SF Mono", "Menlo", "Consolas", monospace;
+    font-size: 11px; color: var(--pink-strong); letter-spacing: 0.1em;
+  }
+  .name {
+    font-size: 18px; color: var(--text); font-weight: 600; letter-spacing: 0.01em;
+  }
+  .arch {
+    font-size: 11px; color: var(--text-muted); letter-spacing: 0.12em;
+    text-transform: uppercase; margin-top: 3px;
+  }
+
+  /* metric (speed) */
+  .metrics { grid-column: 2; grid-row: 1; display: flex; gap: 18px; align-items: flex-start; }
+  .metric { text-align: right; min-width: 64px; }
+  .metric .label {
+    display: block; font-size: 9.5px; letter-spacing: 0.18em;
+    text-transform: uppercase; color: var(--text-muted);
+  }
+  .metric .value {
+    font-family: "SF Mono", "Menlo", "Consolas", monospace;
+    font-size: 20px; color: var(--orange); font-weight: 600; margin-top: 1px;
+  }
+
+  /* rationale (why / plan / tried) */
+  .rationale {
+    grid-column: 1 / -1; margin-top: 10px;
+    font-family: "Helvetica Neue", "Inter", system-ui, sans-serif;
+    font-size: 13.5px;
+  }
+  .rationale p { margin: 7px 0; color: var(--text-muted); line-height: 1.6; }
+  .rationale b { color: var(--green); font-weight: 600; }
+  .lab {
+    display: inline-block; font-size: 9px; font-weight: 700;
+    letter-spacing: 0.2em; padding: 2px 7px 1px; border-radius: 1px;
+    margin-right: 10px; vertical-align: 1.5px; text-transform: uppercase;
+  }
+  .lab.why   { color: var(--pink-strong); border: 1px solid var(--pink);      background: var(--pink-bg); }
+  .lab.plan  { color: var(--green);       border: 1px solid var(--green-soft); background: var(--green-bg); }
+  .lab.tried { color: var(--orange);      border: 1px solid var(--orange);     background: #FFF4EC; }
+  .rationale code {
+    font-family: "SF Mono", "Menlo", "Consolas", monospace;
+    color: var(--green); font-size: 12px;
+    background: var(--green-bg); padding: 0 4px; border-radius: 2px;
+  }
+
+  /* inline diagram */
+  .figure {
+    grid-column: 1 / -1; margin-top: 16px;
+    background: #FFFDF9; border: 1px solid var(--rule); border-radius: 3px;
+    padding: 12px 12px 4px;
+  }
+  .figure svg { width: 100%; height: auto; display: block; }
+  .fig-title {
+    font-family: "Helvetica Neue", "Inter", system-ui, sans-serif;
+    font-size: 10.5px; letter-spacing: 0.22em; text-transform: uppercase;
+    color: var(--green); text-align: center; margin: 2px 0 4px;
+  }
+
+  /* keep row */
+  .keep-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .keep-item {
+    background: #FAF7F0; border: 1px solid var(--rule);
+    border-left: 3px solid var(--green-soft); border-radius: 2px;
+    padding: 13px 16px;
+  }
+  .keep-item .kn { font-size: 15px; color: var(--green); font-weight: 600; }
+  .keep-item .kd {
+    font-family: "Helvetica Neue", "Inter", system-ui, sans-serif;
+    font-size: 12.5px; color: var(--text-muted); margin-top: 3px; line-height: 1.5;
+  }
+
+  .footer-note {
+    margin-top: 40px; text-align: center;
+    font-family: "Hiragino Mincho ProN", "Yu Mincho", serif;
+    font-size: 11px; color: var(--green-soft); letter-spacing: 0.3em;
+  }
+</style>
+</head>
+<body>
+  <div class="page">
+    <header class="masthead">
+      <div class="title">Hardware Design Upgrade</div>
+      <div class="sub">RCJ RescueLine / 2026 Build Plan</div>
+    </header>
+
+    <p class="preamble">
+      After the <b>USA international competition</b> we mapped every place the robot lost
+      time or failed, and turned each into one concrete design change. The course was longer,
+      bumpier and steeper than our regional runs — the line section alone took <b>~4&nbsp;min</b>.
+      Five upgrades below; the proven parts of the current robot are kept untouched.
+    </p>
+
+    <div class="chips">
+      <div class="chip">Off-road <span>· terrain</span></div>
+      <div class="chip">Speed <span>· in-wheel drive</span></div>
+      <div class="chip">Rotational axis <span>· slope</span></div>
+      <div class="chip">ToF unit <span>· evac exit</span></div>
+      <div class="chip">Arm <span>· victim ball</span></div>
+    </div>
+
+    <!-- ============ DRIVE & CHASSIS ============ -->
+    <div class="section-label">Drive &amp; Chassis</div>
+
+    <div class="card">
+      <div class="name-block">
+        <div class="idx">01 · OFF-ROAD</div>
+        <div class="name">Off-road capability</div>
+        <div class="arch">Tire mold · same size, new tread</div>
+      </div>
+      <div class="rationale">
+        <p><span class="lab why">Why</span>
+          At the USA comp the robot <b>struggled on bumps and uneven terrain</b> — it lost grip
+          and got hung up where the surface was not flat.</p>
+        <p><span class="lab plan">Plan</span>
+          <b>Keep the tire size</b> (geometry and gearing stay valid), but change the
+          <b>mold material and tread shape</b> for more compliance and bite over bumps.
+          New tires are cast from a new mold — see the Parts plan.</p>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="name-block">
+        <div class="idx">02 · SPEED</div>
+        <div class="name">Robot speed</div>
+        <div class="arch">In-wheel STS servo · planned ~×1.5</div>
+      </div>
+      <div class="metrics">
+        <div class="metric"><span class="label">target</span><span class="value">×1.5</span></div>
+      </div>
+      <div class="rationale">
+        <p><span class="lab why">Why</span>
+          The international course is <b>longer and more complex</b>. The USA line section took
+          <b>~4&nbsp;min</b>; with the bigger, harder international terrain we need margin to finish in time.</p>
+        <p><span class="lab plan">Plan</span>
+          Move the <b>STS servo into the tire</b> (in-wheel drive) and step the ratio up by
+          <code>40/26 ≈ ×1.5</code>. This is the <b>planned target</b> — a ~1.5× top speed should
+          comfortably absorb the longer course.</p>
+      </div>
+    </div>
+
+    <div class="card flag">
+      <div class="name-block">
+        <div class="idx">03 · ROTATIONAL AXIS</div>
+        <div class="name">Adjustable rotational axis</div>
+        <div class="arch">Per-wheel motor power · pivot control</div>
+      </div>
+      <div class="rationale">
+        <p><span class="lab why">Why</span>
+          On a slope the <b>nose lifts (noses up)</b>: gravity drags the lighter end downhill and
+          the robot rotates off the line. We want to <b>move the rotation axis</b> to fight this —
+          by changing how much power each wheel gets, not by adding any new mechanism.</p>
+        <p><span class="lab tried">Tried</span>
+          On the bench we drove the four wheels independently and watched where it pivots:
+          <code>front&nbsp;100&nbsp;/&nbsp;back&nbsp;0</code> → it moves <b>slowly</b> with the axis
+          toward the <b>back</b>; the opposite gain (<code>front&nbsp;0&nbsp;/&nbsp;back&nbsp;100</code>)
+          moves <b>fast</b> with the axis toward the <b>front</b>. So the pivot really does shift with
+          power balance — but it is dominated by which tires grip, so it depends heavily on
+          <b>front/rear grip balance</b> (the new tire mold feeds directly into this).</p>
+
+        <div class="figure">
+          <div class="fig-title">Bench finding — the pivot follows the power balance</div>
+          <svg viewBox="0 0 760 344" role="img"
+               aria-label="Two top-down robots showing the rotation axis at the rear when the front wheels drive, and at the front when the rear wheels drive.">
+            <defs>
+              <marker id="arw" markerWidth="7.5" markerHeight="7.5" refX="3.8" refY="3" orient="auto">
+                <path d="M0,0 L7.5,3 L0,6 Z" fill="#C97B7B"/>
+              </marker>
+            </defs>
+
+            <!-- panel divider -->
+            <line x1="380" y1="58" x2="380" y2="312" stroke="#E4DCC8" stroke-width="1" stroke-dasharray="3 4"/>
+
+            <!-- ===================== PANEL A : front drives ===================== -->
+            <polygon points="190,60 186,68 194,68" fill="#88A992"/>
+            <text x="190" y="80" text-anchor="middle" font-family="Helvetica Neue, Inter, sans-serif"
+                  font-size="10" letter-spacing="0.22em" fill="#5C5A55">FRONT</text>
+
+            <rect x="156" y="88" width="68" height="144" rx="11" fill="#FAF7F0" stroke="#38543A" stroke-width="1.5"/>
+
+            <!-- driven front wheels (orange + motion chevrons) -->
+            <rect x="149" y="95" width="14" height="34" rx="3" fill="#E8843D"/>
+            <polyline points="152,111 156,107 160,111" fill="none" stroke="#FFFFFF" stroke-width="1.6"/>
+            <polyline points="152,119 156,115 160,119" fill="none" stroke="#FFFFFF" stroke-width="1.6"/>
+            <rect x="217" y="95" width="14" height="34" rx="3" fill="#E8843D"/>
+            <polyline points="220,111 224,107 228,111" fill="none" stroke="#FFFFFF" stroke-width="1.6"/>
+            <polyline points="220,119 224,115 228,119" fill="none" stroke="#FFFFFF" stroke-width="1.6"/>
+
+            <!-- held rear wheels (muted + lock) -->
+            <rect x="149" y="191" width="14" height="34" rx="3" fill="#D8C4B7"/>
+            <rect x="152" y="207" width="8" height="7" rx="1" fill="#5C5A55"/>
+            <path d="M153.6,207 V204.6 A2.4,2.4 0 0 1 158.4,204.6 V207" fill="none" stroke="#5C5A55" stroke-width="1.3"/>
+            <rect x="217" y="191" width="14" height="34" rx="3" fill="#D8C4B7"/>
+            <rect x="220" y="207" width="8" height="7" rx="1" fill="#5C5A55"/>
+            <path d="M221.6,207 V204.6 A2.4,2.4 0 0 1 226.4,204.6 V207" fill="none" stroke="#5C5A55" stroke-width="1.3"/>
+
+            <!-- pivot at rear -->
+            <path d="M166,208 A24,24 0 1 1 190,184" fill="none" stroke="#C97B7B" stroke-width="2" marker-end="url(#arw)"/>
+            <circle cx="190" cy="208" r="6" fill="#FFFFFF" stroke="#38543A" stroke-width="2"/>
+            <line x1="181" y1="208" x2="199" y2="208" stroke="#38543A" stroke-width="1.4"/>
+            <line x1="190" y1="199" x2="190" y2="217" stroke="#38543A" stroke-width="1.4"/>
+            <line x1="200" y1="208" x2="232" y2="208" stroke="#88A992" stroke-width="1"/>
+            <text x="236" y="211" font-family="Helvetica Neue, Inter, sans-serif" font-size="9.5"
+                  font-weight="700" letter-spacing="0.12em" fill="#38543A">AXIS</text>
+
+            <!-- captions A -->
+            <text x="190" y="288" text-anchor="middle" font-family="SF Mono, Menlo, Consolas, monospace" font-size="12.5" fill="#5C5A55">
+              front <tspan fill="#E8843D" font-weight="700">100</tspan> · back <tspan fill="#9A9486">0</tspan>
+            </text>
+            <text x="190" y="306" text-anchor="middle" font-family="Helvetica Neue, Inter, sans-serif" font-size="11" fill="#5C5A55">
+              axis at <tspan fill="#C97B7B" font-weight="700">REAR</tspan> · moves slowly
+            </text>
+
+            <!-- ===================== PANEL B : rear drives ===================== -->
+            <polygon points="570,60 566,68 574,68" fill="#88A992"/>
+            <text x="570" y="80" text-anchor="middle" font-family="Helvetica Neue, Inter, sans-serif"
+                  font-size="10" letter-spacing="0.22em" fill="#5C5A55">FRONT</text>
+
+            <rect x="536" y="88" width="68" height="144" rx="11" fill="#FAF7F0" stroke="#38543A" stroke-width="1.5"/>
+
+            <!-- held front wheels -->
+            <rect x="529" y="95" width="14" height="34" rx="3" fill="#D8C4B7"/>
+            <rect x="532" y="111" width="8" height="7" rx="1" fill="#5C5A55"/>
+            <path d="M533.6,111 V108.6 A2.4,2.4 0 0 1 538.4,108.6 V111" fill="none" stroke="#5C5A55" stroke-width="1.3"/>
+            <rect x="597" y="95" width="14" height="34" rx="3" fill="#D8C4B7"/>
+            <rect x="600" y="111" width="8" height="7" rx="1" fill="#5C5A55"/>
+            <path d="M601.6,111 V108.6 A2.4,2.4 0 0 1 606.4,108.6 V111" fill="none" stroke="#5C5A55" stroke-width="1.3"/>
+
+            <!-- driven rear wheels -->
+            <rect x="529" y="191" width="14" height="34" rx="3" fill="#E8843D"/>
+            <polyline points="532,207 536,203 540,207" fill="none" stroke="#FFFFFF" stroke-width="1.6"/>
+            <polyline points="532,215 536,211 540,215" fill="none" stroke="#FFFFFF" stroke-width="1.6"/>
+            <rect x="597" y="191" width="14" height="34" rx="3" fill="#E8843D"/>
+            <polyline points="600,207 604,203 608,207" fill="none" stroke="#FFFFFF" stroke-width="1.6"/>
+            <polyline points="600,215 604,211 608,215" fill="none" stroke="#FFFFFF" stroke-width="1.6"/>
+
+            <!-- pivot at front -->
+            <path d="M546,112 A24,24 0 1 1 570,88" fill="none" stroke="#C97B7B" stroke-width="2" marker-end="url(#arw)"/>
+            <circle cx="570" cy="112" r="6" fill="#FFFFFF" stroke="#38543A" stroke-width="2"/>
+            <line x1="561" y1="112" x2="579" y2="112" stroke="#38543A" stroke-width="1.4"/>
+            <line x1="570" y1="103" x2="570" y2="121" stroke="#38543A" stroke-width="1.4"/>
+            <line x1="580" y1="112" x2="612" y2="112" stroke="#88A992" stroke-width="1"/>
+            <text x="616" y="115" font-family="Helvetica Neue, Inter, sans-serif" font-size="9.5"
+                  font-weight="700" letter-spacing="0.12em" fill="#38543A">AXIS</text>
+
+            <!-- captions B -->
+            <text x="570" y="288" text-anchor="middle" font-family="SF Mono, Menlo, Consolas, monospace" font-size="12.5" fill="#5C5A55">
+              front <tspan fill="#9A9486">0</tspan> · back <tspan fill="#E8843D" font-weight="700">100</tspan>
+            </text>
+            <text x="570" y="306" text-anchor="middle" font-family="Helvetica Neue, Inter, sans-serif" font-size="11" fill="#5C5A55">
+              axis at <tspan fill="#E8843D" font-weight="700">FRONT</tspan> · moves fast
+            </text>
+
+            <!-- legend -->
+            <rect x="214" y="325" width="11" height="11" rx="2" fill="#E8843D"/>
+            <text x="230" y="334" font-family="Helvetica Neue, Inter, sans-serif" font-size="10.5" fill="#5C5A55">driven wheel</text>
+            <rect x="330" y="325" width="11" height="11" rx="2" fill="#D8C4B7"/>
+            <text x="346" y="334" font-family="Helvetica Neue, Inter, sans-serif" font-size="10.5" fill="#5C5A55">held wheel — grips, becomes the pivot</text>
+          </svg>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ MISSION SYSTEMS ============ -->
+    <div class="section-label">Mission Systems</div>
+
+    <div class="card">
+      <div class="name-block">
+        <div class="idx">04 · TOF UNIT</div>
+        <div class="name">ToF unit — evacuation</div>
+        <div class="arch">Distance sensing · exit detection</div>
+      </div>
+      <div class="rationale">
+        <p><span class="lab why">Why</span>
+          In the evacuation zone the robot must <b>find and confirm the exit</b>. Vision alone is
+          unreliable for the walls/opening geometry.</p>
+        <p><span class="lab plan">Plan</span>
+          Add a <b>ToF unit</b> to measure wall distances and <b>determine the exit</b> of the
+          evacuation zone.</p>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="name-block">
+        <div class="idx">05 · ARM</div>
+        <div class="name">Arm with dropper</div>
+        <div class="arch">Grab + release · victim ball</div>
+      </div>
+      <div class="rationale">
+        <p><span class="lab why">Why</span>
+          The robot needs to <b>collect the victim ball and place it</b> in the correct zone.</p>
+        <p><span class="lab plan">Plan</span>
+          Build an <b>arm with a dropper</b> mechanism — one motion to <b>grab</b> the ball,
+          one to <b>drop</b> it on release.</p>
+      </div>
+    </div>
+
+    <!-- ============ KEEP ============ -->
+    <div class="section-label">Keep — proven, unchanged</div>
+
+    <div class="keep-grid">
+      <div class="keep-item">
+        <div class="kn">Debris remover</div>
+        <div class="kd">Clears obstacles/debris off the line — works well, kept as is.</div>
+      </div>
+      <div class="keep-item">
+        <div class="kn">IR camera</div>
+        <div class="kd">Reliable line &amp; sign detection. Core sensor, retained.</div>
+      </div>
+      <div class="keep-item">
+        <div class="kn">Suspension</div>
+        <div class="kd">Keeps tires on the ground over uneven terrain — pairs with the new tires.</div>
+      </div>
+      <div class="keep-item">
+        <div class="kn">Low center of mass</div>
+        <div class="kd">Stability on slopes and turns. A key advantage — preserved.</div>
+      </div>
+    </div>
+
+    <div class="footer-note">— design upgrade plan · see parts plan for fabrication —</div>
+  </div>
+</body>
+</html>
