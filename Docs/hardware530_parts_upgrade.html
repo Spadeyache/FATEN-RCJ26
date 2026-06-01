@@ -86,10 +86,37 @@
   }
   .lab.why  { color: var(--pink-strong); border: 1px solid var(--pink);      background: var(--pink-bg); }
   .lab.do   { color: var(--green);       border: 1px solid var(--green-soft); background: var(--green-bg); }
+  .lab.note { color: var(--orange);      border: 1px solid var(--orange);     background: #FFF4EC; }
   .card code {
     font-family: "SF Mono", "Menlo", "Consolas", monospace;
     color: var(--green); font-size: 12px;
     background: var(--green-bg); padding: 0 4px; border-radius: 2px;
+  }
+
+  /* objective banner */
+  .objective {
+    font-family: "Helvetica Neue", "Inter", system-ui, sans-serif;
+    font-size: 13px; color: var(--green); line-height: 1.55;
+    background: var(--green-bg); border: 1px solid var(--green-soft);
+    border-radius: 2px; padding: 10px 14px; margin: 14px 0 4px;
+  }
+  .objective .ol {
+    display: block; font-size: 9px; font-weight: 700; letter-spacing: 0.22em;
+    text-transform: uppercase; color: var(--green-soft); margin-bottom: 4px;
+  }
+  .objective b { color: var(--green); font-weight: 700; }
+
+  /* inline diagram */
+  .figure {
+    margin-top: 16px;
+    background: #FFFDF9; border: 1px solid var(--rule); border-radius: 3px;
+    padding: 12px 12px 6px;
+  }
+  .figure svg { width: 100%; height: auto; display: block; }
+  .fig-title {
+    font-family: "Helvetica Neue", "Inter", system-ui, sans-serif;
+    font-size: 10.5px; letter-spacing: 0.22em; text-transform: uppercase;
+    color: var(--green); text-align: center; margin: 2px 0 6px;
   }
 
   .footer-note {
@@ -109,7 +136,8 @@
     <p class="preamble">
       Outside the design work, two <b>fabrication tasks</b> gate the build:
       validating the <b>new PCB</b> and casting the <b>new tires</b> from a fresh mold.
-      Kept simple on purpose — these are make-and-check items, not design decisions.
+      The PCB is a make-and-check item; the <b>tire carries a real design objective</b>
+      (grip budget + front/rear balance), spelled out below.
     </p>
 
     <div class="section-label">Production tasks</div>
@@ -131,16 +159,99 @@
     <div class="card">
       <div class="idx">02 · TIRE MOLD</div>
       <div class="name">Tire mold creation</div>
-      <div class="arch">Same size · new material &amp; shape</div>
+      <div class="arch">Same size · dual-zone tread · all four identical</div>
       <div class="body">
+
+        <div class="objective">
+          <span class="ol">Objective</span>
+          A softer, higher-grip tire that <b>enlarges the grip budget</b> (slopes &amp; bumps)
+          and <b>removes the front/rear grip imbalance</b> — while still scrubbing freely enough
+          for skid-steer turning.
+        </div>
+
         <p><span class="lab why">Why</span>
-          New tires drive <b>two</b> upgrades at once:
-          <b>off-road capability</b> (more compliance and bite over bumps) and
-          <b>rotational-axis adjustment</b> (the pivot is set by <b>front/rear grip balance</b>,
-          so the tire material/tread is what makes the axis controllable).</p>
-        <p><span class="lab do">Do</span>
-          Make a new <b>mold</b> — keep the size, change the <b>material and tread shape</b> —
-          and cast the tires.</p>
+          Our bench tests showed the robot's behaviour is set by <b>grip, not geometry</b>:
+          the rotation axis is held by whichever tires grip, and on a slope the nose lifts when a
+          turn <b>scrubs through the grip budget</b> and gravity drags the lighter end downhill.
+          So the tire is the real lever — and it must do two opposite jobs at once:
+          <b>bite on bumps</b> (off-road) yet still <b>slip freely</b> so a 4-wheel skid-steer can turn.</p>
+
+        <p><span class="lab do">Do — dual-zone tread</span>
+          Cast a tire with a <b>smooth centre band</b> (clean line contact, easy turning, soft
+          high-grip compound that holds on slopes) and <b>low knobs only at the shoulders</b>
+          to catch bumps that come in from the side. <b>Keep the size</b> (gearing/×1.5 stay valid),
+          and make all <b>four identical</b> so front/rear grip is balanced and the axis becomes
+          predictable &amp; software-controllable.</p>
+
+        <p><span class="lab note">Watch</span>
+          Shoulder knobs must sit <b>at or just below</b> the centre diameter. If they stick out
+          past it, the robot rides on the knobs on flat ground → noisy contact and unstable line
+          following. Centre = primary contact; shoulders engage only on bumps.</p>
+
+        <div class="figure">
+          <div class="fig-title">Dual-zone tread — smooth centre, knob shoulders</div>
+          <svg viewBox="0 0 720 266" role="img"
+               aria-label="Tire tread profile across its width: a smooth centre band for line contact and turning, with low knobs only at the two shoulders to catch side bumps.">
+            <defs>
+              <marker id="bmp" markerWidth="8" markerHeight="8" refX="4" refY="3" orient="auto">
+                <path d="M0,0 L8,3 L0,6 Z" fill="#C97B7B"/>
+              </marker>
+            </defs>
+
+            <!-- ground -->
+            <line x1="70" y1="206" x2="650" y2="206" stroke="#88A992" stroke-width="1.5"/>
+            <text x="70" y="224" font-family="Helvetica Neue, Inter, sans-serif" font-size="9.5"
+                  letter-spacing="0.18em" fill="#88A992">GROUND</text>
+
+            <!-- tire body (seen across its width) -->
+            <rect x="170" y="84" width="380" height="106" rx="14" fill="#FAF7F0" stroke="#38543A" stroke-width="1.6"/>
+
+            <!-- shoulder zones tint -->
+            <path d="M170,98 V176 a14,14 0 0 0 14,14 H265 V84 H184 a14,14 0 0 0 -14,14 Z" fill="#FBE6D6"/>
+            <path d="M455,84 H536 a14,14 0 0 1 14,14 V176 a14,14 0 0 1 -14,14 H455 Z" fill="#FBE6D6"/>
+
+            <!-- zone divider lines -->
+            <line x1="265" y1="84" x2="265" y2="190" stroke="#E4DCC8" stroke-width="1" stroke-dasharray="3 4"/>
+            <line x1="455" y1="84" x2="455" y2="190" stroke="#E4DCC8" stroke-width="1" stroke-dasharray="3 4"/>
+
+            <!-- shoulder knobs (low teeth on the contact edge) -->
+            <g fill="#E8843D">
+              <rect x="183" y="184" width="13" height="12" rx="2"/>
+              <rect x="205" y="184" width="13" height="12" rx="2"/>
+              <rect x="227" y="184" width="13" height="12" rx="2"/>
+              <rect x="249" y="184" width="13" height="12" rx="2"/>
+              <rect x="458" y="184" width="13" height="12" rx="2"/>
+              <rect x="480" y="184" width="13" height="12" rx="2"/>
+              <rect x="502" y="184" width="13" height="12" rx="2"/>
+              <rect x="524" y="184" width="13" height="12" rx="2"/>
+            </g>
+
+            <!-- centre smooth contact line -->
+            <line x1="277" y1="190" x2="443" y2="190" stroke="#38543A" stroke-width="2.4"/>
+
+            <!-- zone headers -->
+            <text x="217" y="74" text-anchor="middle" font-family="Helvetica Neue, Inter, sans-serif"
+                  font-size="10" font-weight="700" letter-spacing="0.14em" fill="#E8843D">SHOULDER</text>
+            <text x="360" y="74" text-anchor="middle" font-family="Helvetica Neue, Inter, sans-serif"
+                  font-size="10" font-weight="700" letter-spacing="0.14em" fill="#38543A">SMOOTH CENTRE</text>
+            <text x="503" y="74" text-anchor="middle" font-family="Helvetica Neue, Inter, sans-serif"
+                  font-size="10" font-weight="700" letter-spacing="0.14em" fill="#E8843D">SHOULDER</text>
+
+            <!-- side bump catching on the right shoulder -->
+            <rect x="600" y="176" width="40" height="30" rx="5" fill="#D8C4B7"/>
+            <line x1="596" y1="190" x2="548" y2="190" stroke="#C97B7B" stroke-width="2" marker-end="url(#bmp)"/>
+            <text x="620" y="170" text-anchor="middle" font-family="Helvetica Neue, Inter, sans-serif"
+                  font-size="9.5" fill="#5C5A55">side bump</text>
+
+            <!-- function captions -->
+            <text x="217" y="234" text-anchor="middle" font-family="Helvetica Neue, Inter, sans-serif"
+                  font-size="10.5" fill="#9A6033">bite side bumps</text>
+            <text x="503" y="234" text-anchor="middle" font-family="Helvetica Neue, Inter, sans-serif"
+                  font-size="10.5" fill="#9A6033">bite side bumps</text>
+            <text x="360" y="258" text-anchor="middle" font-family="Helvetica Neue, Inter, sans-serif"
+                  font-size="11" fill="#38543A">line contact · easy turning · slope grip (soft compound)</text>
+          </svg>
+        </div>
       </div>
     </div>
 
