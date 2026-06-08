@@ -12,7 +12,7 @@
 //  1 = soften steering (shrink the L/R turn differential) and slow forward
 //      speed, to test whether gentler/slower corrections stop the nose-up.
 //  No IMU read — the 25° traverse is assumed/hardcoded by enabling this.
-#define SLOPE_TEST 1
+#define SLOPE_TEST 0
 const float CORRECTION_SCALE = 0.3f;  // 1.0 = normal turn, 0.0 = drive straight
 const float SPEED_SCALE      = 0.5f;  // forward speed multiplier on the slope
 const float TURN_REAR_SCALE  = 1.4f;  // turn applied to REAR wheels relative to front:

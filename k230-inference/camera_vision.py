@@ -10,11 +10,11 @@
 #
 #   setup_button()              -- one-time BOOT-button + capture-dir init.
 #
-#   get_image(sensor)           -- snapshot + histogram equalization (the
-#                                  K230D's `img.histeq()` -- plain global
-#                                  histeq, not CLAHE; CanMV doesn't ship a
-#                                  CLAHE primitive). Returns the processed
-#                                  image, ready to display or feed to a model.
+#   get_image(sensor)           -- snapshot a frame. Returns raw exposure-
+#                                  locked sensor output -- no software
+#                                  histeq/CLAHE/stretch (policy: scene-
+#                                  independent input, normalised at the
+#                                  sensor only).
 #
 #   maybe_save(img)             -- save `img` if the BOOT button is pressed
 #                                  (debounced). Returns the filename or None.
@@ -67,18 +67,27 @@ GAIN_DB          = 0.0                     # tune; typical 0..24
 AWB_AUTO         = False
 WHITEBAL_RGB_DB  = (0.0, 0.0, 0.0)         # R, G, B gain in dB
 
-# BLC -- black level correction. Locking it makes the dark floor deterministic.
+# BLC -- black level correction.
+# CanMV v1.5-legacy + gc2093_csi2 ships set_auto_blc / get_blc_regs /
+# __read_reg / __write_reg as method names, but every one of them is a
+# NotImplementedError stub on this build (verified via REPL probe). So
+# this knob is currently a NO-OP -- the chip stays in whatever BLC mode
+# it powers up in (gc2093 default = auto). The framework is left wired up
+# so that if a future CanMV firmware completes the stub, locking BLC
+# becomes effective without any code change here. Keep it False as the
+# intent statement; flipping it True won't change anything until then.
 BLC_AUTO         = False
 
-# Equalization. DEFAULT: OFF.
-# Histogram equalization (and CLAHE) couples the model input to scene
-# content -- a frame with only debris and no silver victim gets its
-# darkest debris pushed toward 255, so the model learns "brightest blob =
-# silver" but at runtime debris-only scenes flip black -> silver. We
-# normalize at the SENSOR (manual AEC/AGC/AWB/BLC above) instead of in
-# software, and retrain on the same fixed exposure as deployment. Keep
-# this off unless you have a specific reason to revert.
-APPLY_HISTEQ     = False
+# Note: histogram equalization is INTENTIONALLY not done here.
+# It couples model input to scene content -- a frame with only debris
+# and no silver victim gets its darkest debris pushed toward 255, so a
+# "brightest blob = silver" model can flip black -> silver. We normalise
+# at the SENSOR (manual AEC/AGC/AWB, plus BLC's hardware default) instead
+# of in software,
+# and the training data should be captured under the same fixed
+# exposure as deployment. If you really need to A/B against a histeq
+# model, do it explicitly in main.py with a single img.histeq() call --
+# don't add a flag here.
 
 # Capture
 CAPTURE_DIR        = "/data/k230-train/captures"
@@ -159,8 +168,8 @@ def apply_config(sensor):
     _readback(sensor)
 
     print("camera_vision: requested expo={}us gain={}dB mirror={} vflip={} "
-          "blc_auto={} histeq={}".format(
-              EXPOSURE_US, GAIN_DB, HMIRROR, VFLIP, BLC_AUTO, APPLY_HISTEQ))
+          "blc_auto={}".format(
+              EXPOSURE_US, GAIN_DB, HMIRROR, VFLIP, BLC_AUTO))
     return sensor
 
 
@@ -203,11 +212,12 @@ def setup_button():
 
 
 def get_image(sensor):
-    """Grab one frame and apply equalization. Returns the processed image."""
-    img = sensor.snapshot()
-    if APPLY_HISTEQ:
-        img.histeq()
-    return img
+    """Grab one frame. Returns the raw exposure-locked sensor image.
+
+    No software post-processing (no histeq, no CLAHE, no stretch). All
+    normalisation happens at the sensor in apply_config().
+    """
+    return sensor.snapshot()
 
 
 def maybe_save(img):

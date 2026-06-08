@@ -2,7 +2,7 @@
 #
 # main.py -- runs at boot. Live YOLOv8 anchor-free detection:
 #
-#   camera_vision.get_image (raw grayscale, no histeq)
+#   camera_vision.get_image (raw exposure-locked grayscale, no software stretching)
 #       -> ai2d letterbox 114
 #       -> KPU (YOLOv8 anchor-free, 640x480)
 #       -> Python decoder + class-wise NMS
@@ -72,7 +72,6 @@ def _print_camera_config():
     print("  AWB             : auto={}  rgb_gain_db={}".format(
           g("AWB_AUTO"), g("WHITEBAL_RGB_DB")))
     print("  BLC             : auto={}".format(g("BLC_AUTO")))
-    print("  apply_histeq    :", g("APPLY_HISTEQ"))
     print("  capture_dir     :", g("CAPTURE_DIR"))
     print("----------------------------")
 
@@ -236,8 +235,8 @@ def main():
     sensor_h = sensor.height()
     model_w  = img_size[0]
     model_h  = img_size[1]
-    print("detect: sensor {}x{} -> model {}x{} histeq={}".format(
-        sensor_w, sensor_h, model_w, model_h, camera_vision.APPLY_HISTEQ))
+    print("detect: sensor {}x{} -> model {}x{}".format(
+        sensor_w, sensor_h, model_w, model_h))
 
     kpu = nn.kpu()
     kpu.load_kmodel(kmodel_path)
@@ -271,7 +270,7 @@ def main():
     t_window = time.ticks_ms()
     try:
         while True:
-            # Camera frame -- raw exposure-locked grayscale (no histeq).
+            # Camera frame -- raw exposure-locked grayscale.
             img = camera_vision.get_image(sensor)
 
             # BOOT button still saves training frames.
