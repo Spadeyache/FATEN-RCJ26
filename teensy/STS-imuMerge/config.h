@@ -12,7 +12,7 @@
 // =============================================================================
 //  Serial-print toggles — set to 0 to silence that module
 // =============================================================================
-#define PRINT_STATE      0   // state transitions
+#define PRINT_STATE      1   // state transitions
 #define PRINT_IMU        1   // pitch/roll/yaw at 10 Hz
 #define PRINT_XIAO       0   // CommandFilter votes + xiaoCommand
 #define PRINT_K230       1   // K230 detections

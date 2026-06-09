@@ -57,7 +57,7 @@ MAX_BOXES_TX        = 16          # cap per wire frame (must match robot_io.MAX_
 
 
 # ============================================================================
-# Robot I/O (Teensy UART)
+# Robot I/O (Teensy UART2)
 # ============================================================================
 UART_BAUD          = 115200
 UART_TX_PIN        = 11

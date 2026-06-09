@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Evac-Zone Mapping — How It Works Now</title>
+<style>
+  :root{
+    --bg:#0f1115; --panel:#171a21; --panel2:#1d212b; --ink:#e6e9ef; --mut:#9aa3b2;
+    --acc:#5ad1c4; --acc2:#7aa2f7; --warn:#e0af68; --bad:#f7768e; --good:#9ece6a;
+    --line:#2a2f3a; --code:#11141a;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.6 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
+  header{padding:32px 24px 20px;border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,#181c25,#0f1115)}
+  h1{margin:0 0 6px;font-size:26px}
+  h2{margin:0;font-size:15px;font-weight:500;color:var(--mut)}
+  main{max-width:1040px;margin:0 auto;padding:24px}
+  section{margin:28px 0}
+  h3{font-size:19px;border-left:3px solid var(--acc);padding-left:10px;margin:0 0 12px}
+  .grid{display:grid;gap:14px}
+  .cards{grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+  .card h4{margin:0 0 6px;font-size:15px;color:var(--acc2)}
+  .card p{margin:0;color:var(--mut);font-size:13.5px}
+  .tag{display:inline-block;font-size:11px;padding:2px 8px;border-radius:20px;
+    background:#23303a;color:var(--acc);margin-left:6px;vertical-align:middle}
+  .tag.todo{background:#3a2a23;color:var(--warn)}
+  .tag.done{background:#23381f;color:var(--good)}
+  code,pre{font-family:"SF Mono",Consolas,Menlo,monospace}
+  code{background:var(--code);padding:1px 5px;border-radius:4px;font-size:12.5px;color:var(--acc)}
+  pre{background:var(--code);border:1px solid var(--line);border-radius:8px;padding:14px;
+    overflow:auto;font-size:12.5px;color:#cdd6e4}
+  .pipe{display:flex;flex-wrap:wrap;align-items:stretch;gap:0}
+  .step{flex:1;min-width:150px;background:var(--panel2);border:1px solid var(--line);
+    border-radius:8px;padding:12px;position:relative;margin:6px}
+  .step .n{position:absolute;top:-9px;left:10px;background:var(--acc);color:#06231f;
+    font-weight:700;font-size:11px;border-radius:20px;padding:1px 8px}
+  .step h4{margin:6px 0 4px;font-size:13.5px;color:var(--ink)}
+  .step p{margin:0;font-size:12px;color:var(--mut)}
+  table{border-collapse:collapse;width:100%;font-size:13px}
+  th,td{border:1px solid var(--line);padding:7px 10px;text-align:left;vertical-align:top}
+  th{background:var(--panel2);color:var(--acc2)}
+  td code{font-size:12px}
+  .mut{color:var(--mut)}
+  .files li{margin:3px 0}
+  .files code{color:var(--acc2)}
+  .legend{display:flex;gap:16px;flex-wrap:wrap;margin-top:8px}
+  .legend span{font-size:12px;color:var(--mut)}
+  .glyph{display:inline-block;width:18px;height:18px;line-height:18px;text-align:center;
+    background:var(--code);border:1px solid var(--line);border-radius:4px;
+    color:var(--ink);font-family:monospace;margin-right:5px}
+  .note{background:#1b212c;border:1px solid var(--line);border-left:3px solid var(--warn);
+    border-radius:6px;padding:12px 14px;color:var(--mut);font-size:13.5px}
+  .ascii{background:#0b0d11;border:1px solid var(--line);border-radius:8px;padding:14px;
+    font-family:monospace;font-size:11px;line-height:1.25;color:#7f8a9c;white-space:pre;overflow:auto}
+  .ascii b{color:var(--bad)}
+  a.src{color:var(--acc);text-decoration:none;border-bottom:1px dotted var(--acc)}
+  footer{color:var(--mut);font-size:12px;text-align:center;padding:30px 0;border-top:1px solid var(--line)}
+  .flow{font-size:12px;color:var(--mut);margin:4px 0 0}
+</style>
+</head>
+<body>
+<header>
+  <h1>Evac-Zone Mapping &mdash; How It Works Now</h1>
+  <h2>Teensy firmware · <code>src/processing/</code> · snapshot of current behaviour (not yet driven)</h2>
+</header>
+
+<main>
+
+  <!-- STATUS BANNER -->
+  <section>
+    <div class="note">
+      <b>Status today:</b> the full mapping pipeline is <b>built and wired</b>, but it runs
+      <b>passively</b>. In <code>EVAC_Search</code> the robot stays <b>parked</b>
+      (<code>Drive::stop()</code>) and only beeps at 1&nbsp;Hz while the map fills from ToF + IMU.
+      Nothing yet <i>reads</i> the occupancy grid to plan motion &mdash; that is the
+      "run the map" Phase&nbsp;2 work. This page documents the machinery that already exists.
+    </div>
+  </section>
+
+  <!-- BIG PICTURE -->
+  <section>
+    <h3>1 · The big picture</h3>
+    <p class="mut">A single orchestrator, <code>Processing::Mapping</code>, fuses dead-reckoning,
+    IMU yaw, and time-of-flight ranges into a 3-state pose EKF and a 40&times;40 occupancy grid.
+    It self-corrects when stuck (scan-matching) and checkpoints to EEPROM so a mid-run reset can
+    resume.</p>
+    <div class="grid cards">
+      <div class="card"><h4>Pose <span class="tag done">EKF</span></h4>
+        <p>3-state <code>(x, y, θ)</code> Kalman filter. Predict from motor command, correct from IMU yaw.</p></div>
+      <div class="card"><h4>MapGrid <span class="tag done">grid</span></h4>
+        <p>40&times;40 cells @ 30&nbsp;mm. Per cell: log-odds occupancy + a semantic label.</p></div>
+      <div class="card"><h4>Recalibrate <span class="tag done">recovery</span></h4>
+        <p>Stuck detector + ToF↔map scan-match snap to fix accumulated drift.</p></div>
+      <div class="card"><h4>MapPersist <span class="tag done">EEPROM</span></h4>
+        <p>Diffed, wear-minimised checkpoints of the semantic map + pose snapshot.</p></div>
+    </div>
+  </section>
+
+  <!-- TICK PIPELINE -->
+  <section>
+    <h3>2 · What one <code>tick()</code> does</h3>
+    <p class="mut">Called every loop while in <code>EVAC_Search</code>
+    (<a class="src">Mapping.cpp:170</a>). Order matters:</p>
+    <div class="pipe">
+      <div class="step"><span class="n">1</span><h4>posePredict</h4>
+        <p>Read averaged motor gains → unicycle <code>(v, ω)</code>, integrate over <code>dt</code>. Covariance grows.</p></div>
+      <div class="step"><span class="n">2</span><h4>poseUpdateYaw</h4>
+        <p>Fuse IMU yaw (Madgwick), de-biased against the θ=0 snapshot taken at <code>init()</code>.</p></div>
+      <div class="step"><span class="n">3</span><h4>tofPoll</h4>
+        <p>Each ready ToF zone → world-frame ray → integrate into grid; cache valid rays for scan-match.</p></div>
+      <div class="step"><span class="n">4</span><h4>maybeRecalibrate</h4>
+        <p>If stuck &amp; ≥4 rays, grid-search a pose snap; accept only if it clearly beats the seed.</p></div>
+      <div class="step"><span class="n">5</span><h4>maybeCheckpoint</h4>
+        <p>Every 30&nbsp;s, if ≥60 cells changed, diff-write the semantic map to EEPROM.</p></div>
+    </div>
+  </section>
+
+  <!-- POSE EKF -->
+  <section>
+    <h3>3 · Pose estimation (the EKF)</h3>
+    <p class="mut"><a class="src">Pose.h / Pose.cpp</a> &mdash; state is
+    <code>(x_mm, y_mm, θ)</code> with a 3&times;3 covariance <code>P</code>.</p>
+    <table>
+      <tr><th>Step</th><th>Source</th><th>Effect</th></tr>
+      <tr><td><code>posePredict(v, ω, dt)</code></td><td>Commanded motor gains (no encoders yet)</td>
+        <td>Moves the estimate forward; <b>inflates</b> covariance (uncertainty grows with motion).</td></tr>
+      <tr><td><code>poseUpdateYaw(θ_meas)</code></td><td>IMU yaw, Madgwick fused</td>
+        <td>Pulls θ toward the measurement; <b>shrinks</b> heading covariance.</td></tr>
+      <tr><td><code>poseUpdateWall(...)</code> <span class="tag todo">Phase 2</span></td><td>ToF wall geometry</td>
+        <td>Declared but not yet called — intended x/y wall-snap correction.</td></tr>
+    </table>
+    <p class="flow">Velocity comes from <code>readMotorCommand()</code>: it averages the four wheel
+    gains into left/right speeds, converts via <code>FORWARD_MS_PER_MM</code>, and derives
+    <code>ω = (vR − vL) / WHEELBASE_MM</code> (140&nbsp;mm). So <b>odometry is open-loop motor-command
+    based</b> — a known weak point the scan-match step exists to patch.</p>
+  </section>
+
+  <!-- THE GRID -->
+  <section>
+    <h3>4 · The occupancy grid</h3>
+    <div class="grid" style="grid-template-columns:1.3fr 1fr;gap:18px">
+      <div>
+        <p class="mut"><a class="src">MapGrid.{h,cpp}</a> &mdash; two parallel
+        <code>40&times;40 = 1600</code>-byte arrays:</p>
+        <table>
+          <tr><th>Array</th><th>Meaning</th></tr>
+          <tr><td><code>logodds[]</code> (int8)</td><td>Occupancy belief, clamped
+            <code>[−64, +64]</code>. Negative = free, positive = occupied.</td></tr>
+          <tr><td><code>semantic[]</code> (uint8)</td><td>A <code>CellSemantic</code> label
+            (unknown / free / wall / obstacle / evac corner / victim).</td></tr>
+        </table>
+        <p class="mut" style="margin-top:10px"><b>Frame:</b> world origin <code>(0,0)</code> ↔ cell
+        <code>(0, 20)</code>. <code>+x</code> = forward into zone (column), <code>+y</code> = robot's
+        left at entry (row). 30&nbsp;mm cells → a ~1.2&nbsp;m square zone.</p>
+      </div>
+      <div class="card">
+        <h4>Ray integration</h4>
+        <p><code>mapIntegrateRay()</code> walks a Bresenham line from the sensor to the hit point:</p>
+        <ul class="mut" style="font-size:13px;margin:8px 0 0;padding-left:18px">
+          <li>cells along the way get <code>LO_MISS (−2)</code> → drift toward <b>free</b></li>
+          <li>the endpoint, if a real hit, gets <code>LO_HIT (+6)</code> → toward <b>occupied</b></li>
+          <li>crossing <code>±LO_DECISIVE (30)</code> promotes the semantic label (FREE / WALL),
+            respecting a <b>rank</b> so a victim is never overwritten by "free".</li>
+        </ul>
+      </div>
+    </div>
+
+    <h4 style="margin:18px 0 6px;color:var(--acc2)">Semantic rank (higher wins)</h4>
+    <p class="mut" style="margin:0 0 10px">
+      victim-alive&nbsp;7 &gt; victim-dead&nbsp;6 &gt; evac-corner&nbsp;5 &gt; obstacle&nbsp;4 &gt;
+      wall&nbsp;3 &gt; free&nbsp;2 &gt; unknown&nbsp;1. Equal rank overwrites (re-detections refresh).
+    </p>
+
+    <h4 style="margin:14px 0 6px;color:var(--acc2)">ASCII dump (serial <code>'m'</code>)</h4>
+    <div class="legend">
+      <span><i class="glyph">.</i>unknown</span>
+      <span><i class="glyph">&nbsp;</i>free</span>
+      <span><i class="glyph">#</i>wall</span>
+      <span><i class="glyph">O</i>obstacle</span>
+      <span><i class="glyph">R</i>evac red</span>
+      <span><i class="glyph">G</i>evac green</span>
+      <span><i class="glyph">A</i>victim alive</span>
+      <span><i class="glyph">D</i>victim dead</span>
+      <span><i class="glyph">*</i>robot</span>
+    </div>
+    <div class="ascii">---- map: top=+y(left), right=+x(forward), * = robot ----
+........................................
+.........#############..................
+.........#           #..................
+.........#   <b>*</b>       #..................   ← robot pose, walls being learned
+.........#           #..................
+.........#####  ######..................
+........................................
+-------------------------------------------</div>
+    <p class="flow">(illustrative — printed by <code>mapDumpASCII()</code>, top row is +y/left.)</p>
+  </section>
+
+  <!-- RECALIBRATE -->
+  <section>
+    <h3>5 · Drift recovery (Recalibrate)</h3>
+    <p class="mut"><a class="src">Recalibrate.{h,cpp}</a> compensates for open-loop odometry drift.</p>
+    <div class="grid cards">
+      <div class="card"><h4>StuckDetector</h4>
+        <p>Arms when commanded to drive (<code>≥30 mm/s</code>). If the pose moves
+        <code>&lt;5 mm</code> for <code>1000 ms</code>, it fires once — "we think we're driving but
+        we're not moving."</p></div>
+      <div class="card"><h4>scanMatchPose</h4>
+        <p>3-D grid search over <code>Δx, Δy, Δθ</code> (±60&nbsp;mm / ±10°) around the current pose.
+        Each candidate's cached rays are re-projected and scored against the semantic map.</p></div>
+      <div class="card"><h4>Accept gate</h4>
+        <p>The best candidate is adopted <b>only if</b> its margin over the seed score
+        <code>≥ 4</code>. On accept, pose snaps and covariance is re-inflated modestly.</p></div>
+    </div>
+    <p class="flow">Scoring rewards rays that land on obstacle/evac (+2) or wall (+1), penalises
+    free cells and out-of-bounds (−1). It rewards <i>alignment with already-mapped structure</i>.</p>
+  </section>
+
+  <!-- PERSIST -->
+  <section>
+    <h3>6 · Persistence (MapPersist)</h3>
+    <p class="mut"><a class="src">MapPersist.{h,cpp}</a> &mdash; EEPROM layout from
+    <code>0x0020</code>:</p>
+    <table>
+      <tr><th>Region</th><th>Size</th><th>Notes</th></tr>
+      <tr><td><code>MapHeader</code></td><td>40 B</td><td>magic, version, pose + P-diagonal, flags, run_count</td></tr>
+      <tr><td><code>semantic[1600]</code></td><td>1600 B</td><td>the label map only (log-odds is rebuilt live)</td></tr>
+      <tr><td><code>crc32</code></td><td>4 B</td><td>over header + semantic, for validity check on load</td></tr>
+    </table>
+    <p class="flow">A RAM shadow of the last-saved array drives <b>byte-level diffing</b> — only changed
+    bytes are <code>EEPROM.update()</code>'d, minimising flash wear. On restart-load the semantic map is
+    kept but <code>logodds</code> is cleared and pose covariance inflated, so old structure guides
+    scan-match while fresh sensor data re-confirms occupancy.</p>
+  </section>
+
+  <!-- LIFECYCLE -->
+  <section>
+    <h3>7 · Lifecycle &amp; integration</h3>
+    <pre>LINE_FOLLOW ──(xiaoCmd==5)──► EVAC_ENTRY ──► <b>EVAC_SEARCH</b> ──► EVAC_DEPLOY ──► EVAC_EXIT ──► LINE_FOLLOW
+
+EVAC_SEARCH.onEnter():  Mapping::init(restart=false)   // snapshot yaw=θ0, bring up ToF, fresh/loaded map
+EVAC_SEARCH.update():   Drive::stop(); Mapping::tick(); 1 Hz beep    // PASSIVE — no path planning yet
+EVAC_EXIT.onEnter():    Mapping::persist()              // force final EEPROM save</pre>
+    <table>
+      <tr><th>Entry point</th><th>Where</th></tr>
+      <tr><td><code>Mapping::init()</code> / <code>tick()</code> / <code>persist()</code></td>
+        <td><a class="src">EVAC_Search.cpp</a>, <a class="src">EVAC_Exit.cpp</a></td></tr>
+      <tr><td>Serial debug <code>'m'</code> (map) / <code>'p'</code> (pose)</td>
+        <td><a class="src">STS-imuMerge.ino:64</a> → <code>Mapping::handleSerial()</code></td></tr>
+    </table>
+  </section>
+
+  <!-- WHATS MISSING -->
+  <section>
+    <h3>8 · What's <span class="tag todo">not</span> implemented yet (the "run the map" gap)</h3>
+    <div class="grid cards">
+      <div class="card"><h4>Exploration planner</h4>
+        <p>Nothing consumes the grid to choose where to drive. <code>EVAC_Search</code> keeps the robot
+        parked. This is the core of "running the map".</p></div>
+      <div class="card"><h4>Victim / corner fusion</h4>
+        <p><code>K230Decode::detections()</code> are streamed but not yet written into the semantic grid
+        as <code>VICTIM_*</code> / <code>EVAC_*</code> cells.</p></div>
+      <div class="card"><h4>Wall-snap EKF update</h4>
+        <p><code>poseUpdateWall()</code> is declared but never called — x/y is still open-loop between
+        scan-match snaps.</p></div>
+      <div class="card"><h4>Deploy / exit logic</h4>
+        <p><code>EVAC_Deploy</code> and <code>EVAC_Exit</code> are skeletons; no map-driven navigation
+        to drop points or the exit.</p></div>
+    </div>
+  </section>
+
+  <!-- FILE MAP -->
+  <section>
+    <h3>9 · File map</h3>
+    <ul class="files mut">
+      <li><code>Mapping.{h,cpp}</code> — orchestrator: predict → update → integrate → recal → checkpoint</li>
+      <li><code>Pose.{h,cpp}</code> — 3-state EKF (x, y, θ)</li>
+      <li><code>MapGrid.{h,cpp}</code> — 40×40 log-odds + semantic grid, ray integration, ASCII dump</li>
+      <li><code>Recalibrate.{h,cpp}</code> — stuck detection + scan-match snap</li>
+      <li><code>MapPersist.{h,cpp}</code> — diffed EEPROM checkpoint</li>
+      <li><code>config.h</code> — all tunables (<code>MAP_*</code>, <code>LO_*</code>,
+        <code>TOF_*</code>, <code>RECAL_*</code>, <code>EEPROM_*</code>)</li>
+      <li><code>state_machine/EVAC_Search.cpp</code> — the (currently passive) driver of the pipeline</li>
+    </ul>
+  </section>
+
+  <!-- KEY CONSTANTS -->
+  <section>
+    <h3>10 · Key tunables (config.h)</h3>
+    <table>
+      <tr><th>Constant</th><th>Value</th><th>Role</th></tr>
+      <tr><td><code>MAP_CELL_MM</code></td><td>30</td><td>grid resolution</td></tr>
+      <tr><td><code>MAP_DIM</code></td><td>40</td><td>cells per side → ~1.2 m zone</td></tr>
+      <tr><td><code>WHEELBASE_MM</code></td><td>140</td><td>ω from wheel-speed difference</td></tr>
+      <tr><td><code>LO_HIT / LO_MISS</code></td><td>+6 / −2</td><td>per-ray belief deltas</td></tr>
+      <tr><td><code>LO_CLAMP / LO_DECISIVE</code></td><td>64 / 30</td><td>saturation / semantic-promote threshold</td></tr>
+      <tr><td><code>TOF_COUNT</code></td><td>1</td><td>one VL53L7CX front sensor today</td></tr>
+      <tr><td><code>RECAL_STUCK_MS</code></td><td>1000</td><td>stall time before scan-match fires</td></tr>
+      <tr><td><code>RECAL_WIN_XY / TH</code></td><td>±60 mm / ±10°</td><td>scan-match search window</td></tr>
+      <tr><td><code>MAP_CHECKPOINT_MS</code></td><td>30000</td><td>min interval between EEPROM saves</td></tr>
+    </table>
+  </section>
+
+</main>
+
+<footer>
+  Generated overview of the current mapping implementation · <code>teensy/STS-imuMerge</code>
+</footer>
+</body>
+</html>

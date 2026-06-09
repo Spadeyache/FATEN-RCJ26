@@ -52,7 +52,11 @@ void grab(bool closed) {
 
 // Blocking. Only call from setup() or controlled-stop sequences.
 void lift(int pos) {
-    _krs.setPos(KRS_ID, pos);
+    int rd = _krs.setPos(KRS_ID, pos);
+#if PRINT_ACTIONS
+    Serial.print("KRS setPos("); Serial.print(pos);
+    Serial.print(") -> readback="); Serial.println(rd);   // -1 == no reply on bus
+#endif
     delay(800);
     _krs.setFree(KRS_ID);
 }

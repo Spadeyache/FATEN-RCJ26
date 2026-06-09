@@ -46,9 +46,13 @@ int YacheK230D::update() {
                 if (_expectedCount == 0) {
                     _state = READ_CHECKSUM;
                 } else if (_expectedCount > K230D_MAX_BOXES_RX) {
+                    Serial.print("K230D RX bad count=");
+                    Serial.println(_expectedCount);
                     // Suspicious -- reset, don't even try.
                     _state = WAIT_AA;
                 } else {
+                    Serial.print("K230D RX frame count=");
+                    Serial.println(_expectedCount);
                     _state = READ_BOXES;
                 }
                 break;
@@ -69,6 +73,18 @@ int YacheK230D::update() {
                         _parsing.y2 = static_cast<int16_t>(static_cast<uint16_t>(_parsing.y2) | b);
                         if (_boxesRecvd < K230D_MAX_BOXES_RX) {
                             _boxes[_boxesRecvd] = _parsing;
+                            Serial.print("K230D RX BOX raw cls=");
+                            Serial.print(_parsing.cls);
+                            Serial.print(" score=");
+                            Serial.print(_parsing.score);
+                            Serial.print(" x1=");
+                            Serial.print(_parsing.x1);
+                            Serial.print(" y1=");
+                            Serial.print(_parsing.y1);
+                            Serial.print(" x2=");
+                            Serial.print(_parsing.x2);
+                            Serial.print(" y2=");
+                            Serial.println(_parsing.y2);
                         }
                         _boxesRecvd++;
                         _byteIdx = 0;
@@ -89,6 +105,10 @@ int YacheK230D::update() {
                     _lastPacketMs = millis();
                     frameFinished += _boxCount;
                 } else {
+                    Serial.print("K230D RX checksum fail got=");
+                    Serial.print(b);
+                    Serial.print(" expected=");
+                    Serial.println(_checksum);
                     frameFinished = -1;
                 }
                 _state = WAIT_AA;

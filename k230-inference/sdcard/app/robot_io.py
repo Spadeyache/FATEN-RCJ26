@@ -34,19 +34,19 @@ CMD_RUN  = 0x01
 
 
 def open_link():
-    """Open UART1 + apply FPIOA pinmux. Returns the UART handle."""
+    """Open UART2 + apply FPIOA pinmux. Returns the UART handle."""
     try:
         fpioa = FPIOA()
-        fpioa.set_function(config.UART_TX_PIN, FPIOA.UART1_TXD)
-        fpioa.set_function(config.UART_RX_PIN, FPIOA.UART1_RXD)
+        fpioa.set_function(config.UART_TX_PIN, FPIOA.UART2_TXD)
+        fpioa.set_function(config.UART_RX_PIN, FPIOA.UART2_RXD)
     except Exception as e:
         print("robot_io: FPIOA setup skipped:", e)
-    u = UART(UART.UART1,
+    u = UART(UART.UART2,
              baudrate=config.UART_BAUD,
              bits=UART.EIGHTBITS,
              parity=UART.PARITY_NONE,
              stop=UART.STOPBITS_ONE)
-    print("robot_io: opened UART1 @{} baud, TX={} RX={}".format(
+    print("robot_io: opened UART2 @{} baud, TX={} RX={}".format(
         config.UART_BAUD, config.UART_TX_PIN, config.UART_RX_PIN))
     return u
 

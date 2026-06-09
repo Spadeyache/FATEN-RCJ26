@@ -32,47 +32,47 @@ void onEnter() {
     Serial.println("State: EVAC_ENTRY");
 #endif
 
-    Actions::Arm::attachGrabServos();
-    Actions::Arm::lift(4050);
-    Actions::Arm::grab(true);
+    // Actions::Arm::attachGrabServos();
+    // Actions::Arm::lift(4050);
+    // Actions::Arm::grab(true);
 
-    Actions::Forward::forward(190, 100);
-    Actions::Turn::turn(-80.0f);
-    Actions::Forward::forward(100, 1150);
-    Actions::Drive::stop();
+    // Actions::Forward::forward(190, 100);
+    // Actions::Turn::turn(-80.0f);
+    // Actions::Forward::forward(100, 1150);
+    // Actions::Drive::stop();
 
-    Actions::Arm::grab(false);
-    Actions::Arm::lift(10050);
-    Actions::Arm::lift(10050);   // intentional duplicate â€” KRS needs the resend
+    // Actions::Arm::grab(false);
+    // Actions::Arm::lift(10050);
+    // Actions::Arm::lift(10050);   // intentional duplicate â€” KRS needs the resend
 
-    Actions::Turn::turn(82.0f);
-    Actions::Forward::forward(-100, 450);
-    Actions::Turn::turn(120.0f);
+    // Actions::Turn::turn(82.0f);
+    // Actions::Forward::forward(-100, 450);
+    // Actions::Turn::turn(120.0f);
 
-    // Crawl forward until front bumper hits the wall.
-    Sensors::IMU::tick();
-    Actions::Drive::motor(70, 70);
-    while (!Sensors::Touch::front()) {
-        delay(10);
-        Sensors::IMU::tick();
-        Sensors::Touch::tick();
-    }
+    // // Crawl forward until front bumper hits the wall.
+    // Sensors::IMU::tick();
+    // Actions::Drive::motor(70, 70);
+    // while (!Sensors::Touch::front()) {
+    //     delay(10);
+    //     Sensors::IMU::tick();
+    //     Sensors::Touch::tick();
+    // }
 
-    Actions::Arm::lift(7050);
+    // Actions::Arm::lift(7050);
 
-    analogWrite(BUZZER_PIN, 160);
-    Actions::Forward::forward(-50, 50);
+    // analogWrite(BUZZER_PIN, 160);
+    // Actions::Forward::forward(-50, 50);
 
-    Actions::Drive::motor(70, 70);
-    while (!Sensors::Touch::front()) {
-        delay(10);
-        Sensors::Touch::tick();
-    }
-    Actions::Drive::stop();
+    // Actions::Drive::motor(70, 70);
+    // while (!Sensors::Touch::front()) {
+    //     delay(10);
+    //     Sensors::Touch::tick();
+    // }
+    // Actions::Drive::stop();
 
-    Actions::Turn::turn(-45.0f);
-    Actions::Forward::forward(50, 40);
-    Actions::Arm::grab(true);
+    // Actions::Turn::turn(-45.0f);
+    // Actions::Forward::forward(50, 40);
+    // Actions::Arm::grab(true);
 
     Actions::Drive::stop();
 }

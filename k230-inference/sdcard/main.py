@@ -64,8 +64,15 @@ def main():
 
             # IDLE -> RUN edge: re-apply camera config.
             if run_state and not prev_state:
-                print("-> RUN  (re-applying camera config)")
+                print("-> RUN  (resetting camera + re-applying camera config)")
+                try:
+                    sensor.stop()
+                except Exception:
+                    pass
+                sensor.reset()
                 camera.apply_config(sensor)
+                sensor.run()
+                time.sleep_ms(config.SETTLE_MS)
             elif not run_state and prev_state:
                 print("-> IDLE")
             prev_state = run_state

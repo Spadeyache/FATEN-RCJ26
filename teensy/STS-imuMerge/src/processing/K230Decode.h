@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 // =============================================================================
 //  Processing::K230Decode - frame parser for K230D AI processor output.
