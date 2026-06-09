@@ -27,7 +27,7 @@ FLASHMEM void setup() {
     digitalWrite(PIN_74HCT126_EN, HIGH);
 
     Actions::Drive::init();
-    // Actions::Arm::init();           // servos + KRS, sets initial pose
+    Actions::Arm::init();           // servos + KRS, sets initial pose
     Sensors::IMU::init();
     Sensors::Touch::init();
     Sensors::XIAO_link::init();

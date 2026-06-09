@@ -1,72 +1,73 @@
 #include "K230Decode.h"
 #include "../sensors/K230_link.h"
 
+#include <Arduino.h>
+
 namespace Processing {
 namespace K230Decode {
 
 namespace {
-    enum ParseState : uint8_t { WAIT_HEADER, WAIT_COUNT, WAIT_DATA, WAIT_CHKSUM };
+    constexpr int16_t SENSOR_W = 640;
+    constexpr int16_t SENSOR_H = 480;
 
-    ParseState _state = WAIT_HEADER;
-    uint8_t    _count = 0;
-    uint8_t    _idx   = 0;
-    uint8_t    _buf[1 + K230_MAX_DETECTIONS * 3];
+    YacheK230D _k230d(Serial5);
+    Detection _detections[K230D_MAX_BOXES_RX];
+    bool      _running = false;
+    bool      _begun = false;
+    uint32_t  _last_published_packet_ms = 0;
 
-    Detection  _detections[K230_MAX_DETECTIONS];
-    uint8_t    _detection_count = 0;
-    bool       _running         = false;
-}
+    uint8_t clampU8(int32_t v) {
+        if (v < 0) return 0;
+        if (v > 255) return 255;
+        return (uint8_t)v;
+    }
 
-void tick() {
-    // 1. Push running flag down to the link layer so it sends the right command.
-    Sensors::K230_link::setCommand(_running ? 0x01 : 0x00);
+    void beginOnce() {
+        if (_begun) return;
+        _k230d.begin(K230_BAUD);
+        _begun = true;
+    }
 
-    // 2. Drain pending bytes through the frame parser.
-    int b;
-    while ((b = Sensors::K230_link::readByte()) >= 0) {
-        const uint8_t byte = (uint8_t)b;
+    void publishLegacyDetections() {
+        for (uint8_t i = 0; i < _k230d.boxCount(); i++) {
+            const K230DBox &b = _k230d.box(i);
+            const int32_t cx = ((int32_t)b.x1 + (int32_t)b.x2) / 2;
+            const int32_t cy = ((int32_t)b.y1 + (int32_t)b.y2) / 2;
 
-        switch (_state) {
-            case WAIT_HEADER:
-                if (byte == 0xAA) _state = WAIT_COUNT;
-                break;
-
-            case WAIT_COUNT:
-                if (byte > K230_MAX_DETECTIONS) { _state = WAIT_HEADER; break; }
-                _count  = byte;
-                _buf[0] = byte;
-                _idx    = 0;
-                _state  = (_count == 0) ? WAIT_CHKSUM : WAIT_DATA;
-                break;
-
-            case WAIT_DATA:
-                _buf[1 + _idx++] = byte;
-                if (_idx >= (uint8_t)(_count * 3)) _state = WAIT_CHKSUM;
-                break;
-
-            case WAIT_CHKSUM: {
-                uint8_t chk = 0;
-                for (uint8_t i = 0; i <= _count * 3; i++) chk ^= _buf[i];
-                if (chk == byte) {
-                    _detection_count = _count;
-                    for (uint8_t i = 0; i < _count; i++) {
-                        _detections[i].type = (ObjectType)_buf[1 + i * 3];
-                        _detections[i].x    =             _buf[2 + i * 3];
-                        _detections[i].y    =             _buf[3 + i * 3];
-                    }
-                }
-                _state = WAIT_HEADER;
-                break;
-            }
+            _detections[i].type = (ObjectType)b.cls;
+            _detections[i].x = clampU8((cx * 255L) / SENSOR_W);
+            _detections[i].y = clampU8((cy * 255L) / SENSOR_H);
         }
     }
 }
 
-const Detection* detections() { return _detections; }
-uint8_t          count()      { return _detection_count; }
+void tick() {
+    beginOnce();
 
-void setRunning(bool run)     { _running = run; }
-bool isRunning()              { return _running; }
+    // Keep the existing sensor-layer command behavior intact so EVAC_Search /
+    // EVAC_Exit can still control the K230 run state through setRunning().
+    Sensors::K230_link::setCommand(_running ? K230D_CMD_RUN : K230D_CMD_IDLE);
+
+    _k230d.update();
+    if (_k230d.lastPacketMs() != 0 &&
+        _k230d.lastPacketMs() != _last_published_packet_ms) {
+        publishLegacyDetections();
+        _last_published_packet_ms = _k230d.lastPacketMs();
+
+#if PRINT_K230
+        _k230d.printBoxes(Serial);
+#endif
+    }
+}
+
+const Detection* detections()   { return _detections; }
+uint8_t          count()        { return _k230d.boxCount(); }
+const Box*       boxes()        { return _k230d.boxCount() ? &_k230d.box(0) : nullptr; }
+uint8_t          boxCount()     { return _k230d.boxCount(); }
+uint32_t         lastPacketMs() { return _k230d.lastPacketMs(); }
+
+void setRunning(bool run) { _running = run; }
+bool isRunning()          { return _running; }
 
 }  // namespace K230Decode
 }  // namespace Processing

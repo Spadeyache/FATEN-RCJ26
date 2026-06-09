@@ -33,6 +33,7 @@ void init() {
     grab(false);                          // open gripper on boot
 
     _krs.begin();
+    delay(200);                           // let the KRS bus / servo settle
     _krs.setSpd(KRS_ID, KRS_SPD);
     lift(11050);                          // parked
 

@@ -1,0 +1,7 @@
+{
+    "_comment": "/data/calibration/camera.json -- per-arena camera overrides. Any subset of these fields is fine; missing fields fall back to defaults in /sdcard/app/config.py. Tune EXPOSURE_US first; use main.py boot log's `get_exposure_us` readback to see what value actually stuck.",
+    "exposure_us": 8000,
+    "gain_db":     0.0,
+    "hmirror":     false,
+    "vflip":       false
+}

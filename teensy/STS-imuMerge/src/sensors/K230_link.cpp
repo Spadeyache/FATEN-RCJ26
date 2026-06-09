@@ -1,4 +1,4 @@
-﻿#include "K230_link.h"
+#include "K230_link.h"
 #include "../../config.h"
 
 namespace Sensors {
@@ -11,6 +11,9 @@ namespace {
 
 void init() {
     Serial5.begin(K230_BAUD);
+    _cmd = 0x00;       // setup default: K230 not detecting/rest
+    _last_cmd_ms = 0;
+    Serial5.write(_cmd);
 }
 
 void tick() {

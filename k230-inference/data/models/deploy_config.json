@@ -1,0 +1,38 @@
+{
+  "nncase_version": "2.11.0",
+  "chip_type": "k230",
+  "model_type": "AnchorFreeDet",
+  "kmodel_path": "victim.kmodel",
+  "img_size": [
+    640,
+    480
+  ],
+  "inference_width": 640,
+  "inference_height": 480,
+  "num_classes": 2,
+  "categories": [
+    "black",
+    "silver"
+  ],
+  "confidence_threshold": 0.3,
+  "nms_threshold": 0.5,
+  "nms_option": false,
+  "mean": [
+    0.0,
+    0.0,
+    0.0
+  ],
+  "std": [
+    1.0,
+    1.0,
+    1.0
+  ],
+  "calibrate_method": "Kld",
+  "ptq_option": "w:uint8 d:int16",
+  "_meta": {
+    "variant": "yolov8_kld_i16act_u8w",
+    "preprocess_mode": "raw_01",
+    "use_letterbox": true,
+    "kmodel_size_bytes": 3353400
+  }
+}

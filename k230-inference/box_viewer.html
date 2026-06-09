@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>K230D box viewer (via Teensy USB)</title>
+<style>
+  :root {
+    --bg:        #FBF8F2;
+    --text:      #2A2A28;
+    --muted:     #5C5A55;
+    --rule:      #E4DCC8;
+    --green:     #38543A;
+    --orange:    #E8843D;
+    --silver:    #888;
+    --black:     #181818;
+  }
+  html, body {
+    margin: 0; padding: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Helvetica Neue", "Inter", system-ui, sans-serif;
+    font-size: 14px;
+  }
+  .page { max-width: 940px; margin: 40px auto; padding: 0 24px; }
+  h1 { color: var(--green); font-weight: 600; font-size: 22px; margin: 0 0 16px; }
+  .controls { display: flex; gap: 12px; margin-bottom: 20px; align-items: center; }
+  button {
+    background: var(--green); color: white; border: 0;
+    padding: 8px 18px; border-radius: 3px; cursor: pointer;
+    font: inherit; letter-spacing: 0.04em;
+  }
+  button.disconnect { background: var(--orange); }
+  button:disabled  { opacity: 0.5; cursor: default; }
+  .status { color: var(--muted); }
+  .row { display: grid; grid-template-columns: 640px 1fr; gap: 20px; }
+  canvas {
+    background: #FFF;
+    border: 1px solid var(--rule);
+    image-rendering: pixelated;
+  }
+  .info {
+    background: #FFF; border: 1px solid var(--rule); padding: 12px 14px;
+    font-size: 12px;
+  }
+  .info h3 { margin: 0 0 6px; font-size: 12px; letter-spacing: 0.16em;
+             color: var(--green); text-transform: uppercase; }
+  .info pre {
+    background: #FAF7F0; padding: 8px; border-radius: 2px;
+    font-size: 11px; max-height: 360px; overflow: auto; margin: 0;
+    font-family: "SF Mono", "Menlo", monospace;
+  }
+  .legend { display: flex; gap: 14px; margin-top: 14px; font-size: 12px; color: var(--muted); }
+  .swatch { display: inline-block; width: 12px; height: 12px; margin-right: 5px; vertical-align: -1px; border-radius: 2px; }
+</style>
+</head>
+<body>
+  <div class="page">
+    <h1>K230D box viewer (via Teensy USB)</h1>
+
+    <div class="controls">
+      <button id="connect">Connect</button>
+      <button id="disconnect" class="disconnect" disabled>Disconnect</button>
+      <span class="status" id="status">not connected</span>
+    </div>
+
+    <div class="row">
+      <canvas id="cv" width="640" height="480"></canvas>
+      <div class="info">
+        <h3>Latest frame</h3>
+        <div id="meta">no frame yet</div>
+        <h3 style="margin-top: 14px;">Raw lines</h3>
+        <pre id="raw"></pre>
+        <div class="legend">
+          <div><span class="swatch" style="background: var(--silver);"></span>silver</div>
+          <div><span class="swatch" style="background: var(--black);"></span>black</div>
+        </div>
+      </div>
+    </div>
+
+    <p style="color: var(--muted); margin-top: 24px; font-size: 12px; line-height: 1.5;">
+      Connect to the Teensy's USB serial. The Teensy must be running yacheK230D
+      <code>printBoxes()</code> output (format: <code>K230D BOX cls=… score=… x1=… y1=… x2=… y2=…</code>).
+      Each <code>K230D BOXES n=…</code> line resets the canvas and the boxes that
+      follow are drawn in sensor-frame coords (640×480). What you see here should
+      mirror what's drawn on the K230D's IDE preview — if they differ, the wire
+      payload is being parsed wrong on one side.
+    </p>
+  </div>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const cv  = $("cv");
+  const ctx = cv.getContext("2d");
+  let port, reader, keepReading = false;
+  let pending = [];        // boxes accumulating between `K230D BOXES` headers
+  let lastFrameMeta = "";
+
+  const CLS_NAMES  = ["silver", "black"];
+  const CLS_COLORS = ["#888", "#181818"];
+
+  // Initial canvas state.
+  function clearCanvas() {
+    ctx.fillStyle = "#FFF";
+    ctx.fillRect(0, 0, cv.width, cv.height);
+    // Soft grid every 80px for visual reference.
+    ctx.strokeStyle = "#EEEAE0";
+    ctx.lineWidth = 1;
+    for (let x = 0; x < cv.width;  x += 80) {
+      ctx.beginPath(); ctx.moveTo(x + 0.5, 0); ctx.lineTo(x + 0.5, cv.height); ctx.stroke();
+    }
+    for (let y = 0; y < cv.height; y += 80) {
+      ctx.beginPath(); ctx.moveTo(0, y + 0.5); ctx.lineTo(cv.width, y + 0.5); ctx.stroke();
+    }
+  }
+
+  function drawBoxes(boxes) {
+    clearCanvas();
+    for (const b of boxes) {
+      const col = CLS_COLORS[b.cls] || "#E8843D";
+      ctx.strokeStyle = col;
+      ctx.lineWidth = 2;
+      ctx.strokeRect(b.x1, b.y1, b.x2 - b.x1, b.y2 - b.y1);
+      const label = `${CLS_NAMES[b.cls] || "c" + b.cls} ${(b.score / 255).toFixed(2)}`;
+      ctx.font = "12px sans-serif";
+      const tw = ctx.measureText(label).width + 6;
+      ctx.fillStyle = col;
+      ctx.fillRect(b.x1, b.y1 - 14, tw, 14);
+      ctx.fillStyle = "#FFF";
+      ctx.fillText(label, b.x1 + 3, b.y1 - 3);
+    }
+  }
+
+  const HEADER_RE = /^K230D BOXES n=(\d+)/;
+  const BOX_RE    = /K230D BOX cls=(\d+) score=(\d+) x1=(-?\d+) y1=(-?\d+) x2=(-?\d+) y2=(-?\d+)/;
+
+  function handleLine(line) {
+    const rawEl = $("raw");
+    rawEl.textContent = (line + "\n" + rawEl.textContent).slice(0, 4000);
+
+    const h = HEADER_RE.exec(line);
+    if (h) {
+      // Commit whatever is pending before resetting -- this is the previous frame.
+      if (pending.length || lastFrameMeta) {
+        drawBoxes(pending);
+        $("meta").textContent =
+          `${pending.length} boxes  (received ${new Date().toLocaleTimeString()})`;
+      }
+      pending = [];
+      lastFrameMeta = `n=${h[1]}`;
+      return;
+    }
+    const m = BOX_RE.exec(line);
+    if (m) {
+      pending.push({
+        cls:   parseInt(m[1], 10),
+        score: parseInt(m[2], 10),
+        x1:    parseInt(m[3], 10),
+        y1:    parseInt(m[4], 10),
+        x2:    parseInt(m[5], 10),
+        y2:    parseInt(m[6], 10),
+      });
+      // Render incrementally so you see boxes as they arrive even if the
+      // next BOXES header is delayed.
+      drawBoxes(pending);
+      $("meta").textContent =
+        `${pending.length} boxes accumulating  (last update ${new Date().toLocaleTimeString()})`;
+    }
+  }
+
+  async function connect() {
+    if (!("serial" in navigator)) {
+      $("status").textContent = "Web Serial not supported in this browser. Use Chrome or Edge.";
+      return;
+    }
+    try {
+      port = await navigator.serial.requestPort();
+      await port.open({ baudRate: 115200 });
+      $("status").textContent = "connected";
+      $("connect").disabled = true;
+      $("disconnect").disabled = false;
+      keepReading = true;
+      readLoop();
+    } catch (e) {
+      $("status").textContent = "connect error: " + e.message;
+    }
+  }
+
+  async function disconnect() {
+    keepReading = false;
+    try { if (reader) await reader.cancel(); } catch {}
+    try { if (port)   await port.close();   } catch {}
+    port = null; reader = null;
+    $("status").textContent = "disconnected";
+    $("connect").disabled = false;
+    $("disconnect").disabled = true;
+  }
+
+  async function readLoop() {
+    const dec = new TextDecoder();
+    let buf = "";
+    reader = port.readable.getReader();
+    try {
+      while (keepReading) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buf += dec.decode(value, { stream: true });
+        let nl;
+        while ((nl = buf.indexOf("\n")) >= 0) {
+          const line = buf.slice(0, nl).trim();
+          buf = buf.slice(nl + 1);
+          if (line) handleLine(line);
+        }
+      }
+    } catch (e) {
+      $("status").textContent = "read error: " + e.message;
+    } finally {
+      try { reader.releaseLock(); } catch {}
+    }
+  }
+
+  $("connect").addEventListener("click", connect);
+  $("disconnect").addEventListener("click", disconnect);
+  clearCanvas();
+})();
+</script>
+</body>
+</html>

@@ -15,7 +15,7 @@
 #define PRINT_STATE      0   // state transitions
 #define PRINT_IMU        1   // pitch/roll/yaw at 10 Hz
 #define PRINT_XIAO       0   // CommandFilter votes + xiaoCommand
-#define PRINT_K230       0   // K230 detections
+#define PRINT_K230       1   // K230 detections
 #define PRINT_PID        0   // line PID internals
 #define PRINT_MAPPING    0   // mapping/EKF/checkpoint logs
 #define PRINT_ACTIONS    0   // turn / forward / arm action logs
@@ -105,7 +105,7 @@ enum XiaoMode : uint8_t {
 //  K230D AI processor
 // =============================================================================
 #define K230_BAUD           115200UL
-#define K230_MAX_DETECTIONS 8
+#define K230_MAX_DETECTIONS 16
 #define K230_CMD_INTERVAL   100        // ms
 
 // =============================================================================
