@@ -25,7 +25,7 @@
 //   Serial1 -> KRS smart servo (lift arm) via 74HCT126 half-duplex buffer
 //   Serial2 -> STS smart servos (drive motors)
 //   Serial3 -> XIAO ESP32 link
-//   Serial5 -> K230D AI processor
+//   Serial8 -> K230D AI processor
 
 // --- I²C buses ---
 //   Wire  → (free)

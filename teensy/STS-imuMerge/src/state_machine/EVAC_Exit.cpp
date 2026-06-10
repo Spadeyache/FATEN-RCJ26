@@ -26,7 +26,8 @@ void onEnter() {
     Serial.println("State: EVAC_EXIT (stub)");
 #endif
     Processing::Mapping::persist();
-    Processing::K230Decode::setRunning(false);
+    // Teensy-side K230 run/idle control disabled for now.
+    // Processing::K230Decode::setRunning(false);
     Processing::XiaoDecode::setMode(XIAO_MODE_LINE);
 }
 

@@ -3,7 +3,7 @@
 // =============================================================================
 //  Sensors::K230_link — raw byte transport for the K230D AI processor.
 //
-//  - Pulls bytes from Serial5 into a FIFO; consumer drains via readByte().
+//  - Pulls bytes from Serial8 into a FIFO; consumer drains via readByte().
 //  - Sends a 1-byte command (0x00 IDLE / 0x01 DETECT) every K230_CMD_INTERVAL.
 //  - Frame parsing (header / count / payload / checksum) lives in
 //    processing/K230Decode — this layer does NOT understand framing.

@@ -11,7 +11,7 @@
 //
 //  CHKSUM = XOR of every byte from 0xAA through the last box byte.
 //
-//  YacheK230D owns the Serial5 byte parser. This layer adapts it to expose both
+//  YacheK230D owns the Serial8 byte parser. This layer adapts it to expose both
 //  raw boxes and the older center-point Detection view used by the existing
 //  state-machine code. It also owns the running-mode flag that tells K230_link
 //  whether to send 0x00 (idle) or 0x01 (detect).
@@ -25,8 +25,8 @@ namespace Processing {
 namespace K230Decode {
 
 enum ObjectType : uint8_t {
-    SILVER      = 0,
-    BLACK       = 1,
+    SILVER      = K230_CLASS_SILVER,
+    BLACK       = K230_CLASS_BLACK,
 
     // Legacy names kept so older state code can still compile while the
     // K230 YOLO model now reports silver/black classes.
@@ -46,6 +46,14 @@ struct Detection {
 
 using Box = K230DBox;
 
+namespace goalPOS {
+extern bool valid;
+extern float direction;   // normalized: (box_center_x - 320) / 320
+extern uint8_t cls;
+extern uint8_t score;
+extern uint32_t updatedMs;
+}
+
 void tick();
 
 const Detection* detections();   // pointer to internal array
@@ -53,6 +61,22 @@ uint8_t          count();         // number of valid entries
 const Box*       boxes();         // pointer to internal box array
 uint8_t          boxCount();      // number of valid boxes
 uint32_t         lastPacketMs();  // millis() timestamp of last valid frame
+
+bool isVictimClass(uint8_t cls);
+bool updateGoalFromVictim(const K230DBox &msg);
+
+// Check one decoded K230D box. Returns true only for configured silver/black
+// victim classes, and updates goalPOS from this box when it matches.
+bool checkVictim(const K230DBox &msg);
+
+// Check a caller-provided list of decoded K230D boxes. Picks the highest-score
+// silver/black match, updates goalPOS from it, and returns true. If there is no
+// match, clears goalPOS::valid and returns false.
+bool checkVictim(const K230DBox *msgs, uint8_t msgCount);
+
+// Check the most recent K230D frame already stored by this decoder. This is the
+// normal call for state-machine code such as EVAC_Search.
+bool checkVictim();
 
 void setRunning(bool run);        // true -> send DETECT command, false -> IDLE
 bool isRunning();

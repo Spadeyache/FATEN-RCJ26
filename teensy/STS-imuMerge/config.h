@@ -91,6 +91,17 @@ enum XiaoMode : uint8_t {
 // =============================================================================
 #define DISABLE_GREEN_MS    750     // green-turn cooldown after firing one
 
+// EVAC search victim sweep
+#define EVAC_SEARCH_SPIN_LEFT       -40.0f
+#define EVAC_SEARCH_SPIN_RIGHT       40.0f
+#define EVAC_GRAB_BASE_SPEED        45.0f
+#define EVAC_GRAB_TURN_GAIN         35.0f
+#define EVAC_GRAB_AVG_FRAMES          3
+#define EVAC_GRAB_LOST_HOLD_FRAMES    3
+#define EVAC_GRAB_STOP_HEIGHT_PX     120.0f
+#define EVAC_GRAB_STOP_WINDOW          4
+#define EVAC_GRAB_STOP_REQUIRED        3
+
 // =============================================================================
 //  CommandFilter — vote thresholds
 // =============================================================================
@@ -107,6 +118,13 @@ enum XiaoMode : uint8_t {
 #define K230_BAUD           115200UL
 #define K230_MAX_DETECTIONS 16
 #define K230_CMD_INTERVAL   100        // ms
+
+// K230 YOLO class IDs. Set these to the model's raw output IDs.
+// Current model/viewer mapping is flipped, so raw 1=silver and raw 0=black.
+#define K230_CLASS_SILVER   1
+#define K230_CLASS_BLACK    0
+#define K230_FRAME_WIDTH    640.0f
+#define K230_FRAME_CENTER_X (K230_FRAME_WIDTH * 0.5f)
 
 // =============================================================================
 //  Evacuation-zone mapping

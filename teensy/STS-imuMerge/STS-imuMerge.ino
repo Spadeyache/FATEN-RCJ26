@@ -45,7 +45,10 @@ void loop() {
     // Sweep the numbers one at a time and watch where the robot pivots.
     //   (+,-,+,-) = in-place spin   (+,-,0,0) = front-only   (0,0,+,-) = rear-only
     // Comment this block out to return to normal line following.
-    // Actions::Drive::motorRaw(0, -0, 100, -100);
+    // Actions::Drive::motorRaw(30, -30, 100, -100);
+    // Actions::Drive::motorRaw(0, 60, -70, 80);
+    // Actions::Drive::motorRaw(0, 100,0,100);
+    // Actions::Drive::vibrateMotor(2, 100.0f, 6, 100);
     // return;
     // ========================================================================
 

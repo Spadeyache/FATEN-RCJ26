@@ -32,6 +32,8 @@ SYNC1    = 0x55
 CMD_IDLE = 0x00
 CMD_RUN  = 0x01
 
+_last_cmd_seen = None
+
 
 def open_link():
     """Open UART2 + apply FPIOA pinmux. Returns the UART handle."""
@@ -56,6 +58,7 @@ def read_command(u, current_state):
 
     0x01 -> True (run), 0x00 -> False (idle). Other bytes ignored.
     """
+    global _last_cmd_seen
     state = current_state
     n = u.any()
     if not n:
@@ -66,8 +69,14 @@ def read_command(u, current_state):
         return current_state
     for b in data:
         if b == CMD_RUN:
+            if _last_cmd_seen != CMD_RUN:
+                print("robot_io: RX CMD_RUN")
+            _last_cmd_seen = CMD_RUN
             state = True
         elif b == CMD_IDLE:
+            if _last_cmd_seen != CMD_IDLE:
+                print("robot_io: RX CMD_IDLE")
+            _last_cmd_seen = CMD_IDLE
             state = False
     return state
 

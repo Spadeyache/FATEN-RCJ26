@@ -28,12 +28,15 @@ import config
 import camera
 import detector as detmod
 import robot_io
+import status_led
 
 
 def main():
     import nncase_runtime as nn
 
     print("=== main.py === Teensy-controlled YOLO")
+    status_led.init()
+    status_led.set_status("rest", force=True)
 
     # Camera + display + media up. Config is re-applied on every RUN edge.
     sensor = Sensor()
@@ -45,6 +48,7 @@ def main():
     MediaManager.init()
     sensor.run()
     time.sleep_ms(config.SETTLE_MS)
+    status_led.set_status("rest", force=True)
 
     # Model + ai2d.
     det = detmod.Detector(sensor)
@@ -73,8 +77,10 @@ def main():
                 camera.apply_config(sensor)
                 sensor.run()
                 time.sleep_ms(config.SETTLE_MS)
+                status_led.set_status("evac", force=True)
             elif not run_state and prev_state:
                 print("-> IDLE")
+                status_led.set_status("rest", force=True)
             prev_state = run_state
 
             if not run_state:
@@ -92,6 +98,7 @@ def main():
                 print("saved ->", saved)
 
             boxes = det.infer(img)               # list of [cls, score, x1,y1,x2,y2]
+            status_led.set_status("found" if len(boxes) > 0 else "evac")
             robot_io.send_boxes(u, boxes)
 
             # Draw same boxes on preview.
@@ -123,6 +130,7 @@ def main():
     except KeyboardInterrupt:
         print("\nstopping...")
     finally:
+        status_led.set_status("rest", force=True)
         try: u.deinit()
         except Exception: pass
         det.release()

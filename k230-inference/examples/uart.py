@@ -4,7 +4,7 @@ from machine import UART
 u2 = UART(UART.UART2, baudrate=115200, bits=UART.EIGHTBITS, parity=UART.PARITY_NONE, stop=UART.STOPBITS_ONE)
 
 # Send data via UART2
-u2.write("UART1 test")
+u2.write("UART2 test")
 
 # Read data from UART2
 r = u2.read()

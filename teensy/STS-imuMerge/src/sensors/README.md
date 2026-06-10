@@ -31,7 +31,7 @@ Sensors call **drivers/** only. They never include from `processing/`,
 | File | What it owns |
 |---|---|
 | `XIAO_link.{h,cpp}` | `YacheEncodedSerial` instance on Serial3 + per-register cache |
-| `K230_link.{h,cpp}` | Serial5 byte stream (no parsing) + idle/detect command tx |
+| `K230_link.{h,cpp}` | Serial8 byte stream (no parsing) + idle/detect command tx |
 | `IMU.{h,cpp}` | `yacheMPU6050` on Wire1 + pitch/roll/yaw getters |
 | `ToF.{h,cpp}` | `yacheVL53L7CX` array + dataReady/getRanges passthrough |
 | `Touch.{h,cpp}` | Digital pins: `touchfront`, `conduct0`, `conduct1` |

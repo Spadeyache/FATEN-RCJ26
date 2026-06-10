@@ -160,6 +160,32 @@ void runLinePID() {
 #endif
 }
 
+void vibrateMotor(uint8_t motorIdx, float32_t amplitude, uint8_t cycles, uint32_t halfPeriodMs) {
+    if (motorIdx > 3) return;
+
+    // Snapshot all four gains so the other wheels stay put.
+    float32_t saved[4] = { _flGain, _frGain, _blGain, _brGain };
+    float32_t work[4];
+    for (int i = 0; i < 4; i++) work[i] = saved[i];
+
+    for (uint8_t c = 0; c < cycles; c++) {
+        work[motorIdx] = (c & 1) ? -amplitude : amplitude;
+        cli();
+        _flGain = work[0]; _frGain = work[1];
+        _blGain = work[2]; _brGain = work[3];
+        sei();
+        // Must hold each phase long enough for the servo's internal loop
+        // (~10 Hz = 100 ms) to actually execute the command before flipping.
+        delay(halfPeriodMs);
+    }
+
+    // Restore the original gains.
+    cli();
+    _flGain = saved[0]; _frGain = saved[1];
+    _blGain = saved[2]; _brGain = saved[3];
+    sei();
+}
+
 float32_t frontLeftGain()  { return _flGain; }
 float32_t frontRightGain() { return _frGain; }
 float32_t backLeftGain()   { return _blGain; }

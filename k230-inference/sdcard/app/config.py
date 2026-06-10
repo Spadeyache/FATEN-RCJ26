@@ -65,6 +65,17 @@ UART_RX_PIN        = 12
 
 
 # ============================================================================
+# Status NeoPixel
+# ============================================================================
+STATUS_LED_ENABLED = True
+NEOPIXEL_PIN       = 35
+NEOPIXEL_PIXELS    = 1
+STATUS_COLOR_REST  = (255, 255, 255) # white: rest / idle
+STATUS_COLOR_EVAC  = (0, 0, 255)     # blue: evac mode, no victim
+STATUS_COLOR_FOUND = (0, 255, 0)     # green: at least one victim
+
+
+# ============================================================================
 # Display / debug
 # ============================================================================
 SHOW_DISPLAY       = True

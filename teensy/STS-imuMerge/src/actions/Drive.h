@@ -33,6 +33,14 @@ void motorRaw(float32_t fl, float32_t fr, float32_t bl, float32_t br) FASTRUN;
 
 void runLinePID();
 
+// Overcome stiction on one wheel by alternating its speed sign.
+// motorIdx:     0=FL, 1=FR, 2=BL, 3=BR.
+// amplitude:    ±speed (0..100) during the burst.
+// cycles:       number of half-periods (total time = cycles × halfPeriodMs).
+// halfPeriodMs: must be ≥ servo update period (~100 ms @ 10 Hz) so each
+//               direction is actually executed before the flip.
+void vibrateMotor(uint8_t motorIdx, float32_t amplitude = 30.0f, uint8_t cycles = 4, uint32_t halfPeriodMs = 100);
+
 // Per-wheel gain accessors (read by Processing::Mapping for unicycle model).
 float32_t frontLeftGain();
 float32_t frontRightGain();

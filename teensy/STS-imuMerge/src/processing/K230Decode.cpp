@@ -6,11 +6,19 @@
 namespace Processing {
 namespace K230Decode {
 
+namespace goalPOS {
+bool valid = false;
+float direction = 0.0f;
+uint8_t cls = 0;
+uint8_t score = 0;
+uint32_t updatedMs = 0;
+}
+
 namespace {
-    constexpr int16_t SENSOR_W = 640;
+    constexpr int16_t SENSOR_W = (int16_t)K230_FRAME_WIDTH;
     constexpr int16_t SENSOR_H = 480;
 
-    YacheK230D _k230d(Serial5);
+    YacheK230D _k230d(Serial8);
     Detection _detections[K230D_MAX_BOXES_RX];
     bool      _running = false;
     bool      _begun = false;
@@ -39,14 +47,47 @@ namespace {
             _detections[i].y = clampU8((cy * 255L) / SENSOR_H);
         }
     }
+
+    float normalizedDirectionFor(const K230DBox &b) {
+        const float center_x = ((float)b.x1 + (float)b.x2) * 0.5f;
+        float direction = (center_x - K230_FRAME_CENTER_X) / K230_FRAME_CENTER_X;
+        if (direction < -1.0f) direction = -1.0f;
+        if (direction >  1.0f) direction =  1.0f;
+        return direction;
+    }
+
+    uint8_t viewerClassFor(uint8_t rawCls) {
+        if (rawCls == K230_CLASS_SILVER) return 0;
+        if (rawCls == K230_CLASS_BLACK) return 1;
+        return rawCls;
+    }
+
+    void printViewerBoxes() {
+        Serial.print(F("K230D BOXES n="));
+        Serial.println(_k230d.boxCount());
+        for (uint8_t i = 0; i < _k230d.boxCount(); i++) {
+            const K230DBox &b = _k230d.box(i);
+            Serial.print(F("K230D BOX cls="));
+            Serial.print(viewerClassFor(b.cls));
+            Serial.print(F(" score="));
+            Serial.print(b.score);
+            Serial.print(F(" x1="));
+            Serial.print(b.x1);
+            Serial.print(F(" y1="));
+            Serial.print(b.y1);
+            Serial.print(F(" x2="));
+            Serial.print(b.x2);
+            Serial.print(F(" y2="));
+            Serial.println(b.y2);
+        }
+    }
 }
 
 void tick() {
     beginOnce();
 
-    // Keep the existing sensor-layer command behavior intact so EVAC_Search /
-    // EVAC_Exit can still control the K230 run state through setRunning().
-    Sensors::K230_link::setCommand(_running ? K230D_CMD_RUN : K230D_CMD_IDLE);
+    // Teensy-side K230 run/idle control disabled for now.
+    // Sensors::K230_link::setCommand(_running ? K230D_CMD_RUN : K230D_CMD_IDLE);
 
     _k230d.update();
     if (_k230d.lastPacketMs() != 0 &&
@@ -55,7 +96,7 @@ void tick() {
         _last_published_packet_ms = _k230d.lastPacketMs();
 
 #if PRINT_K230
-        _k230d.printBoxes(Serial);
+        printViewerBoxes();
 #endif
     }
 }
@@ -66,7 +107,69 @@ const Box*       boxes()        { return _k230d.boxCount() ? &_k230d.box(0) : nu
 uint8_t          boxCount()     { return _k230d.boxCount(); }
 uint32_t         lastPacketMs() { return _k230d.lastPacketMs(); }
 
-void setRunning(bool run) { _running = run; }
+bool isVictimClass(uint8_t cls) {
+    return cls == K230_CLASS_SILVER || cls == K230_CLASS_BLACK;
+}
+
+bool updateGoalFromVictim(const K230DBox &msg) {
+    if (!isVictimClass(msg.cls)) return false;
+
+    goalPOS::valid = true;
+    goalPOS::direction = normalizedDirectionFor(msg);
+    goalPOS::cls = msg.cls;
+    goalPOS::score = msg.score;
+    goalPOS::updatedMs = millis();
+    return true;
+}
+
+// Check one decoded K230D box and update goalPOS when it is silver/black.
+bool checkVictim(const K230DBox &msg) {
+    return updateGoalFromVictim(msg);
+}
+
+// Check an explicit list of decoded K230D boxes. The highest-score silver/black
+// box becomes the current goalPOS target.
+bool checkVictim(const K230DBox *msgs, uint8_t msgCount) {
+    if (msgs == nullptr || msgCount == 0) {
+        goalPOS::valid = false;
+        return false;
+    }
+
+    const K230DBox *best = nullptr;
+    for (uint8_t i = 0; i < msgCount; i++) {
+        if (!isVictimClass(msgs[i].cls)) continue;
+        if (best == nullptr || msgs[i].score > best->score) {
+            best = &msgs[i];
+        }
+    }
+
+    if (best == nullptr) {
+        goalPOS::valid = false;
+        return false;
+    }
+    return updateGoalFromVictim(*best);
+}
+
+// Check the latest K230D frame held by this decoder.
+bool checkVictim() {
+    return checkVictim(boxes(), boxCount());
+}
+
+void setRunning(bool run) {
+    if (_running == run) return;
+    _running = run;
+
+    // Teensy-side K230 run/idle control disabled for now.
+    // const K230DCommand cmd = _running ? K230D_CMD_RUN : K230D_CMD_IDLE;
+    // beginOnce();
+    // Sensors::K230_link::setCommand(cmd);
+    // _k230d.sendCommand(cmd);
+
+#if PRINT_K230
+    Serial.print(F("K230D CMD "));
+    Serial.println(_running ? F("RUN") : F("IDLE"));
+#endif
+}
 bool isRunning()          { return _running; }
 
 }  // namespace K230Decode
