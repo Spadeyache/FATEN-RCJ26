@@ -20,7 +20,7 @@ MODELS_DIR         = "/data/models"
 DEPLOY_CONFIG_PATH = MODELS_DIR + "/deploy_config.json"
 KMODEL_DEFAULT     = MODELS_DIR + "/victim.kmodel"   # used only if deploy_config absent
 
-CAPTURE_DIR        = "/data/images"
+CAPTURE_DIR        = "/data/captures"
 LOG_DIR            = "/data/logs"
 CAMERA_CALIB_PATH  = "/data/calibration/camera.json"
 

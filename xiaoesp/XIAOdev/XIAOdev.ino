@@ -14,8 +14,8 @@
 // ── Output mode ────────────────────────────────────────────────────────────────
 // STREAM  →  binary camera frames over Serial (use with viewer)
 // LOG     →  human-readable debug text over Serial (use with serial monitor)
-// #define OUTPUT_STREAM
-#define OUTPUT_LOG
+#define OUTPUT_STREAM
+// #define OUTPUT_LOG
 
 // Stream FPS cap — limits USB interrupt pressure on Core 1.
 // Lower = less impact on loop speed. 10 is a good balance.

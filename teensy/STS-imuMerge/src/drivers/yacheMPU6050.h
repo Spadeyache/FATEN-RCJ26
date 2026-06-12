@@ -6,8 +6,7 @@
 //  - Raw getMotion6() reads at IMU_SAMPLE_HZ.
 //  - Madgwick.updateIMU() (gyro + accel only, no magnetometer).
 //  - getPitch/getRoll/getYaw return degrees, zero-referenced to begin().
-//  - Calibration offsets persist to EEPROM at addresses 0..23
-//    (calib block reserved by config.h; map data starts at EEPROM_MAP_BASE).
+//  - Calibration offsets persist to EEPROM at addresses 0..23.
 // =============================================================================
 
 #include "Arduino.h"

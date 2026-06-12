@@ -90,7 +90,7 @@ BLC_AUTO         = False
 # don't add a flag here.
 
 # Capture
-CAPTURE_DIR        = "/data/k230-train/captures"
+CAPTURE_DIR        = "/data/captures"
 CAPTURE_BUTTON     = 0                     # BOOT button GPIO on most K230D Zeros
 BUTTON_DEBOUNCE_MS = 400
 JPEG_QUALITY       = 95

@@ -50,10 +50,10 @@ enum XiaoMode : uint8_t {
 // =============================================================================
 #define MAX_MOTOR_SPEED     100
 
-#define PID_KP              3.0f
+#define PID_KP              0.3f    //3.0f
 #define PID_KI              0.0f
-#define PID_KD              3.0f
-#define PID_BASE_SPEED      100.0f
+#define PID_KD              0.0f    //3.0f
+#define PID_BASE_SPEED      40.0f   //100f
 #define PID_LEFT_SCALE      1.7f
 #define PID_INTEGRAL_LIMIT  500.0f
 #define LINE_EMA_ALPHA      0.3f
@@ -141,24 +141,47 @@ enum XiaoMode : uint8_t {
 #define ENTRANCE_X_MM         0.0f
 #define ENTRANCE_Y_MM         0.0f
 
-// ToF (VL53L7CX)
-#define TOF_COUNT              1
+// ToF (VL53L7CX) — 4-sensor array on Wire1.
+// All sensors share the default address (0x52), so at boot each XSHUT pin is
+// used to power them up one at a time and assign a unique I2C address.
+#define TOF_COUNT              4
+#define TOF_RES                8        // 8x8 multizone
 #define TOF_MAX_MM          1320
 #define TOF_MIN_MM            20
-#define TOF_RES                4
 #define TOF_FREQ_HZ           15
 #define TOF_FOV_DEG         60.0f
-#define TOF_LPN_PIN_FRONT     -1
-#define TOF_I2C_RST_PIN       -1
-#define TOF_FRONT_DX_MM       0.0f
-#define TOF_FRONT_DY_MM       0.0f
-#define TOF_FRONT_YAW_RAD     0.0f
 
-// Log-odds occupancy
-#define LO_HIT                 6
-#define LO_MISS               -2
-#define LO_CLAMP              64
-#define LO_DECISIVE           30
+// Per-sensor config (index 0..3). Adjust to your physical mount.
+//   XSHUT : Teensy pin that holds this sensor in reset at boot.
+//           Use -1 for a sensor with NO XSHUT wired (always powered on).
+//           Sensor 0 has no XSHUT, so it is configured FIRST and moved off the
+//           default 0x52 before any XSHUT sensor is woken (avoids a collision).
+//   DX/DY : sensor origin in the robot frame (mm); +x forward, +y left
+//   YAW   : sensor facing in the robot frame (deg); 0=forward, +90=left, -90=right
+//   ADDR  : unique 8-bit I2C address assigned at boot (default chip addr is 0x52)
+#define TOF0_XSHUT_PIN   -1
+#define TOF0_DX_MM       50.0f
+#define TOF0_DY_MM       40.0f
+#define TOF0_YAW_DEG     40.0f
+#define TOF0_ADDR        0x54
+
+#define TOF1_XSHUT_PIN    39
+#define TOF1_DX_MM       50.0f
+#define TOF1_DY_MM      -40.0f
+#define TOF1_YAW_DEG    -40.0f
+#define TOF1_ADDR        0x56
+
+#define TOF2_XSHUT_PIN    40
+#define TOF2_DX_MM       30.0f
+#define TOF2_DY_MM       60.0f
+#define TOF2_YAW_DEG     90.0f
+#define TOF2_ADDR        0x58
+
+#define TOF3_XSHUT_PIN    41
+#define TOF3_DX_MM       30.0f
+#define TOF3_DY_MM      -60.0f
+#define TOF3_YAW_DEG    -90.0f
+#define TOF3_ADDR        0x5A
 
 // EKF noise
 #define EKF_Q_V_FRAC          0.15f
@@ -166,19 +189,3 @@ enum XiaoMode : uint8_t {
 #define EKF_Q_THETA_RAD       0.05f
 #define EKF_R_YAW_RAD2        0.0012f
 #define EKF_R_WALL_MM2      100.0f
-
-// Recalibration / stuck detection
-#define RECAL_STUCK_MS         1000
-#define RECAL_MIN_VCMD_MMPS      30
-#define RECAL_DPOSE_MM            5
-#define RECAL_WIN_XY_MM          60
-#define RECAL_WIN_TH_DEG         10
-#define RECAL_STEP_XY_MM         15
-#define RECAL_STEP_TH_DEG         2
-
-// EEPROM
-#define EEPROM_MAP_BASE       0x0020
-#define EEPROM_MAP_MAGIC      0xE7ACC001UL
-#define EEPROM_MAP_VERSION       1
-#define MAP_CHECKPOINT_MS    30000
-#define MAP_CHECKPOINT_MIN_DIRTY 60

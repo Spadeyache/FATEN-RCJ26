@@ -1,19 +1,18 @@
 #pragma once
 
 // =============================================================================
-//  Processing::Mapping — orchestrates the evac-zone mapping pipeline.
+//  Processing::Mapping — evac-zone pose estimator (Phase 0).
 //
-//  init():
-//    Optionally restores map + pose from EEPROM, snapshots IMU yaw as θ=0,
-//    brings up ToF sensors.
+//  init():  pose at the entrance, snapshots IMU yaw as θ=0, brings up ToF.
 //
 //  tick(): each call does, in order:
 //    1. posePredict()    using motor command + dt
 //    2. poseUpdateYaw()  from Sensors::IMU
-//    3. ToF poll → log-odds integration + ray buffer for scan-match
-//    4. maybeRecalibrate() + maybeCheckpoint()
 //
-//  handleSerial(c): debug — 'm' = ASCII map dump, 'p' = pose print.
+//  handleSerial(c): debug — 'p' = pose print, 't' = raw ToF distance dump.
+//
+//  Removed in Phase 0 (to be re-added incrementally): EEPROM persistence,
+//  occupancy grid + ToF integration, and scan-match recalibration.
 // =============================================================================
 
 #include "Pose.h"

@@ -1,5 +1,6 @@
 #include "vision.h"
 #include "config.h"
+#include "serial_print.h"
 #include <Arduino.h>
 
 #define boxlength 5 //must be odd
@@ -241,7 +242,7 @@ uint8_t rgbToGray(uint8_t r, uint8_t g, uint8_t b) {
 
 void scanRow(camera_fb_t* fb, uint8_t y, uint8_t xMin, uint8_t xMax, cameraData* out) {
     for (uint8_t x = xMin; x <= xMax; x++) {
-        out[x] = updateRawGrayHSV(fb, x, y);
+        out[x] = updateRawGrayHSV(fb, x, y, SPRINT_RESULTS);
     }
 }
 

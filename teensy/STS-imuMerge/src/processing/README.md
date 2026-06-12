@@ -34,7 +34,4 @@ Processing may call `sensors/` and `drivers/`. It must not include from
 | `XiaoDecode.{h,cpp}` | Reads XIAO_link cache → `xiaoCommand`, `lineError`, `gapAngle` |
 | `K230Decode.{h,cpp}` | Stream parser for K230D frames → `detections[]` |
 | `Pose.{h,cpp}` | 3-state EKF (x, y, θ) |
-| `MapGrid.{h,cpp}` | 40×40 occupancy + semantic grid |
-| `MapPersist.{h,cpp}` | EEPROM checkpoint of map + pose |
-| `Recalibrate.{h,cpp}` | Stuck detection + scan-match snap |
-| `Mapping.{h,cpp}` | Orchestrator: predict → update → integrate → checkpoint |
+| `Mapping.{h,cpp}` | Pose estimator (Phase 0): predict + yaw update |

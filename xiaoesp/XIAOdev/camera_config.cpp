@@ -49,7 +49,7 @@ bool Camera_Init() {
                 
         // --- Manual exposure ---
         s->set_exposure_ctrl(s, 0);    // Disable AEC (0 = Manual)
-        s->set_aec_value(s, 30);      // 20  Manual exposure: 0 to 1200 (Higher = brighter/slower shutter)
+        s->set_aec_value(s, 600);      // 30  Manual exposure: 0 to 1200 (Higher = brighter/slower shutter)
         s->set_aec2(s, 0);             // Disable night-mode AEC when in manual
 
         // --- Manual gain ---
