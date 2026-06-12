@@ -14,7 +14,7 @@
 // =============================================================================
 #define PRINT_STATE      1   // state transitions
 #define PRINT_IMU        0   // pitch/roll/yaw at 10 Hz
-#define PRINT_XIAO       0   // CommandFilter votes + xiaoCommand
+#define PRINT_XIAO       1   // CommandFilter votes + xiaoCommand
 #define PRINT_K230       0   // K230 detections
 #define PRINT_PID        1   // line PID internals
 #define PRINT_MAPPING    0   // mapping/EKF/checkpoint logs
@@ -50,10 +50,10 @@ enum XiaoMode : uint8_t {
 // =============================================================================
 #define MAX_MOTOR_SPEED     100
 
-#define PID_KP              0.3f    //3.0f
+#define PID_KP              0.9f    //3.0f tested for clopes P=0.3, D=0.0
 #define PID_KI              0.0f
-#define PID_KD              0.0f    //3.0f
-#define PID_BASE_SPEED      40.0f   //100f
+#define PID_KD              1.25f    //3.0f
+#define PID_BASE_SPEED      60.0f   //100f
 #define PID_LEFT_SCALE      1.7f
 #define PID_INTEGRAL_LIMIT  500.0f
 #define LINE_EMA_ALPHA      0.3f

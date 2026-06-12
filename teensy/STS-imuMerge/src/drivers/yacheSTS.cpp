@@ -30,10 +30,10 @@ FASTRUN void yacheSTS::power(float32_t lf, float32_t rf, float32_t lb, float32_t
 
     // Mapping: 100.0f -> 4000 (servo's full-speed register value).
     // Right-side signs (idx 1, 3) inverted so a positive arg drives forward.
-    _speeds[0] = (int16_t)(inputs[0] *  40.0f);
-    _speeds[1] = (int16_t)(inputs[1] * -40.0f);
-    _speeds[2] = (int16_t)(inputs[2] *  40.0f);
-    _speeds[3] = (int16_t)(inputs[3] * -40.0f);
+    _speeds[0] = (int16_t)(inputs[0] * -40.0f);
+    _speeds[1] = (int16_t)(inputs[1] *  40.0f);
+    _speeds[2] = (int16_t)(inputs[2] * -40.0f);
+    _speeds[3] = (int16_t)(inputs[3] *  40.0f);
 
     _sts.SyncWriteSpe(_ids, 4, _speeds, _accs);
 }

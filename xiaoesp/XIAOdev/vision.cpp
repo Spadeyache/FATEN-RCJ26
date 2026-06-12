@@ -138,15 +138,15 @@ cameraData updateRawGrayHSV(camera_fb_t* fb, uint8_t coordX, uint8_t coordY, boo
     // 3. Convert averaged RGB to HSV (Applying software WB inside)
     HSV hsv = rgb888_to_hsv(avgR, avgG, avgB);
 
-    if (print){
-        // 4. Print unified line
-        Serial.printf(
-            "PRE_CALIB:[R:%3d G:%3d B:%3d] | AVG_BOX:[R:%3d G:%3d B:%3d Gray:%3d] | HSV:[H:%3d S:%3d V:%3d]\n",
-            preR, preG, preB,
-            avgR, avgG, avgB, gray,
-            hsv.h, hsv.s, hsv.v
-        );
-    }
+    // if (print){
+    //     // 4. Print unified line
+    //     Serial.printf(
+    //         "PRE_CALIB:[R:%3d G:%3d B:%3d] | AVG_BOX:[R:%3d G:%3d B:%3d Gray:%3d] | HSV:[H:%3d S:%3d V:%3d]\n",
+    //         preR, preG, preB,
+    //         avgR, avgG, avgB, gray,
+    //         hsv.h, hsv.s, hsv.v
+    //     );
+    // }
 
     
     res.gray = gray;

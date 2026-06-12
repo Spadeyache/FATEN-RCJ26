@@ -11,19 +11,12 @@
 #include "ModeGap.h"
 // #include "wifi_config.h"
 
-// ── Output mode ────────────────────────────────────────────────────────────────
-// STREAM  →  binary camera frames over Serial (use with viewer)
-// LOG     →  human-readable debug text over Serial (use with serial monitor)
-// #define OUTPUT_STREAM
-#define OUTPUT_LOG
-
 // Stream FPS cap — limits USB interrupt pressure on Core 1.
 // Lower = less impact on loop speed. 10 is a good balance.
 #define STREAM_FPS 10
-// ──────────────────────────────────────────────────────────────────────────────
 
 #if defined(OUTPUT_STREAM) == defined(OUTPUT_LOG)
-  #error "Define exactly one of OUTPUT_STREAM or OUTPUT_LOG"
+  #error "Define exactly one of OUTPUT_STREAM or OUTPUT_LOG in config.h"
 #endif
 
 // ── Serial link to Teensy ──────────────────────────────────────────────────────

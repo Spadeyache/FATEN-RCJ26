@@ -2,7 +2,7 @@
 
 void setup() {
     Serial.begin(115200);  // USB Monitor
-    Serial4.begin(115200); // Pins 16 and 17
+    Serial4.begin(4000000); // Pins 16 and 17
     delay(1000);
     Serial.println("Teensy Online. Waiting for XIAO...");
 }
