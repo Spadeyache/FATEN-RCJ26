@@ -4,7 +4,7 @@
 //  Actions::Drive — 4-wheel motor control + line-follow PID.
 //
 //  Owns:
-//    - the yacheSTS instance (Serial2 @ 1 Mbps)
+//    - the yacheSTS instance (STS_SERIAL @ 1 Mbps)
 //    - the four per-wheel gain globals (volatile, written by motor())
 //    - the 9 ms IntervalTimer ISR that pushes gains to the servos
 //

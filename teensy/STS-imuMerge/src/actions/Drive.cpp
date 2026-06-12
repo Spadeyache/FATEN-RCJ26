@@ -1,6 +1,7 @@
 ﻿#include "Drive.h"
 #include "WeightDistribution.h"
 #include "../../config.h"
+#include "../../pins_teensy.h"
 #include "../drivers/yacheSTS.h"
 #include "../sensors/IMU.h"
 #include "../processing/XiaoDecode.h"
@@ -50,7 +51,11 @@ namespace {
 }
 
 void init() {
-    _sts.begin(Serial2);
+    // Enable the STS bus 74HCT126 buffer (held HIGH; write-only bus).
+    pinMode(STS_EN_PIN, OUTPUT);
+    digitalWrite(STS_EN_PIN, HIGH);
+
+    _sts.begin(STS_SERIAL);
     _sts.setWheelMode(true);
     _controlTimer.begin(motorOutput, 9000);
 }

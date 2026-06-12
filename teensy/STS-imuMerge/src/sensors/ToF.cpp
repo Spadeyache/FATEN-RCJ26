@@ -1,8 +1,9 @@
 #include "ToF.h"
+#include "../../pins_teensy.h"
 #include <Wire.h>
 
 // =============================================================================
-//  Sensors::ToF — 4x VL53L7CX on Wire1.
+//  Sensors::ToF — 4x VL53L7CX on TOF_WIRE (primary I2C / Wire0).
 //
 //  All VL53L7CX power up at the same default I2C address (0x52). To run several
 //  on one bus we hold every sensor in reset via its XSHUT pin, then bring them
@@ -20,10 +21,10 @@ namespace ToF {
 namespace {
     // lpn=-1: we drive XSHUT ourselves, so the driver must not toggle it.
     yacheVL53L7CX _tof[TOF_COUNT] = {
-        yacheVL53L7CX(Wire1, -1, -1),
-        yacheVL53L7CX(Wire1, -1, -1),
-        yacheVL53L7CX(Wire1, -1, -1),
-        yacheVL53L7CX(Wire1, -1, -1),
+        yacheVL53L7CX(TOF_WIRE, -1, -1),
+        yacheVL53L7CX(TOF_WIRE, -1, -1),
+        yacheVL53L7CX(TOF_WIRE, -1, -1),
+        yacheVL53L7CX(TOF_WIRE, -1, -1),
     };
 
     // -1 = no XSHUT pin (sensor is always powered on).
@@ -50,7 +51,7 @@ namespace {
 
 void init() {
     if (_initialised) return;
-    Wire1.begin();   // idempotent — Sensors::IMU also calls this
+    TOF_WIRE.begin();   // primary I2C (Wire0); ToF has its own bus
 
     // 1. Hold every XSHUT sensor in reset (low = off). Sensors with no XSHUT
     //    (pin == -1) stay powered on at the default 0x52.

@@ -1,5 +1,6 @@
 ﻿#include "IMU.h"
 #include "../../config.h"
+#include "../../pins_teensy.h"
 #include "../drivers/yacheMPU6050.h"
 #include <Wire.h>
 
@@ -7,7 +8,7 @@ namespace Sensors {
 namespace IMU {
 
 namespace {
-    yacheMPU6050 _imu(Wire1);   // SCL1 = pin 17, SDA1 = pin 16
+    yacheMPU6050 _imu(IMU_WIRE);   // SCL1 = pin 17, SDA1 = pin 16
     float32_t    _pitch = 0.0f, _roll = 0.0f, _yaw = 0.0f;
 }
 

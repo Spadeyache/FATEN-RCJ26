@@ -9,6 +9,7 @@
 #include <Arduino.h>
 #include <SCServo.h>
 #include <arm_math.h>
+#include "../../pins_teensy.h"
 
 class yacheSTS {
     public:
@@ -23,7 +24,7 @@ class yacheSTS {
 
     private:
         SMS_STS _sts;
-        uint8_t _ids[4]    = {4, 1, 2, 3};   // FL, FR, BL, BR
+        uint8_t _ids[4]    = {STS_ID_FL, STS_ID_FR, STS_ID_BL, STS_ID_BR};   // FL, FR, BL, BR
         int16_t _speeds[4] = {0, 0, 0, 0};
         uint8_t _accs[4]   = {0, 0, 0, 0};
 };

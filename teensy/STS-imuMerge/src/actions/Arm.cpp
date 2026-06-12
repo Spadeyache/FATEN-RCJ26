@@ -12,7 +12,7 @@ namespace Arm {
 namespace {
     Servo              _grabServo0;
     Servo              _grabServo1;
-    IcsHardSerialClass _krs(&Serial1, PIN_74HCT126_EN, KRS_BAUD, KRS_TIMEOUT);
+    IcsHardSerialClass _krs(&KRS_SERIAL, KRS_EN_PIN, KRS_BAUD, KRS_TIMEOUT);
 }
 
 void attachGrabServos() {

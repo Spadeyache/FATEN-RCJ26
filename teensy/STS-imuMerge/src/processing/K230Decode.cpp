@@ -1,5 +1,6 @@
 #include "K230Decode.h"
 #include "../sensors/K230_link.h"
+#include "../../pins_teensy.h"
 
 #include <Arduino.h>
 
@@ -18,7 +19,7 @@ namespace {
     constexpr int16_t SENSOR_W = (int16_t)K230_FRAME_WIDTH;
     constexpr int16_t SENSOR_H = 480;
 
-    YacheK230D _k230d(Serial8);
+    YacheK230D _k230d(K230_SERIAL);
     Detection _detections[K230D_MAX_BOXES_RX];
     bool      _running = false;
     bool      _begun = false;

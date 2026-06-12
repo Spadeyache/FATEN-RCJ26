@@ -1,12 +1,13 @@
 ﻿#include "XIAO_link.h"
 #include "../../config.h"
+#include "../../pins_teensy.h"
 #include "../drivers/yacheEncodedSerial.h"
 
 namespace Sensors {
 namespace XIAO_link {
 
 namespace {
-    YacheEncodedSerial _xiao(Serial3);
+    YacheEncodedSerial _xiao(XIAO_SERIAL);
 }
 
 void init() {

@@ -21,7 +21,7 @@
 #include <Wire.h>
 #include <vl53l7cx_class.h>
 #include <arm_math.h>
-#include "../../config.h"
+#include "../../pins_teensy.h"
 
 class yacheVL53L7CX {
 public:

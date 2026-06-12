@@ -13,10 +13,10 @@
 //  Serial-print toggles — set to 0 to silence that module
 // =============================================================================
 #define PRINT_STATE      1   // state transitions
-#define PRINT_IMU        1   // pitch/roll/yaw at 10 Hz
+#define PRINT_IMU        0   // pitch/roll/yaw at 10 Hz
 #define PRINT_XIAO       0   // CommandFilter votes + xiaoCommand
-#define PRINT_K230       1   // K230 detections
-#define PRINT_PID        0   // line PID internals
+#define PRINT_K230       0   // K230 detections
+#define PRINT_PID        1   // line PID internals
 #define PRINT_MAPPING    0   // mapping/EKF/checkpoint logs
 #define PRINT_ACTIONS    0   // turn / forward / arm action logs
 #define PRINT_TOUCH      0   // touchfront + conduct triggers
@@ -42,8 +42,8 @@ enum XiaoMode : uint8_t {
 
 #define KRS_BAUD            115200UL
 #define KRS_TIMEOUT         400      // ms
-#define KRS_ID              1
 #define KRS_SPD             43       // 1-127
+//   KRS_ID and serial port live in pins_teensy.h (hardware map)
 
 // =============================================================================
 //  Motor + line-follow PID
@@ -141,47 +141,8 @@ enum XiaoMode : uint8_t {
 #define ENTRANCE_X_MM         0.0f
 #define ENTRANCE_Y_MM         0.0f
 
-// ToF (VL53L7CX) — 4-sensor array on Wire1.
-// All sensors share the default address (0x52), so at boot each XSHUT pin is
-// used to power them up one at a time and assign a unique I2C address.
-#define TOF_COUNT              4
-#define TOF_RES                8        // 8x8 multizone
-#define TOF_MAX_MM          1320
-#define TOF_MIN_MM            20
-#define TOF_FREQ_HZ           15
-#define TOF_FOV_DEG         60.0f
-
-// Per-sensor config (index 0..3). Adjust to your physical mount.
-//   XSHUT : Teensy pin that holds this sensor in reset at boot.
-//           Use -1 for a sensor with NO XSHUT wired (always powered on).
-//           Sensor 0 has no XSHUT, so it is configured FIRST and moved off the
-//           default 0x52 before any XSHUT sensor is woken (avoids a collision).
-//   DX/DY : sensor origin in the robot frame (mm); +x forward, +y left
-//   YAW   : sensor facing in the robot frame (deg); 0=forward, +90=left, -90=right
-//   ADDR  : unique 8-bit I2C address assigned at boot (default chip addr is 0x52)
-#define TOF0_XSHUT_PIN   -1
-#define TOF0_DX_MM       50.0f
-#define TOF0_DY_MM       40.0f
-#define TOF0_YAW_DEG     40.0f
-#define TOF0_ADDR        0x54
-
-#define TOF1_XSHUT_PIN    39
-#define TOF1_DX_MM       50.0f
-#define TOF1_DY_MM      -40.0f
-#define TOF1_YAW_DEG    -40.0f
-#define TOF1_ADDR        0x56
-
-#define TOF2_XSHUT_PIN    40
-#define TOF2_DX_MM       30.0f
-#define TOF2_DY_MM       60.0f
-#define TOF2_YAW_DEG     90.0f
-#define TOF2_ADDR        0x58
-
-#define TOF3_XSHUT_PIN    41
-#define TOF3_DX_MM       30.0f
-#define TOF3_DY_MM      -60.0f
-#define TOF3_YAW_DEG    -90.0f
-#define TOF3_ADDR        0x5A
+// ToF (VL53L7CX) hardware map — bus, XSHUT pins, I2C addresses, mount geometry,
+// and array config — now lives in pins_teensy.h (TOF_* / TOFn_* defines).
 
 // EKF noise
 #define EKF_Q_V_FRAC          0.15f
