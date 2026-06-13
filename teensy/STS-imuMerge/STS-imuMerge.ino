@@ -9,6 +9,9 @@
 #include "pins_teensy.h"
 
 #include "src/actions/Drive.h"
+#include "src/actions/Forward.h"
+#include "src/actions/Turn.h"
+
 #include "src/actions/Arm.h"
 #include "src/sensors/IMU.h"
 #include "src/sensors/Touch.h"
@@ -50,6 +53,10 @@ void loop() {
     // Actions::Drive::motorRaw(0, 100,0,100);
     // Actions::Drive::vibrateMotor(2, 100.0f, 6, 100);
     // Actions::Drive::motorRaw(100, 100,100,100);
+    // Actions::Forward::forward(100, 80);
+    // Actions::Turn::turn(90, 40);
+    // Actions::Drive::motorRaw(0, 0,0,0);
+    // delay(1500);
     // return;
     // ========================================================================
 

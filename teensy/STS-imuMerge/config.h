@@ -50,7 +50,7 @@ enum XiaoMode : uint8_t {
 // =============================================================================
 #define MAX_MOTOR_SPEED     100
 
-#define PID_KP              0.9f    //3.0f tested for clopes P=0.3, D=0.0
+#define PID_KP              0.7f    //3.0f tested for clopes P=0.3, D=0.0
 #define PID_KI              0.0f
 #define PID_KD              1.25f    //3.0f
 #define PID_BASE_SPEED      60.0f   //100f
@@ -68,23 +68,28 @@ enum XiaoMode : uint8_t {
 #define IMU_EMA_ALPHA       0.25f
 
 // =============================================================================
-//  Action: Turn — motor speeds + duration calibration
+//  Robot geometry — shared unit reference for Forward and Turn
 // =============================================================================
-#define TURN_UTURN_L       -70.0f
-#define TURN_UTURN_R        70.0f
-#define TURN_LEFT_L        -70.0f
-#define TURN_LEFT_R        100.0f
-#define TURN_RIGHT_L       100.0f
-#define TURN_RIGHT_R       -70.0f
+#define WHEEL_DIAMETER_MM      70.0f   // tyre outer diameter (mm) — physical reference
+                                       // Both Forward and Turn calibration constants are
+                                       // empirical at MAX_MOTOR_SPEED and scale linearly:
+                                       //   duration = constant × MAX_MOTOR_SPEED / speed
 
-#define TURN_UTURN_MS       3200
-#define TURN_MS_PER_DEG     11.2
+// =============================================================================
+//  Action: Turn — universal spin-in-place
+//   turn(angle_deg, speed = MAX_MOTOR_SPEED)
+//     angle_deg > 0 → right   |   angle_deg < 0 → left
+//     duration = |angle| × TURN_SPIN_MS_PER_DEG × MAX_MOTOR_SPEED / speed
+// =============================================================================
+#define TURN_SPIN_MS_PER_DEG   7.3f   // calibrated at MAX_MOTOR_SPEED, in-place spin
 
 // =============================================================================
 //  Action: Forward — distance/time calibration
+//   forward(speed, distance_mm)
+//     duration = distance_mm × FORWARD_MS_PER_MM × MAX_MOTOR_SPEED / speed
 // =============================================================================
-#define FORWARD_MS_PER_MM   7.7f
-#define FORWARD_YAW_KP      1.5f
+#define FORWARD_MS_PER_MM   4.4f   //now tuned for 50
+#define FORWARD_YAW_KP      1.5f  //not in use
 
 // =============================================================================
 //  State machine timings

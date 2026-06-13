@@ -89,6 +89,8 @@ namespace {
 }
 
 void onEnter() {
+    pinMode(LED_PIN, OUTPUT);
+    digitalWrite(LED_PIN, LOW);
 #if PRINT_STATE
     Serial.println("State: LINE_FOLLOW");
 #endif
@@ -105,42 +107,28 @@ void update() {
 
     const uint8_t cmd = Processing::XiaoDecode::command();
 
-    // U-turn fires immediately, then loops back.
-    // Inlined hardcoded U-turn: spin in place for TURN_UTURN_MS, draining the
-    // XIAO link so packets don't backlog. Blocking — no state-machine churn.
+    // U-turn: 180° spin using the universal turn().
     if (cmd == 1) {
 #if PRINT_ACTIONS
-        Serial.println("Action: U-Turn (inline)");
+        Serial.println("Action: U-Turn");
 #endif
-        Actions::Drive::motor(TURN_UTURN_L, TURN_UTURN_R);
-
-        const unsigned long start = millis();
-        unsigned long lastComms = 0;
-        while (millis() - start < (unsigned long)TURN_UTURN_MS) {
-            if (millis() - lastComms >= 20) {
-                Sensors::XIAO_link::tick();
-                Processing::XiaoDecode::tick();
-                lastComms = millis();
-            }
-        }
-
-        Actions::Drive::stop();
+        Actions::Turn::turn(180.0f, 60.0f);   // speed defaults to MAX_MOTOR_SPEED
         Processing::XiaoDecode::clearFilter();
         return;
     }
 
     // Green turns: short forward + 90Â° turn + cooldown.
     if (cmd == 2 && !_disableGreen) {
-        Actions::Forward::forward(70, 28);
-        Actions::Turn::turn(-90.0f);
+        Actions::Forward::forward(60, 35);
+        Actions::Turn::turn(-75.0f, 60.0f);
         _disableGreen      = true;
         _disableGreenStart = millis();
         Processing::XiaoDecode::clearFilter();
         return;
     }
     if (cmd == 3 && !_disableGreen) {
-        Actions::Forward::forward(70, 28);
-        Actions::Turn::turn(90.0f);
+        Actions::Forward::forward(60, 35);
+        Actions::Turn::turn(75.0f, 60.0f);
         _disableGreen      = true;
         _disableGreenStart = millis();
         Processing::XiaoDecode::clearFilter();
@@ -151,8 +139,13 @@ void update() {
     if (cmd == 5) { Actions::Drive::stop();
                     StateMachine::transitionTo(StateMachine::EVAC_ENTRY); return; }
 
+    // NoGreenIntersection
     if ((cmd == 6 || cmd == 7) && !_disableGreen) {
+        if (cmd == 7) {
+            digitalWrite(LED_PIN, HIGH);
+        }
         handleNoGreenIntersection();
+        digitalWrite(LED_PIN, LOW);   // ensure LED off after NOGI
         return;
     }
 
