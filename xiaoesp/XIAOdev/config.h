@@ -69,7 +69,7 @@
 // ── Mode 0 : Line Follow ─────────────────────────────────────────────────────
 #define LF_SILVER_PixCOUNT_THRESHOLD   4    // Min silver Pixel count → report FEAT_SILVER
 #define LF_RED_PixCOUNT_THRESHOLD      30   // Min red Pixel count → report FEAT_RED
-#define LF_BLACK_PixCOUNT_THRESHOLD    30   // Min black pixels → report FEAT_BLACK_INTERSECT
+#define LF_BLACK_PixCOUNT_THRESHOLD    35   // Min black pixels → report FEAT_BLACK_INTERSECT
 #define LF_GREEN_PixCOUNT_THRESHOLD    5    // pixels needed to confirm green
 
 // ── Mode 1 : Evac ────────────────────────────────────────────────────────────

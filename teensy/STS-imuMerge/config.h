@@ -50,11 +50,11 @@ enum XiaoMode : uint8_t {
 // =============================================================================
 #define MAX_MOTOR_SPEED     100
 
-#define PID_KP              0.7f    //3.0f tested for clopes P=0.3, D=0.0
+#define PID_KP              0.55f    //0.85f tested for clopes P=0.3, D=0.0
 #define PID_KI              0.0f
-#define PID_KD              1.25f    //3.0f
-#define PID_BASE_SPEED      60.0f   //100f
-#define PID_LEFT_SCALE      1.7f
+#define PID_KD              0.65f    //1.25f
+#define PID_BASE_SPEED      30.0f   //60f
+// #define PID_LEFT_SCALE      1.0f   //1.7f but I want to remove this
 #define PID_INTEGRAL_LIMIT  500.0f
 #define LINE_EMA_ALPHA      0.3f
 #define DERIV_EMA_ALPHA     0.4f

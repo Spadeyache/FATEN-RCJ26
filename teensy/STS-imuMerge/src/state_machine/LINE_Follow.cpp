@@ -99,7 +99,7 @@ void onEnter() {
 void update() {
     clearGreenIfElapsed();
 
-    // Front bumper has priority â€” hand off to the obstacle handler.
+    // Front bumper has priority hand off to the obstacle handler.
     if (Sensors::Touch::front()) {
         StateMachine::transitionTo(StateMachine::LINE_OBSTACLE);
         return;
@@ -117,7 +117,7 @@ void update() {
         return;
     }
 
-    // Green turns: short forward + 90Â° turn + cooldown.
+    // Green turns: short forward + 90° turn + cooldown.
     if (cmd == 2 && !_disableGreen) {
         Actions::Forward::forward(60, 35);
         Actions::Turn::turn(-75.0f, 60.0f);

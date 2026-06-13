@@ -112,8 +112,8 @@ FASTRUN void motorRaw(float32_t fl, float32_t fr, float32_t bl, float32_t br) {
 void runLinePID() {
     static float integral      = 0.0f;
     static float lastError     = 0.0f;
-    static float smoothedError = 0.0f;
-    static float smoothedDeriv = 0.0f;
+    // static float smoothedError = 0.0f;   // smoothing disabled
+    // static float smoothedDeriv = 0.0f;   // smoothing disabled
     static unsigned long lastTime = 0;
 
     unsigned long now = micros();
@@ -124,16 +124,25 @@ void runLinePID() {
     // Map 0..254 â†’ Â±200 so the PID gains match their hand-tuned scale.
     const float rawError = (Processing::XiaoDecode::lineError() - 127.0f) * (200.0f / 127.0f);
 
-    smoothedError = LINE_EMA_ALPHA * rawError + (1.0f - LINE_EMA_ALPHA) * smoothedError;
+    // --- Smoothing disabled: plain PID on the raw error/derivative. ---
+    // smoothedError = LINE_EMA_ALPHA * rawError + (1.0f - LINE_EMA_ALPHA) * smoothedError;
+    //
+    // const float rawDeriv = (smoothedError - lastError) / dt;
+    // smoothedDeriv  = DERIV_EMA_ALPHA * rawDeriv + (1.0f - DERIV_EMA_ALPHA) * smoothedDeriv;
+    // lastError = smoothedError;
+    //
+    // integral += smoothedError * dt;
+    // integral  = constrain(integral, -PID_INTEGRAL_LIMIT, PID_INTEGRAL_LIMIT);
+    //
+    // const float correction = PID_KP * smoothedError + PID_KI * integral + PID_KD * smoothedDeriv;
 
-    const float rawDeriv = (smoothedError - lastError) / dt;
-    smoothedDeriv  = DERIV_EMA_ALPHA * rawDeriv + (1.0f - DERIV_EMA_ALPHA) * smoothedDeriv;
-    lastError = smoothedError;
+    const float derivative = (rawError - lastError) / dt;
+    lastError = rawError;
 
-    integral += smoothedError * dt;
+    integral += rawError * dt;
     integral  = constrain(integral, -PID_INTEGRAL_LIMIT, PID_INTEGRAL_LIMIT);
 
-    const float correction = PID_KP * smoothedError + PID_KI * integral + PID_KD * smoothedDeriv;
+    const float correction = PID_KP * rawError + PID_KI * integral + PID_KD * derivative;
     const float pitchAdj   = (float)Sensors::IMU::getPitch() * IMU_PITCH_GAIN;
 
 #if SLOPE_TEST
@@ -153,42 +162,16 @@ void runLinePID() {
 
     motorRaw(fl, fr, bl, br);
 #else
-    const float leftSpeed  = PID_BASE_SPEED + correction * PID_LEFT_SCALE + pitchAdj;
-    const float rightSpeed = PID_BASE_SPEED - correction                  + pitchAdj;
+    const float leftSpeed  = PID_BASE_SPEED + correction + pitchAdj;
+    const float rightSpeed = PID_BASE_SPEED - correction + pitchAdj;
 
     motor(leftSpeed, rightSpeed);
 #endif
 
 #if PRINT_PID
-    Serial.printf("PID err:%.1f sErr:%.1f sDrv:%.1f corr:%.1f L:%.0f R:%.0f\n",
-                  rawError, smoothedError, smoothedDeriv, correction, leftSpeed, rightSpeed);
+    Serial.printf("PID err:%.1f drv:%.1f corr:%.1f L:%.0f R:%.0f\n",
+                  rawError, derivative, correction, leftSpeed, rightSpeed);
 #endif
-}
-
-void vibrateMotor(uint8_t motorIdx, float32_t amplitude, uint8_t cycles, uint32_t halfPeriodMs) {
-    if (motorIdx > 3) return;
-
-    // Snapshot all four gains so the other wheels stay put.
-    float32_t saved[4] = { _flGain, _frGain, _blGain, _brGain };
-    float32_t work[4];
-    for (int i = 0; i < 4; i++) work[i] = saved[i];
-
-    for (uint8_t c = 0; c < cycles; c++) {
-        work[motorIdx] = (c & 1) ? -amplitude : amplitude;
-        cli();
-        _flGain = work[0]; _frGain = work[1];
-        _blGain = work[2]; _brGain = work[3];
-        sei();
-        // Must hold each phase long enough for the servo's internal loop
-        // (~10 Hz = 100 ms) to actually execute the command before flipping.
-        delay(halfPeriodMs);
-    }
-
-    // Restore the original gains.
-    cli();
-    _flGain = saved[0]; _frGain = saved[1];
-    _blGain = saved[2]; _brGain = saved[3];
-    sei();
 }
 
 float32_t frontLeftGain()  { return _flGain; }
