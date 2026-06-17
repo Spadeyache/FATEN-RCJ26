@@ -31,7 +31,7 @@ FLASHMEM void setup() {
 
     Actions::Drive::init();
     // Actions::Arm::init();           // servos + KRS, sets initial pose
-    // Sensors::IMU::init();
+    Sensors::IMU::init();
     // Sensors::Touch::init();
     Sensors::XIAO_link::init();
     // Sensors::K230_link::init();
@@ -50,7 +50,10 @@ void loop() {
     // Comment this block out to return to normal line following.
     // Actions::Drive::motorRaw(30, -30, 100, -100);
     // Actions::Drive::motorRaw(0, 60, -70, 80);
-    // Actions::Drive::motorRaw(0, 100,0,100);
+    // Actions::Drive::motorRaw(-100, 100,0,0);
+    // delay(1000);
+    // Actions::Drive::motorRaw(40, -40,70,-70);
+    // delay(1000);
     // Actions::Drive::vibrateMotor(2, 100.0f, 6, 100);
     // Actions::Drive::motorRaw(100, 100,100,100);
     // Actions::Forward::forward(100, 80);
@@ -63,7 +66,7 @@ void loop() {
     // 1. Pump sensor I/O (raw bytes in/out).
     Sensors::XIAO_link::tick();
     // Sensors::K230_link::tick();
-    // Sensors::IMU::tick();
+    Sensors::IMU::tick();
     // Sensors::Touch::tick();
 
     // 2. Run processing layer (decode, filter, fuse).

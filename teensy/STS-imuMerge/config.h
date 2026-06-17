@@ -13,10 +13,10 @@
 //  Serial-print toggles — set to 0 to silence that module
 // =============================================================================
 #define PRINT_STATE      1   // state transitions
-#define PRINT_IMU        0   // pitch/roll/yaw at 10 Hz
+#define PRINT_IMU        1   // pitch/roll/yaw at 10 Hz
 #define PRINT_XIAO       1   // CommandFilter votes + xiaoCommand
 #define PRINT_K230       0   // K230 detections
-#define PRINT_PID        1   // line PID internals
+#define PRINT_PID        0   // line PID internals
 #define PRINT_MAPPING    0   // mapping/EKF/checkpoint logs
 #define PRINT_ACTIONS    0   // turn / forward / arm action logs
 #define PRINT_TOUCH      0   // touchfront + conduct triggers
@@ -46,26 +46,31 @@ enum XiaoMode : uint8_t {
 //   KRS_ID and serial port live in pins_teensy.h (hardware map)
 
 // =============================================================================
-//  Motor + line-follow PID
+//  Motor
 // =============================================================================
 #define MAX_MOTOR_SPEED     100
 
-#define PID_KP              0.55f    //0.85f tested for clopes P=0.3, D=0.0
-#define PID_KI              0.0f
-#define PID_KD              0.65f    //1.25f
-#define PID_BASE_SPEED      30.0f   //60f
-// #define PID_LEFT_SCALE      1.0f   //1.7f but I want to remove this
-#define PID_INTEGRAL_LIMIT  500.0f
-#define LINE_EMA_ALPHA      0.3f
-#define DERIV_EMA_ALPHA     0.4f
+// Line-follow PID gains, base speed (FRIC_SPEED_*), and smoothing alphas now
+// live in src/actions/Drive.cpp, next to the gravAdj/rotAxisAdj/frictionCircAdj
+// tuning constants.
 
 // =============================================================================
 //  IMU
 // =============================================================================
-#define CALIBRATE_IMU       0
+#define CALIBRATE_IMU       0   // 1 = calibrate at boot + save to EEPROM; 0 = load saved EEPROM offsets
 #define IMU_SAMPLE_RATE     200.0f
 #define IMU_PITCH_GAIN      0.0f
 #define IMU_EMA_ALPHA       0.25f
+
+// MPU6050 calibration offsets — fallback / initial-guess values (from IMU-01).
+// At boot they are overwritten by either the auto-calibration (CALIBRATE_IMU==1)
+// or the values loaded from EEPROM (CALIBRATE_IMU==0).
+#define IMU_AX_OFFSET       -4737
+#define IMU_AY_OFFSET        -374
+#define IMU_AZ_OFFSET         631
+#define IMU_GX_OFFSET          19
+#define IMU_GY_OFFSET          54
+#define IMU_GZ_OFFSET           2
 
 // =============================================================================
 //  Robot geometry — shared unit reference for Forward and Turn

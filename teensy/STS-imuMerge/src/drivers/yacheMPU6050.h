@@ -49,8 +49,8 @@ private:
     float32_t _pitch = 0.0f, _roll = 0.0f, _yaw = 0.0f;
     float32_t _yawZero = 0.0f, _pitchZero = 0.0f, _rollZero = 0.0f;
 
-    int16_t ax_offset = -4737, ay_offset = -374, az_offset = 631;
-    int16_t gx_offset =    19, gy_offset =   54, gz_offset =   2;
+    int16_t ax_offset = IMU_AX_OFFSET, ay_offset = IMU_AY_OFFSET, az_offset = IMU_AZ_OFFSET;
+    int16_t gx_offset = IMU_GX_OFFSET, gy_offset = IMU_GY_OFFSET, gz_offset = IMU_GZ_OFFSET;
 
     int32_t buffersize    = 1000;
     int16_t acel_deadzone = 8;

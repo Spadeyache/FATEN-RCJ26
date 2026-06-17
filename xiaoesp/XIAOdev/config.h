@@ -10,8 +10,8 @@
 //  Define exactly ONE:
 //    OUTPUT_STREAM → binary camera frames over Serial (use with HTML viewer)
 //    OUTPUT_LOG    → human-readable debug text over Serial (use with serial monitor)
-// #define OUTPUT_STREAM
-#define OUTPUT_LOG
+#define OUTPUT_STREAM
+// #define OUTPUT_LOG
 
 // ── Serial baud rates ────────────────────────────────────────────────────────
 #define SERIAL_DEBUG_BAUD    115200

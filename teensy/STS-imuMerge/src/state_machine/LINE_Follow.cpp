@@ -105,7 +105,13 @@ void update() {
         return;
     }
 
-    const uint8_t cmd = Processing::XiaoDecode::command();
+    // const uint8_t cmd = Processing::XiaoDecode::command();
+
+    // uint8_t cmd = Processing::XiaoDecode::command();
+    // if(cmd != 0 || cmd != 6 || cmd != 7){
+    //     cmd = 0;
+    // }
+    const uint8_t cmd = 0;
 
     // U-turn: 180° spin using the universal turn().
     if (cmd == 1) {

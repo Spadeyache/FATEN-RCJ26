@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RescueLine — Teensy / XIAO / K230D System Map</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<style>
+  :root{
+    --bg:#0d1117; --panel:#161b22; --panel2:#1c2430; --line:#30363d;
+    --txt:#e6edf3; --dim:#9da7b3; --accent:#58a6ff; --green:#3fb950;
+    --amber:#d29922; --red:#f85149; --purple:#bc8cff; --cyan:#39c5cf;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+       background:var(--bg);color:var(--txt);line-height:1.55;}
+  .wrap{display:flex;max-width:1500px;margin:0 auto;}
+  /* sidebar nav */
+  nav{position:sticky;top:0;align-self:flex-start;height:100vh;overflow-y:auto;
+      width:240px;flex:0 0 240px;padding:24px 16px;border-right:1px solid var(--line);
+      background:var(--panel);}
+  nav h1{font-size:15px;margin:0 0 4px;color:var(--accent);letter-spacing:.3px}
+  nav .sub{font-size:11px;color:var(--dim);margin-bottom:18px}
+  nav a{display:block;color:var(--dim);text-decoration:none;font-size:13px;
+        padding:6px 10px;border-radius:6px;margin:2px 0;border-left:2px solid transparent}
+  nav a:hover{color:var(--txt);background:var(--panel2)}
+  nav a.head{color:var(--txt);font-weight:600;margin-top:14px;font-size:12px;
+             text-transform:uppercase;letter-spacing:.6px;opacity:.7;pointer-events:none}
+  main{flex:1;padding:36px 48px;min-width:0}
+  section{margin-bottom:54px;scroll-margin-top:20px}
+  h2{font-size:24px;border-bottom:1px solid var(--line);padding-bottom:8px;margin-top:0;
+     color:var(--txt)}
+  h3{font-size:17px;color:var(--cyan);margin-top:28px}
+  p{color:var(--txt)}
+  .lead{color:var(--dim);font-size:15px;max-width:820px}
+  code{background:var(--panel2);padding:1px 6px;border-radius:4px;font-size:13px;
+       color:var(--purple);font-family:"SFMono-Regular",Consolas,monospace}
+  .mermaid{background:var(--panel);border:1px solid var(--line);border-radius:10px;
+           padding:18px;margin:18px 0;text-align:center;overflow-x:auto}
+  table{border-collapse:collapse;width:100%;margin:16px 0;font-size:13.5px}
+  th,td{border:1px solid var(--line);padding:8px 11px;text-align:left;vertical-align:top}
+  th{background:var(--panel2);color:var(--accent)}
+  tr:nth-child(even) td{background:var(--panel)}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;
+        padding:18px 22px;margin:16px 0}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px;margin:16px 0}
+  .grid .card{margin:0}
+  .tag{display:inline-block;font-size:11px;padding:2px 8px;border-radius:20px;
+       font-weight:600;letter-spacing:.3px}
+  .t-in{background:rgba(57,197,207,.15);color:var(--cyan);border:1px solid var(--cyan)}
+  .t-out{background:rgba(63,185,80,.15);color:var(--green);border:1px solid var(--green)}
+  .note{border-left:3px solid var(--amber);background:rgba(210,153,34,.08);
+        padding:12px 16px;border-radius:0 8px 8px 0;margin:16px 0;font-size:14px}
+  .note b{color:var(--amber)}
+  .danger{border-left-color:var(--red);background:rgba(248,81,73,.08)}
+  .danger b{color:var(--red)}
+  .ok{border-left-color:var(--green);background:rgba(63,185,80,.08)}
+  .ok b{color:var(--green)}
+  kbd{font-family:Consolas,monospace;color:var(--green)}
+  .mono{font-family:Consolas,monospace;font-size:13px}
+  .pill{font-size:12px;color:var(--dim)}
+  hr{border:none;border-top:1px solid var(--line);margin:40px 0}
+  .legend span{margin-right:18px;font-size:13px;color:var(--dim)}
+  .sw{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:5px;
+      vertical-align:middle}
+</style>
+</head>
+<body>
+<div class="wrap">
+<nav>
+  <h1>RescueLine</h1>
+  <div class="sub">Teensy 4.1 firmware · system map</div>
+  <a class="head">Overview</a>
+  <a href="#big">1 · The whole robot</a>
+  <a href="#layers">2 · 5-layer architecture</a>
+  <a href="#loop">3 · The main loop</a>
+  <a class="head">Data sources</a>
+  <a href="#xiao">4 · XIAO ESP32-S3 path</a>
+  <a href="#filter">5 · CommandFilter votes</a>
+  <a href="#k230">6 · K230D AI path</a>
+  <a href="#other">7 · IMU · ToF · Touch</a>
+  <a class="head">Decision &amp; action</a>
+  <a href="#sm">8 · State machine</a>
+  <a href="#line">9 · LINE_Follow logic</a>
+  <a href="#drive">10 · PID → 4 wheels</a>
+  <a class="head">Reference</a>
+  <a href="#active">11 · What's live now</a>
+</nav>
+
+<main>
+  <h2 style="border:none;margin-bottom:4px">How the Teensy, XIAO &amp; K230D work as one system</h2>
+  <p class="lead">A top-to-bottom map of the rescue robot's brain. The <b>Teensy 4.1</b> is the
+  conductor: it pulls in pre-chewed data from two smart co-processors (the <b>XIAO ESP32-S3</b>
+  camera and the <b>K230D</b> AI processor) plus its own onboard sensors, fuses and filters
+  everything, decides which behaviour to run, and finally drives four wheels. Read top to
+  bottom — each section zooms one level deeper.</p>
+
+  <div class="legend card" style="padding:12px 18px">
+    <span><span class="sw" style="background:#39c5cf"></span>Co-processor / sensor (input)</span>
+    <span><span class="sw" style="background:#bc8cff"></span>Teensy processing</span>
+    <span><span class="sw" style="background:#d29922"></span>Decision / state</span>
+    <span><span class="sw" style="background:#3fb950"></span>Actuator (output)</span>
+  </div>
+
+  <!-- ===================================================================== -->
+  <section id="big">
+    <h2>1 · The whole robot at a glance</h2>
+    <p class="lead">Everything the Teensy reads is already <i>simplified</i> by the time it
+    arrives. The XIAO does the heavy camera vision and hands over a few bytes; the K230D runs a
+    YOLO model and hands over bounding boxes. The Teensy never touches raw pixels — it works with
+    small, fast messages.</p>
+
+    <div class="mermaid">
+flowchart LR
+  subgraph SRC["INPUTS — smart co-processors & sensors"]
+    direction TB
+    XIAO["📷 XIAO ESP32-S3<br/><small>runs camera vision<br/>(line, green, red, silver, gap)</small>"]
+    K230["🧠 K230D AI processor<br/><small>YOLO model<br/>(victim bounding boxes)</small>"]
+    IMU["🧭 IMU MPU6050<br/><small>pitch / roll / yaw</small>"]
+    TOF["📏 ToF VL53L7CX<br/><small>distance / walls</small>"]
+    TCH["👆 Touch + conductive<br/><small>bump / wall contact</small>"]
+  end
+
+  subgraph TEENSY["TEENSY 4.1 — the conductor"]
+    direction TB
+    RX["Raw byte transport<br/><small>sensors/ layer</small>"]
+    PROC["Decode · filter · fuse<br/><small>processing/ layer</small>"]
+    STATE["State machine<br/><small>pick a behaviour</small>"]
+    ACT["Actions<br/><small>PID, turn, forward, arm</small>"]
+    RX --> PROC --> STATE --> ACT
+  end
+
+  subgraph OUT["OUTPUTS"]
+    direction TB
+    MOT["⚙️ 4× STS wheels<br/><small>FL FR BL BR</small>"]
+    ARM["🦾 KRS arm / gripper"]
+  end
+
+  XIAO -- "UART3 @ 4 Mbps<br/>register protocol" --> RX
+  K230 -- "UART8 @ 115k<br/>frame protocol" --> RX
+  IMU  -- "I²C" --> RX
+  TOF  -- "I²C" --> RX
+  TCH  -- "GPIO" --> RX
+  ACT -- "STS bus @ 1 Mbps" --> MOT
+  ACT -- "KRS bus" --> ARM
+  XIAO -. "mode cmd (LINE/EVAC/GAP)" .- PROC
+
+  classDef src fill:#102a2c,stroke:#39c5cf,color:#e6edf3;
+  classDef proc fill:#241a33,stroke:#bc8cff,color:#e6edf3;
+  classDef dec fill:#2b2410,stroke:#d29922,color:#e6edf3;
+  classDef out fill:#10271a,stroke:#3fb950,color:#e6edf3;
+  class XIAO,K230,IMU,TOF,TCH src;
+  class RX,PROC proc;
+  class STATE dec;
+  class ACT,MOT,ARM out;
+    </div>
+
+    <div class="note"><b>Key idea:</b> the Teensy is not doing image processing. The XIAO and
+    K230D are <i>offloaded brains</i> that pre-digest the camera into tiny messages. This keeps
+    the Teensy's control loop fast and deterministic.</div>
+  </section>
+
+  <!-- ===================================================================== -->
+  <section id="layers">
+    <h2>2 · The 5-layer architecture</h2>
+    <p class="lead">All firmware lives under <code>src/&lt;layer&gt;/</code>. The rule is strict:
+    <b>calls only flow downward</b>. A layer never calls a layer above it. This is what keeps the
+    "spaghetti" out — each box below only knows about the box beneath it.</p>
+
+    <div class="mermaid">
+flowchart TB
+  SM["<b>state_machine/</b><br/>orchestrates behaviour<br/><small>LINE_Follow · LINE_Gap · LINE_Obstacle · EVAC_*</small>"]
+  AC["<b>actions/</b><br/>blocking high-level motions<br/><small>Drive (PID) · Turn · Forward · Arm</small>"]
+  PR["<b>processing/</b><br/>decode · filter · fuse<br/><small>XiaoDecode · K230Decode · CommandFilter · Pose/EKF · Mapping</small>"]
+  SE["<b>sensors/</b><br/>raw I/O wrappers<br/><small>XIAO_link · K230_link · IMU · ToF · Touch</small>"]
+  DR["<b>drivers/</b><br/>per-chip register wrappers<br/><small>yacheSTS · yacheMPU6050 · yacheVL53L7CX · yacheEncodedSerial</small>"]
+  HW["🔌 hardware<br/><small>UART · I²C · GPIO</small>"]
+  SM --> AC --> PR --> SE --> DR --> HW
+
+  classDef dec fill:#2b2410,stroke:#d29922,color:#e6edf3;
+  classDef out fill:#10271a,stroke:#3fb950,color:#e6edf3;
+  classDef proc fill:#241a33,stroke:#bc8cff,color:#e6edf3;
+  classDef src fill:#102a2c,stroke:#39c5cf,color:#e6edf3;
+  classDef hw fill:#161b22,stroke:#30363d,color:#9da7b3;
+  class SM dec; class AC out; class PR proc; class SE,DR src; class HW hw;
+    </div>
+
+    <div class="grid">
+      <div class="card"><b style="color:var(--green)">actions/</b><br><span class="pill">Blocking motions you call and wait on: <code>Turn::turn(180,60)</code>, <code>Forward::forward(60,35)</code>, <code>Drive::runLinePID()</code>.</span></div>
+      <div class="card"><b style="color:var(--purple)">processing/</b><br><span class="pill">Turns raw bytes into <i>meaning</i>: a confirmed command code, a line error, a victim direction, a pose.</span></div>
+      <div class="card"><b style="color:var(--cyan)">sensors/</b><br><span class="pill">Just moves bytes in/out. <code>XIAO_link::get(reg)</code> / <code>send(reg,val)</code>. No interpretation.</span></div>
+      <div class="card"><b style="color:var(--cyan)">drivers/</b><br><span class="pill">Per-chip register code (the "yache" wrappers). Speaks the actual chip language.</span></div>
+    </div>
+    <p class="pill">Adding new code? A new chip → <code>drivers/</code>. Reading raw bytes → <code>sensors/</code>.
+    Decoding/fusing them → <code>processing/</code>. A motion primitive → <code>actions/</code>. A new behaviour → <code>state_machine/</code>.</p>
+  </section>
+
+  <!-- ===================================================================== -->
+  <section id="loop">
+    <h2>3 · The main loop — one pass, every cycle</h2>
+    <p class="lead"><code>STS-imuMerge.ino → loop()</code> is deliberately tiny. It runs the same
+    4-step pipeline forever: <b>pump I/O → process → handle debug → run the active state</b>.</p>
+
+    <div class="mermaid">
+flowchart LR
+  A["1 · Pump sensor I/O<br/><small>XIAO_link::tick()<br/>K230_link::tick()<br/>IMU / Touch tick()</small>"]
+  B["2 · Processing<br/><small>XiaoDecode::tick()<br/>K230Decode::tick()<br/>(decode + filter + fuse)</small>"]
+  C["3 · Debug serial<br/><small>'m' = map dump<br/>'p' = pose print</small>"]
+  D["4 · Run active state<br/><small>StateMachine::tick()<br/>→ dispatches to current state</small>"]
+  A --> B --> C --> D
+  D -. "loop forever" .-> A
+
+  classDef proc fill:#241a33,stroke:#bc8cff,color:#e6edf3;
+  classDef dec fill:#2b2410,stroke:#d29922,color:#e6edf3;
+  class A,B,C proc; class D dec;
+    </div>
+
+    <div class="card">
+      <span class="pill mono">
+      loop() {<br>
+      &nbsp;&nbsp;Sensors::XIAO_link::tick();&nbsp;&nbsp;<span style="color:var(--dim)">// 1 — drain RX into register cache</span><br>
+      &nbsp;&nbsp;Processing::XiaoDecode::tick();&nbsp;<span style="color:var(--dim)">// 2 — read cache, vote, expose lineError/command</span><br>
+      &nbsp;&nbsp;while (Serial.available()) Mapping::handleSerial(...);&nbsp;<span style="color:var(--dim)">// 3</span><br>
+      &nbsp;&nbsp;StateMachine::tick();&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:var(--dim)">// 4 — act</span><br>
+      }
+      </span>
+    </div>
+    <div class="note"><b>Why two steps per sensor?</b> Step 1 (<code>sensors/</code>) only moves
+    bytes — fast, non-blocking. Step 2 (<code>processing/</code>) interprets them. Splitting them
+    means the transport never blocks on decode logic, and decode always works on the freshest cache.</div>
+  </section>
+
+  <!-- ===================================================================== -->
+  <section id="xiao">
+    <h2>4 · The XIAO ESP32-S3 path <span class="tag t-in">primary vision input</span></h2>
+    <p class="lead">The XIAO runs the camera and boils each frame down to a handful of
+    <b>registers</b>. Communication is a tiny register protocol over UART3 at 4 Mbps using
+    <code>YacheEncodedSerial</code> — a 3-byte packet <code>[255, reg, value]</code>.</p>
+
+    <h3>The register protocol</h3>
+    <table>
+      <tr><th>Register</th><th>ID</th><th>Direction</th><th>Meaning</th></tr>
+      <tr><td><code>XIAO_REG_FEATURE</code></td><td>0x01</td><td><span class="tag t-in">Xiao → Teensy</span></td><td>Detected feature byte (green, red, silver, intersection, gap…) — the noisy raw vote</td></tr>
+      <tr><td><code>XIAO_REG_COM</code></td><td>0x02</td><td><span class="tag t-in">Xiao → Teensy</span></td><td>Line centre-of-mass, <code>0..254</code> (<b>127 = centred</b>) — the steering error</td></tr>
+      <tr><td><code>XIAO_REG_ANGLE</code></td><td>0x04</td><td><span class="tag t-in">Xiao → Teensy</span></td><td>Gap line angle, <code>0..254</code> (127 = 0°) — only meaningful in GAP mode</td></tr>
+      <tr><td><code>XIAO_REG_MODE</code></td><td>0x03</td><td><span class="tag t-out">Teensy → Xiao</span></td><td>Tells the XIAO which vision program to run (see below)</td></tr>
+    </table>
+
+    <h3>Teensy steers the XIAO's "mode"</h3>
+    <p>The Teensy can re-task the camera by writing <code>XIAO_REG_MODE</code>. This is the one
+    upward message — the state machine swaps the camera's job to match the behaviour it's running.</p>
+    <div class="grid">
+      <div class="card"><b>0 · LINE</b><br><span class="pill">Follow the black line, watch for green/red/silver/intersection glyphs.</span></div>
+      <div class="card"><b>1 · EVAC</b><br><span class="pill">Evacuation-zone vision.</span></div>
+      <div class="card"><b>2 · NOGI</b><br><span class="pill">No-green-intersection disambiguation (which arm of the cross to take).</span></div>
+      <div class="card"><b>3 · GAP</b><br><span class="pill">Line-gap mode — reports a gap angle to re-acquire the line.</span></div>
+    </div>
+
+    <h3>What the decode layer does with it</h3>
+    <div class="mermaid">
+flowchart LR
+  RAW["Register cache<br/><small>XIAO_link::get(reg)</small>"]
+  COM["lineError()<br/><small>= COM register<br/>updated EVERY loop</small>"]
+  ANG["gapAngle()<br/><small>= ANGLE register</small>"]
+  FEAT["FEATURE byte"]
+  FILT["CommandFilter<br/><small>majority vote @ 50 Hz<br/>(15-frame ring buffer)</small>"]
+  CMD["command()<br/><small>confirmed code 1–8</small>"]
+  RAW --> COM
+  RAW --> ANG
+  RAW --> FEAT --> FILT --> CMD
+
+  classDef proc fill:#241a33,stroke:#bc8cff,color:#e6edf3;
+  classDef src fill:#102a2c,stroke:#39c5cf,color:#e6edf3;
+  class RAW src; class COM,ANG,FEAT,FILT,CMD proc;
+    </div>
+    <div class="note"><b>Two speeds on purpose.</b> <code>lineError</code> (steering) is time-critical, so
+    it's read raw <i>every loop</i>. The <code>FEATURE</code> byte is noisy, so it's only trusted after
+    surviving a vote — see next section.</div>
+  </section>
+
+  <!-- ===================================================================== -->
+  <section id="filter">
+    <h2>5 · CommandFilter — turning noisy glyphs into trusted commands</h2>
+    <p class="lead">A single camera frame can lie (motion blur, glare). So the raw FEATURE byte is
+    never acted on directly. Instead, every value drops into a <b>15-slot ring buffer</b>, and a
+    command is only "confirmed" once it collects enough votes. Different events need different
+    thresholds — a U-turn must be very sure; a line-loss can react faster.</p>
+
+    <div class="mermaid">
+flowchart TB
+  IN["raw FEATURE byte<br/>(each 50 Hz tick)"]
+  Q["15-frame ring buffer<br/><small>oldest vote falls off</small>"]
+  TALLY["Tally votes per category<br/><small>left · right · u-turn · red · silver · black · no-line</small>"]
+  CHK{"reached<br/>threshold?"}
+  CONF["confirmed command 1–8"]
+  ZERO["0 — nothing confirmed yet"]
+  IN --> Q --> TALLY --> CHK
+  CHK -- yes --> CONF
+  CHK -- no --> ZERO
+
+  classDef proc fill:#241a33,stroke:#bc8cff,color:#e6edf3;
+  classDef dec fill:#2b2410,stroke:#d29922,color:#e6edf3;
+  class IN,Q,TALLY proc; class CHK dec; class CONF,ZERO proc;
+    </div>
+
+    <h3>Confirmed command codes &amp; what they trigger</h3>
+    <table>
+      <tr><th>Code</th><th>Meaning</th><th>Threshold</th><th>LINE_Follow reaction</th></tr>
+      <tr><td><b>1</b></td><td>U-turn glyph (green both sides)</td><td>≥2 u-turn glyphs, or strong dual-green</td><td>180° spin in place</td></tr>
+      <tr><td><b>2</b></td><td>Green left</td><td>4 votes</td><td>forward 35 mm + turn −75°, then green-cooldown</td></tr>
+      <tr><td><b>3</b></td><td>Green right</td><td>4 votes</td><td>forward 35 mm + turn +75°, then green-cooldown</td></tr>
+      <tr><td><b>4</b></td><td>Red (stop) tile</td><td>5 votes</td><td>→ <code>STALLED_RED</code> (idle until red clears)</td></tr>
+      <tr><td><b>5</b></td><td>Silver (evac entrance)</td><td>4 votes</td><td>→ <code>EVAC_ENTRY</code></td></tr>
+      <tr><td><b>6</b></td><td>No-green intersection</td><td>6 black votes, ≤2 green</td><td>NGI sub-sequence (stop, NOGI mode, resample, go straight)</td></tr>
+      <tr><td><b>7</b></td><td>NGI back-up variant</td><td>2 black, 0 green</td><td>NGI sub-sequence (90° branch — future work)</td></tr>
+      <tr><td><b>8</b></td><td>Sustained line loss</td><td>3 votes</td><td>→ <code>LINE_GAP</code></td></tr>
+      <tr><td><b>0</b></td><td>nothing confirmed</td><td>—</td><td>just run the line PID</td></tr>
+    </table>
+    <div class="note"><b>Clever bit:</b> the U-turn glyph (code 1) also counts as one vote toward
+    <i>both</i> left and right, so a normal single-side green approach can never accidentally cross
+    the U-turn threshold. Precedence: <b>red → silver → u-turn → green → intersection → no-line</b>.</div>
+  </section>
+
+  <!-- ===================================================================== -->
+  <section id="k230">
+    <h2>6 · The K230D AI path <span class="tag t-in">victim detection</span></h2>
+    <p class="lead">The K230D is a dedicated AI processor running a YOLO model. It streams
+    <b>bounding boxes</b> over UART8 at 115 kbps. The Teensy sends it a 1-byte command every
+    100 ms — <code>0x00</code> idle or <code>0x01</code> detect — and parses the frames that come back.</p>
+
+    <h3>Wire format (binary frame)</h3>
+    <div class="card mono" style="font-size:12.5px">
+      [0xAA][0x55][COUNT] ( [CLS][SCORE][X1hi][X1lo][Y1hi][Y1lo][X2hi][X2lo][Y2hi][Y2lo] ) × COUNT [CHKSUM]
+    </div>
+    <p class="pill">Each box = 10 bytes (class, score, and a hi/lo bounding rectangle).
+    <code>CHKSUM</code> = XOR of every byte from the <code>0xAA</code> header through the last box byte.
+    Frame parsing lives in <code>processing/K230Decode</code>; the <code>sensors/K230_link</code> layer
+    just buffers bytes and never understands framing.</p>
+
+    <div class="mermaid">
+flowchart LR
+  K["K230D YOLO"]
+  LINK["K230_link<br/><small>buffer RX bytes<br/>send 0x00/0x01 @ 10 Hz</small>"]
+  DEC["K230Decode<br/><small>find header · check COUNT<br/>verify XOR checksum</small>"]
+  BOX["decoded boxes<br/><small>cls · score · x1y1x2y2</small>"]
+  VIC["checkVictim()<br/><small>pick best silver/black</small>"]
+  GOAL["goalPOS<br/><small>direction = (cx−320)/320<br/>valid · cls · score</small>"]
+  K -- "UART8" --> LINK --> DEC --> BOX --> VIC --> GOAL
+  GOAL -.-> EVAC["used by EVAC_Search<br/>to drive toward a victim"]
+
+  classDef src fill:#102a2c,stroke:#39c5cf,color:#e6edf3;
+  classDef proc fill:#241a33,stroke:#bc8cff,color:#e6edf3;
+  classDef dec fill:#2b2410,stroke:#d29922,color:#e6edf3;
+  class K,LINK src; class DEC,BOX,VIC,GOAL proc; class EVAC dec;
+    </div>
+    <div class="note"><b>Class mapping is flipped</b> in the current model: raw <code>1 = silver</code>,
+    raw <code>0 = black</code>. <code>goalPOS.direction</code> is the normalised left/right offset of
+    the chosen victim in the 640-px frame — that's what the evac search state steers on.</div>
+  </section>
+
+  <!-- ===================================================================== -->
+  <section id="other">
+    <h2>7 · Onboard sensors — IMU · ToF · Touch</h2>
+    <p class="lead">Beyond the two camera co-processors, the Teensy reads three local sensors
+    directly. These feed slope compensation, evac-zone mapping, and obstacle handling.</p>
+    <div class="grid">
+      <div class="card">
+        <b style="color:var(--cyan)">🧭 IMU (MPU6050)</b>
+        <p class="pill">I²C. <code>yacheMPU6050</code> driver → <code>Sensors::IMU</code>. Provides pitch /
+        roll / yaw. Pitch can bias the wheel mix on slopes (<code>WeightDistribution</code> table);
+        yaw feeds the EVAC pose/EKF.</p>
+      </div>
+      <div class="card">
+        <b style="color:var(--cyan)">📏 ToF (VL53L7CX)</b>
+        <p class="pill">I²C multi-zone distance array. <code>yacheVL53L7CX</code> driver. Used in the
+        evacuation zone for wall ranging → <code>Pose</code>/EKF → <code>Mapping</code> (a 40×40 grid).</p>
+      </div>
+      <div class="card">
+        <b style="color:var(--cyan)">👆 Touch + conductive</b>
+        <p class="pill">GPIO. Front bumper has <b>top priority</b> in LINE_Follow — a bump immediately
+        hands off to <code>LINE_Obstacle</code> before any camera command is considered.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================================================================== -->
+  <section id="sm">
+    <h2>8 · The state machine — choosing a behaviour</h2>
+    <p class="lead">The robot is always in exactly one <b>state</b>. Each state is a namespace with
+    <code>onEnter()</code> + <code>update()</code>. <code>StateMachine::tick()</code> dispatches to the
+    active state every loop; a state requests a change with <code>transitionTo(NEXT)</code>, which is
+    applied at the start of the next tick (and fires the new state's <code>onEnter()</code>).</p>
+
+    <div class="mermaid">
+stateDiagram-v2
+  [*] --> LINE_FOLLOW
+  LINE_FOLLOW --> LINE_OBSTACLE: touch front bumper
+  LINE_FOLLOW --> LINE_GAP: cmd 8 (line lost)
+  LINE_FOLLOW --> STALLED_RED: cmd 4 (red tile)
+  LINE_FOLLOW --> EVAC_ENTRY: cmd 5 (silver)
+  LINE_OBSTACLE --> LINE_FOLLOW: obstacle cleared
+  LINE_GAP --> LINE_FOLLOW: line re-acquired
+  STALLED_RED --> LINE_FOLLOW: red clears (cmd ≠ 4)
+  EVAC_ENTRY --> EVAC_SEARCH
+  EVAC_SEARCH --> EVAC_DEPLOY: victim reached
+  EVAC_DEPLOY --> EVAC_EXIT: victim dropped
+  EVAC_EXIT --> LINE_FOLLOW: back on the line
+
+  note right of LINE_FOLLOW
+    cmd 1/2/3 (U-turn, green L/R)
+    are handled INLINE here —
+    they act but stay in LINE_FOLLOW
+  end note
+    </div>
+
+    <div class="grid">
+      <div class="card"><b style="color:var(--amber)">LINE_*</b><br><span class="pill">The competition course: follow line, cross gaps, dodge obstacles, obey green/red glyphs.</span></div>
+      <div class="card"><b style="color:var(--amber)">EVAC_*</b><br><span class="pill">The evacuation zone: enter → search victims (K230D) → deploy in safe corner → exit → rejoin line.</span></div>
+      <div class="card"><b style="color:var(--amber)">STALLED_RED</b><br><span class="pill">No file — handled inline. Just stops until the XIAO stops reporting red.</span></div>
+    </div>
+  </section>
+
+  <!-- ===================================================================== -->
+  <section id="line">
+    <h2>9 · Inside LINE_Follow — priority dispatch</h2>
+    <p class="lead">This is the default state and the clearest example of how a command turns into
+    motion. Every tick it checks possibilities <b>in strict priority order</b> and acts on the first
+    match; if nothing matches it just runs the PID.</p>
+
+    <div class="mermaid">
+flowchart TB
+  T["LINE_Follow::update()"]
+  G{"green cooldown<br/>elapsed?"}
+  TCH{"touch front?"}
+  C{"confirmed<br/>command?"}
+  U["cmd 1 → 180° U-turn<br/><small>(inline, stay in state)</small>"]
+  GR["cmd 2/3 → fwd + 90° green turn<br/><small>start cooldown</small>"]
+  RED["cmd 4 → STALLED_RED"]
+  EV["cmd 5 → EVAC_ENTRY"]
+  NGI["cmd 6/7 → no-green-intersection seq<br/><small>stop · NOGI mode · resample · go</small>"]
+  GAP["cmd 8 → LINE_GAP"]
+  PID["default → Drive::runLinePID()"]
+
+  T --> G --> TCH
+  TCH -- yes --> OBS["→ LINE_OBSTACLE"]
+  TCH -- no --> C
+  C -- 1 --> U
+  C -- "2/3" --> GR
+  C -- 4 --> RED
+  C -- 5 --> EV
+  C -- "6/7" --> NGI
+  C -- 8 --> GAP
+  C -- "0 / none" --> PID
+
+  classDef dec fill:#2b2410,stroke:#d29922,color:#e6edf3;
+  classDef out fill:#10271a,stroke:#3fb950,color:#e6edf3;
+  class T,G,TCH,C dec; class U,GR,RED,EV,NGI,GAP,PID,OBS out;
+    </div>
+
+    <div class="note danger"><b>Heads-up — currently neutralised for bench tuning:</b> in
+    <code>LINE_Follow.cpp</code> the line reads <code>const uint8_t cmd = 0;</code> (the real
+    <code>XiaoDecode::command()</code> call right above it is commented out). So right now the robot
+    <i>ignores all glyph commands</i> and only does touch-handoff + pure PID. Re-enable the real
+    command read to restore green/red/silver/gap behaviour.</div>
+  </section>
+
+  <!-- ===================================================================== -->
+  <section id="drive">
+    <h2>10 · From line error to four wheels — the PID</h2>
+    <p class="lead">When no command fires, <code>Drive::runLinePID()</code> converts the XIAO's line
+    centre-of-mass into a left/right speed split. A background <b>9 ms IntervalTimer ISR</b> then
+    streams the four wheel gains to the STS servos — control math and the servo write are decoupled.</p>
+
+    <div class="mermaid">
+flowchart LR
+  E["lineError 0..254<br/><small>127 = centred</small>"]
+  M["rawError = (err−127)·200/127<br/><small>→ ±200 scale</small>"]
+  P["PID<br/><small>Kp 0.55 · Ki 0 · Kd 0.65</small>"]
+  MIX["asymmetric mix<br/><small>L = base + corr·0.65<br/>R = base − corr·1.3<br/>(clamp −55..35)</small>"]
+  MOT["motor(L,R)<br/><small>writes 4 gain globals</small>"]
+  ISR["⏱ 9 ms ISR<br/><small>_sts.power(FL,FR,BL,BR)</small>"]
+  W["⚙️ STS wheels"]
+  E --> M --> P --> MIX --> MOT -. "gains (volatile)" .-> ISR --> W
+
+  classDef proc fill:#241a33,stroke:#bc8cff,color:#e6edf3;
+  classDef out fill:#10271a,stroke:#3fb950,color:#e6edf3;
+  class E,M,P,MIX proc; class MOT,ISR,W out;
+    </div>
+
+    <div class="grid">
+      <div class="card"><b>Why asymmetric?</b><br><span class="pill">The L (×0.65) and R (×1.3)
+      correction scales were hand-tuned: on a left-up/right-down sideways slope, making the lower
+      side more aggressive (and allowing negative speed) tracked the line far better.</span></div>
+      <div class="card"><b>Why a 9 ms ISR?</b><br><span class="pill">The servo bus write happens on a
+      timer, not in the main loop. <code>motor()</code> just updates four <code>volatile</code> gains;
+      the ISR pushes them at a steady rate so wheel output never stutters when the loop is busy.</span></div>
+      <div class="card"><b>Slope / tilt comp</b><br><span class="pill">An optional path
+      (<code>imuCompensation</code> + <code>WeightDistribution</code> table) scales the unloaded
+      wheels by IMU pitch. Present but off by default in flat-line follow.</span></div>
+    </div>
+  </section>
+
+  <hr>
+
+  <!-- ===================================================================== -->
+  <section id="active">
+    <h2>11 · Map vs. reality — what's actually running today</h2>
+    <p class="lead">This diagram shows the <b>full designed system</b>. The current
+    <code>setup()</code>/<code>loop()</code> only switches on a subset while you tune the new robot.
+    Useful to know so the diagram doesn't mislead you on the bench.</p>
+    <table>
+      <tr><th>Subsystem</th><th>Status in code today</th></tr>
+      <tr><td>XIAO link + decode</td><td class="ok-cell"><span style="color:var(--green)">● live</span> — initialised and ticked every loop</td></tr>
+      <tr><td>Drive / PID / 4-wheel ISR</td><td><span style="color:var(--green)">● live</span></td></tr>
+      <tr><td>State machine</td><td><span style="color:var(--green)">● live</span> (starts in LINE_FOLLOW)</td></tr>
+      <tr><td>LINE_Follow glyph commands</td><td><span style="color:var(--amber)">◐ stubbed</span> — <code>cmd</code> hardcoded to 0; only touch + PID active</td></tr>
+      <tr><td>K230D link + decode</td><td><span style="color:var(--dim)">○ commented out</span> in setup/loop</td></tr>
+      <tr><td>IMU</td><td><span style="color:var(--dim)">○ commented out</span> in setup/loop</td></tr>
+      <tr><td>Touch sensors</td><td><span style="color:var(--dim)">○ commented out</span> in setup/loop</td></tr>
+      <tr><td>Arm / KRS servos</td><td><span style="color:var(--dim)">○ commented out</span> in setup</td></tr>
+    </table>
+    <div class="note ok"><b>To re-enable a subsystem:</b> uncomment its <code>::init()</code> in
+    <code>setup()</code> and its <code>::tick()</code> in <code>loop()</code>, and (for line glyphs)
+    restore the real <code>XiaoDecode::command()</code> read in <code>LINE_Follow::update()</code>.</div>
+
+    <p class="pill" style="margin-top:30px">Generated from the live source in
+    <code>teensy/STS-imuMerge/</code>. Open this file in any browser — the diagrams render via
+    Mermaid (needs internet for the one CDN script; everything else is offline).</p>
+  </section>
+</main>
+</div>
+
+<script>
+  mermaid.initialize({
+    startOnLoad:true,
+    theme:'dark',
+    flowchart:{ curve:'basis', htmlLabels:true, nodeSpacing:45, rankSpacing:55 },
+    themeVariables:{
+      fontFamily:'Segoe UI, sans-serif',
+      lineColor:'#6b7686',
+      primaryColor:'#1c2430',
+      primaryTextColor:'#e6edf3',
+      primaryBorderColor:'#30363d'
+    }
+  });
+</script>
+</body>
+</html>

@@ -19,13 +19,14 @@ void init() {
 
 void tick() {
     _imu.update();
-    _pitch = -_imu.getPitch();   // driver sign inverted vs robot convention
-    _roll  =  _imu.getRoll();
-    _yaw   =  _imu.getYaw();
+    // Raw driver angles — no sign flip, exactly as IMU-01 prints them.
+    _pitch = _imu.getPitch();
+    _roll  = _imu.getRoll();
+    _yaw   = _imu.getYaw();
 
 #if PRINT_IMU
     static uint32_t lastPrint = 0;
-    if (millis() - lastPrint >= 100) {
+    if (millis() - lastPrint >= 40) {   // ~25 Hz, matches IMU-01's per-loop print cadence
         Serial.printf("pitch:%.2f roll:%.2f yaw:%.2f\n",
                       (float)_pitch, (float)_roll, (float)_yaw);
         lastPrint = millis();

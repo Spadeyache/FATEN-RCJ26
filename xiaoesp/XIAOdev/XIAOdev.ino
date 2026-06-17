@@ -13,7 +13,7 @@
 
 // Stream FPS cap — limits USB interrupt pressure on Core 1.
 // Lower = less impact on loop speed. 10 is a good balance.
-#define STREAM_FPS 10
+#define STREAM_FPS 5
 
 #if defined(OUTPUT_STREAM) == defined(OUTPUT_LOG)
   #error "Define exactly one of OUTPUT_STREAM or OUTPUT_LOG in config.h"

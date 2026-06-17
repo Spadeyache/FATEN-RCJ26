@@ -9,22 +9,18 @@ yacheMPU6050::yacheMPU6050(TwoWire &w)
 
 void yacheMPU6050::begin() {
     _wire->begin();
-    _wire->setClock(400000);
 
+    // Bare initialize() only — matches IMU-01 (defaults: ±2g, ±250°/s, DLPF off).
     _mpu.initialize();
     if (!_mpu.testConnection()) {
         Serial.println("MPU6050 connection failed! Check wiring.");
         while (1);
     }
 
-    _mpu.setFullScaleAccelRange(MPU6050_ACCEL_FS_2);
-    _mpu.setFullScaleGyroRange(MPU6050_GYRO_FS_250);
-    _mpu.setDLPFMode(MPU6050_DLPF_BW_42);
-
 #if CALIBRATE_IMU
-    calibrate();
+    calibrate();              // measures offsets, applies them, saves to EEPROM
 #else
-    loadOffsetsFromEEPROM();
+    loadOffsetsFromEEPROM();  // reuse the last calibration stored in EEPROM
 #endif
     applyOffsets();
 
@@ -32,13 +28,8 @@ void yacheMPU6050::begin() {
     _microsPerReading = (uint32_t)(1000000.0f / IMU_SAMPLE_HZ);
     _microsPrevious   = micros();
 
+    // No settle / zeroAttitude — output is absolute, exactly like IMU-01.
     Serial.printf("IMU+Madgwick ready @ %.1f Hz.\n", IMU_SAMPLE_HZ);
-
-    Serial.println("IMU settling...");
-    uint32_t settleStart = millis();
-    while (millis() - settleStart < 2000) update();
-    zeroAttitude();
-    Serial.println("IMU ready.");
 }
 
 void yacheMPU6050::sampleAndFilterOnce() {
@@ -47,7 +38,12 @@ void yacheMPU6050::sampleAndFilterOnce() {
     _mpu.getMotion6(&axRaw, &ayRaw, &azRaw, &gxRaw, &gyRaw, &gzRaw);
     float ax = convertRawAccel(axRaw), ay = convertRawAccel(ayRaw), az = convertRawAccel(azRaw);
     float gx = convertRawGyro (gxRaw), gy = convertRawGyro (gyRaw), gz = convertRawGyro (gzRaw);
-    _filter.updateIMU(gx, gy, gz, ax, ay, az);
+    // Axis remap + 180° flip about sensor-Y (this mount = IMU-01 rotated 180°, X
+    // reversed). Negate the X and Z feeds on BOTH gyro and accel: two sign flips
+    // keep the frame right-handed (negating X alone would NOT), and this puts
+    // gravity back on filter +Z, so the rest attitude is ~0 — no 0→180 sweep.
+    _filter.updateIMU(-gy, gz, -gx, -ay, az, -ax);
+    // _filter.updateIMU(gy, gz, gx, ay, az, ax);
 
     _roll  = _filter.getRoll();
     _pitch = _filter.getPitch();
@@ -57,18 +53,43 @@ void yacheMPU6050::sampleAndFilterOnce() {
 }
 
 FASTRUN void yacheMPU6050::update() {
-    if ((int32_t)(micros() - _microsPrevious) < (int32_t)_microsPerReading) return;
+    const uint32_t now     = micros();
+    const uint32_t elapsed = now - _microsPrevious;
+    if (elapsed < _microsPerReading) return;     // ~25 Hz gate (bounds I2C load, like IMU-01)
+
+    // Feed Madgwick the REAL elapsed time, not a fixed 1/25 s. Our main loop does
+    // far more than IMU-01's bare loop, so the interval jitters; using the true dt
+    // keeps responsiveness independent of loop rate (kills the laggy / low-pass feel).
+    // begin() only updates invSampleFreq — it does NOT touch the quaternion.
+    const float dt = elapsed * 1e-6f;
+    _microsPrevious = now;                        // reset → no deficit build-up / catch-up bursts
+    _filter.begin(1.0f / dt);
 
     _mpu.getMotion6(&axRaw, &ayRaw, &azRaw, &gxRaw, &gyRaw, &gzRaw);
     float ax = convertRawAccel(axRaw), ay = convertRawAccel(ayRaw), az = convertRawAccel(azRaw);
     float gx = convertRawGyro (gxRaw), gy = convertRawGyro (gyRaw), gz = convertRawGyro (gzRaw);
-    _filter.updateIMU(gx, gy, gz, ax, ay, az);
+
+#if PRINT_IMU
+    // TEMP mount-check: at rest, the axis reading ~±16384 is the gravity axis.
+    static uint32_t _lpRaw = 0;
+    if (millis() - _lpRaw >= 200) {
+        Serial.printf("RAW a[%6d %6d %6d] g[%6d %6d %6d]\n",
+                      axRaw, ayRaw, azRaw, gxRaw, gyRaw, gzRaw);
+        _lpRaw = millis();
+    }
+#endif
+
+    // Axis remap + 180° flip about sensor-Y (this mount = IMU-01 rotated 180°, X
+    // reversed). Negate the X and Z feeds on BOTH gyro and accel: two sign flips
+    // keep the frame right-handed (negating X alone would NOT), and this puts
+    // gravity back on filter +Z, so the rest attitude is ~0 — no 0→180 sweep.
+    // _filter.updateIMU(gy, gz, gx, ay, az, ax);
+    _filter.updateIMU(-gy, gz, -gx, -ay, az, -ax);
+    
 
     _roll  = _filter.getRoll();
     _pitch = _filter.getPitch();
     _yaw   = _filter.getYaw();
-
-    _microsPrevious += _microsPerReading;
 }
 
 float32_t yacheMPU6050::getYaw() {
@@ -132,9 +153,14 @@ void yacheMPU6050::calibrate() {
 }
 
 void yacheMPU6050::runAutoCalibration() {
-    ax_offset = -mean_ax / 8;
+    // Gravity rests on X, but the mount may have it on +X or -X. Auto-detect the
+    // sign from the first reading so the offsets converge either way (handles a
+    // 180°-flipped sensor without code changes).
+    const int gTarget = (mean_ax >= 0) ? 16384 : -16384;
+
+    ax_offset = (gTarget - mean_ax) / 8;
     ay_offset = -mean_ay / 8;
-    az_offset = (16384 - mean_az) / 8;
+    az_offset = -mean_az / 8;
     gx_offset = -mean_gx / 4;
     gy_offset = -mean_gy / 4;
     gz_offset = -mean_gz / 4;
@@ -151,12 +177,12 @@ void yacheMPU6050::runAutoCalibration() {
 
         meansensors();
 
-        if (abs(mean_ax)         <= acel_deadzone) ready++; else ax_offset -= mean_ax / acel_deadzone;
-        if (abs(mean_ay)         <= acel_deadzone) ready++; else ay_offset -= mean_ay / acel_deadzone;
-        if (abs(16384 - mean_az) <= acel_deadzone) ready++; else az_offset += (16384 - mean_az) / acel_deadzone;
-        if (abs(mean_gx)         <= giro_deadzone) ready++; else gx_offset -= mean_gx / (giro_deadzone + 1);
-        if (abs(mean_gy)         <= giro_deadzone) ready++; else gy_offset -= mean_gy / (giro_deadzone + 1);
-        if (abs(mean_gz)         <= giro_deadzone) ready++; else gz_offset -= mean_gz / (giro_deadzone + 1);
+        if (abs(gTarget - mean_ax) <= acel_deadzone) ready++; else ax_offset += (gTarget - mean_ax) / acel_deadzone;
+        if (abs(mean_ay)           <= acel_deadzone) ready++; else ay_offset -= mean_ay / acel_deadzone;
+        if (abs(mean_az)           <= acel_deadzone) ready++; else az_offset -= mean_az / acel_deadzone;
+        if (abs(mean_gx)           <= giro_deadzone) ready++; else gx_offset -= mean_gx / (giro_deadzone + 1);
+        if (abs(mean_gy)           <= giro_deadzone) ready++; else gy_offset -= mean_gy / (giro_deadzone + 1);
+        if (abs(mean_gz)           <= giro_deadzone) ready++; else gz_offset -= mean_gz / (giro_deadzone + 1);
 
         if (ready == 6) break;
     }
