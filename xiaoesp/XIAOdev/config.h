@@ -92,3 +92,16 @@
 #define GAP_SCAN_ROW_COUNT    12   // Number of rows in window
 #define GAP_ANGLE_CENTER     127   // Encoded value for 0°
 #define GAP_ANGLE_SCALE     1.41f  // Degrees-to-counts: ±90° maps to ±127 counts
+
+// ── LineCount : border-crossing detection + in/out tracking ─────────────────
+// Rectangle whose border we sample (frame is 160 x 120; keep ≥2 px from edges
+// because updateRawGrayHSV() averages a 5x5 box). Widen beyond the 50–110
+// line-follow band so side branches are visible at the edge.
+#define LC_ROI_X_MIN          40
+#define LC_ROI_X_MAX         119
+#define LC_ROI_Y_TOP          15   // top edge (far from robot, small pixelY)
+#define LC_ROI_Y_BOT         65   // bottom edge (near robot, large pixelY)
+
+#define LC_RUN_MIN_LEN         3   // min contiguous black samples on the border to count a line (≈ line width)
+#define LC_MATCH_GATE         30   // max loop-distance (samples) for the tracker to accept a match
+#define LC_LOST_FRAMES         5   // frames the IN may stay unseen before the base case re-seeds

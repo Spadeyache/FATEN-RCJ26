@@ -9,11 +9,12 @@
 #include "ModeEvac.h"
 #include "ModeNoGI.h"
 #include "ModeGap.h"
+#include "LineCount.h"
 // #include "wifi_config.h"
 
 // Stream FPS cap — limits USB interrupt pressure on Core 1.
 // Lower = less impact on loop speed. 10 is a good balance.
-#define STREAM_FPS 5
+#define STREAM_FPS 3
 
 #if defined(OUTPUT_STREAM) == defined(OUTPUT_LOG)
   #error "Define exactly one of OUTPUT_STREAM or OUTPUT_LOG in config.h"
@@ -138,7 +139,13 @@ void streamTask(void* pvParameters) {
         uint16_t h   = streamH[idx];
         uint8_t* buf = streamBuf[idx];
 
+        // LineCount overlay line — ASCII, emitted under the mutex *before* the
+        // frame so the viewer parses it as text (never inside the pixel bytes).
+        char lcLine[220];
+        int  lcLen = lc_formatDebug(lcLine, sizeof(lcLine));
+
         xSemaphoreTake(serialMutex, portMAX_DELAY);
+        if (lcLen > 0) Serial.write((const uint8_t*)lcLine, lcLen);
         Serial.write(MAGIC_IMAGE,         4);
         Serial.write((uint8_t*)&w,        2);
         Serial.write((uint8_t*)&h,        2);

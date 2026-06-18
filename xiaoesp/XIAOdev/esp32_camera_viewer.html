@@ -542,6 +542,7 @@ canvas { display: block; image-rendering: pixelated; }
   </div>
 
   <div class="toolbar-spacer"></div>
+  <button id="lcBtn" class="sm active">Line: on</button>
   <button id="scaleBtn" class="sm">2×</button>
   <button id="saveBtn" class="sm">&#x1F4BE; Save frame</button>
 </div>
@@ -596,6 +597,7 @@ canvas { display: block; image-rendering: pixelated; }
       <span>Filter:</span>
       <button class="filter-btn active" data-tag="ALL">ALL</button>
       <button class="filter-btn" data-tag="RES">[RES]</button>
+      <button class="filter-btn" data-tag="LC">[LC]</button>
       <button class="filter-btn" data-tag="CLS">[CLS]</button>
       <button class="filter-btn" data-tag="PIX">[PIX]</button>
       <button class="filter-btn" data-tag="SIN">[SIN]</button>
@@ -817,12 +819,69 @@ function renderMarkerList() {
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
+//  LINECOUNT OVERLAY  — ROI box + in/out crossing points (from [LC] lines)
+// ═════════════════════════════════════════════════════════════════════════════
+let lcData = null;        // { box:[x0,y0,x1,y1], crossings:[{x,y,role}], inIdx, held, out }
+let lcOverlayOn = true;
+const LC_IN_COLOR  = '#2ecc71';   // green  = the line the robot is on (in)
+const LC_OUT_COLOR = '#e8840a';   // orange = branches (out)
+
+// [LC] box=20,15,139,110 n=3 in=1 held=0 out=2 p=120,110,i 80,15,o 40,60,o
+function parseLC(text) {
+  const box  = text.match(/box=(\d+),(\d+),(\d+),(\d+)/);
+  const inM  = text.match(/\bin=(-?\d+)/);
+  const held = text.match(/\bheld=(\d+)/);
+  const out  = text.match(/\bout=(\d+)/);
+  const crossings = [];
+  const pIdx = text.indexOf('p=');
+  if (pIdx >= 0) {
+    for (const p of text.slice(pIdx + 2).trim().split(/\s+/)) {
+      const m = p.match(/^(\d+),(\d+),([io])$/);
+      if (m) crossings.push({ x: +m[1], y: +m[2], role: m[3] });
+    }
+  }
+  lcData = {
+    box:   box ? [+box[1], +box[2], +box[3], +box[4]] : null,
+    crossings,
+    inIdx: inM  ? +inM[1]  : -1,
+    held:  held ? +held[1] : 0,
+    out:   out  ? +out[1]  : 0,
+  };
+  markDirty();
+}
+
+function drawLcOverlay() {
+  if (!lcOverlayOn || !lcData) return;
+  const d = lcData;
+  if (d.box) {
+    octx.strokeStyle = (d.held ? LC_OUT_COLOR : '#5b9cf6');
+    octx.lineWidth = 1;
+    octx.strokeRect(d.box[0] + .5, d.box[1] + .5, d.box[2] - d.box[0], d.box[3] - d.box[1]);
+  }
+  for (const c of d.crossings) {
+    octx.beginPath();
+    octx.arc(c.x + .5, c.y + .5, 2.6, 0, Math.PI * 2);
+    octx.fillStyle = (c.role === 'i') ? LC_IN_COLOR : LC_OUT_COLOR;
+    octx.fill();
+    octx.lineWidth = 0.6; octx.strokeStyle = 'rgba(0,0,0,0.6)'; octx.stroke();
+  }
+  const inC = d.crossings.find(c => c.role === 'i');
+  if (inC) {
+    octx.fillStyle = LC_IN_COLOR;
+    octx.font = '6px monospace';
+    octx.fillText('in ' + inC.x + ',' + inC.y,
+      Math.min(inC.x + 4, overlay.width - 34), Math.max(inC.y - 3, 7));
+  }
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
 //  OVERLAY  (skipped entirely when not dirty)
 // ═════════════════════════════════════════════════════════════════════════════
 function drawOverlay() {
   if (!overlayDirty) return;
   overlayDirty = false;
   octx.clearRect(0, 0, overlay.width, overlay.height);
+  drawLcOverlay();
   for (const { visible, x, y, w, h, color } of markers) {
     if (!visible) continue;
     octx.fillStyle = 'rgba(255,255,255,0.12)';
@@ -870,7 +929,7 @@ function classify(t) {
 }
 // ── Serial filter ─────────────────────────────────────────────────────────────
 // Known tag prefixes produced by serial_print.h on Xiao.
-const KNOWN_TAGS = ['[RES]', '[CLS]', '[PIX]', '[SIN]', '[SOUT]'];
+const KNOWN_TAGS = ['[RES]', '[LC]', '[CLS]', '[PIX]', '[SIN]', '[SOUT]'];
 let activeFilter = 'ALL';   // 'ALL' | '[RES]' | '[CLS]' | ... | 'UNTAGGED'
 
 function lineTag(text) {
@@ -963,6 +1022,8 @@ function appendLine(text) {
 
   // Update metrics panel from [RES] lines
   if (text.startsWith('[RES]')) updateMetrics(parseResLine(text));
+  // Update the line-detection overlay from [LC] lines
+  if (text.startsWith('[LC]')) parseLC(text);
 }
 
 autoScrollBtn.onclick = () => {
@@ -1030,6 +1091,14 @@ async function disconnect() {
 }
 const setStatus  = (cls,t) => { statusBadge.className = 'status '+cls; statusBadge.textContent = t; };
 const showError  = msg     => { errorHint.style.display = 'block'; errorHint.textContent = msg; };
+
+const lcBtn = document.getElementById('lcBtn');
+lcBtn.onclick = () => {
+  lcOverlayOn = !lcOverlayOn;
+  lcBtn.textContent = 'Line: ' + (lcOverlayOn ? 'on' : 'off');
+  lcBtn.classList.toggle('active', lcOverlayOn);
+  markDirty();
+};
 
 scaleBtn.onclick = () => {
   scale = scale===1 ? 2 : scale===2 ? 4 : 1;

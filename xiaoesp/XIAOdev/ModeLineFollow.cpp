@@ -2,6 +2,7 @@
 #include "vision.h"
 #include "config.h"
 #include "serial_print.h"
+#include "LineCount.h"
 
 // Width of the green-detection window on each side of the line
 static const uint8_t GREEN_WINDOW  = 25;
@@ -76,4 +77,19 @@ void modeLineFollowRun(camera_fb_t* fb, YacheEncodedSerial& teensy) {
     SPRINTF(SPRINT_RESULTS, "[RES]",
         "mode=0 feat=%d com=%.1f blk=%d sil=%d red=%d gL=%d gR=%d",
         featureId, centerOfMass, blackCount, silverCount, redCount, greenLeft, greenRight);
+
+    // ── 8. LineCount probe (debug only — does NOT affect what we send) ─────────
+    //  Layer 1: count all border crossings.  Layer 2: classify 1 in + N out.
+    //  Result is stored; in OUTPUT_STREAM the stream task emits the full "[LC]"
+    //  line under the serial mutex (so the viewer can overlay box + in/out).
+    LineCounts lc;
+    lc_detectCrossings(fb, lc);
+    LineClass cls = lc_updateIn(lc);
+    lc_storeDebug(lc, cls);
+#ifndef OUTPUT_STREAM
+    SPRINTF(SPRINT_RESULTS, "[LC]",
+        "n=%d in=%d held=%d out=%d inPos=%.0f inY=%d",
+        lc.count, cls.inIndex, cls.inHeld ? 1 : 0, cls.outCount, cls.inPos,
+        (cls.inIndex >= 0) ? lc.crossings[cls.inIndex].pixelY : 0);
+#endif
 }
