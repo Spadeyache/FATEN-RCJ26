@@ -38,7 +38,17 @@ static TaskHandle_t      streamTaskHandle = nullptr;
 
 static const uint8_t MAGIC_IMAGE[4] = {0xAA, 0x55, 0xBB, 0x44};
 
+// Fletcher-16 over the pixel payload. Cheap, and any dropped/duplicated byte
+// shifts the running sums so the viewer's recomputed value won't match → the
+// torn frame is discarded instead of rendered as garbage.
+static uint16_t fletcher16(const uint8_t* d, size_t n) {
+    uint16_t s1 = 0, s2 = 0;
+    for (size_t i = 0; i < n; i++) { s1 = (s1 + d[i]) % 255; s2 = (s2 + s1) % 255; }
+    return (uint16_t)((s2 << 8) | s1);
+}
+
 void streamTask(void* pvParameters);
+static void sendLineCountDebugOnly();
 
 // logf — only emits in OUTPUT_LOG builds; silent in OUTPUT_STREAM
 static void logf(const char* fmt, ...) {
@@ -65,6 +75,7 @@ void setup() {
     delay(500);
 
 #ifdef OUTPUT_STREAM
+#if STREAM_SEND_CAMERA_IMAGES
     if (!psramFound()) {
         Serial.println("FATAL: PSRAM not found");
         while (true) delay(1000);
@@ -83,6 +94,9 @@ void setup() {
     }
     xTaskCreatePinnedToCore(streamTask, "streamTask", 4096, nullptr, 1, &streamTaskHandle, 0);
     logf("Stream task on Core 0\n");
+#else
+    logf("Stream image payload disabled; sending [LC] debug only\n");
+#endif
 #endif
 }
 
@@ -108,20 +122,37 @@ void loop() {
     }
 
 #ifdef OUTPUT_STREAM
+#if STREAM_SEND_CAMERA_IMAGES
     // ── Hand frame to stream task (non-blocking) ──────────────────────────────
     streamW[writeIdx] = (uint16_t)fb->width;
     streamH[writeIdx] = (uint16_t)fb->height;
     memcpy(streamBuf[writeIdx], fb->buf, fb->len);
     uint8_t next = readIdx; readIdx = writeIdx; writeIdx = next;
     xSemaphoreGive(frameReady);
+#else
+    sendLineCountDebugOnly();
+#endif
 #endif
 
     Camera_Return(fb);
 }
 
+#ifdef OUTPUT_STREAM
+static void sendLineCountDebugOnly() {
+    static uint32_t lastSent = 0;
+    const uint32_t now = millis();
+    if ((uint32_t)(now - lastSent) < (1000UL / STREAM_FPS)) return;
+    lastSent = now;
+
+    char lcLine[320];
+    int lcLen = lc_formatDebug(lcLine, sizeof(lcLine));
+    if (lcLen > 0) Serial.write((const uint8_t*)lcLine, lcLen);
+}
+#endif
+
+#if defined(OUTPUT_STREAM) && STREAM_SEND_CAMERA_IMAGES
 // ── Stream task: Core 0 ────────────────────────────────────────────────────────
 void streamTask(void* pvParameters) {
-    static const int32_t ERR_ZERO = 0;
     const TickType_t minInterval = pdMS_TO_TICKS(1000 / STREAM_FPS);
     TickType_t lastSent = 0;
 
@@ -141,17 +172,24 @@ void streamTask(void* pvParameters) {
 
         // LineCount overlay line — ASCII, emitted under the mutex *before* the
         // frame so the viewer parses it as text (never inside the pixel bytes).
-        char lcLine[220];
+        char lcLine[320];
         int  lcLen = lc_formatDebug(lcLine, sizeof(lcLine));
+
+        // Frame integrity: send payload length + a Fletcher-16 checksum so the
+        // viewer can drop torn frames and resync instead of rendering garbage.
+        const uint32_t plen = (uint32_t)w * (uint32_t)h * 2UL;
+        const uint16_t crc  = fletcher16(buf, plen);
 
         xSemaphoreTake(serialMutex, portMAX_DELAY);
         if (lcLen > 0) Serial.write((const uint8_t*)lcLine, lcLen);
-        Serial.write(MAGIC_IMAGE,         4);
-        Serial.write((uint8_t*)&w,        2);
-        Serial.write((uint8_t*)&h,        2);
-        Serial.write((uint8_t*)&ERR_ZERO, 4);
-        Serial.write(buf,        FRAME_BYTES);
+        Serial.write(MAGIC_IMAGE,      4);
+        Serial.write((uint8_t*)&w,     2);
+        Serial.write((uint8_t*)&h,     2);
+        Serial.write((uint8_t*)&plen,  4);   // payload length (replaces old err field)
+        Serial.write(buf,     FRAME_BYTES);
+        Serial.write((uint8_t*)&crc,   2);   // checksum over the payload
         // No Serial.flush() — driver sends async; we release mutex immediately.
         xSemaphoreGive(serialMutex);
     }
 }
+#endif

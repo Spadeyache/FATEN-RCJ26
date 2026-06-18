@@ -66,30 +66,42 @@ void modeLineFollowRun(camera_fb_t* fb, YacheEncodedSerial& teensy) {
     if (redCount    > LF_RED_PixCOUNT_THRESHOLD)    featureId = FEAT_RED;
     if (silverCount > LF_SILVER_PixCOUNT_THRESHOLD) featureId = FEAT_SILVER;
 
-    // ── 6. Send to Teensy ─────────────────────────────────────────────────────
-    uint8_t scaledCOM = (uint8_t)constrain(
-        map((long)(centerOfMass * 10), (long)(SCAN_COL_MIN * 10), (long)(SCAN_COL_MAX * 10), 0, 254), 0, 254);
-
-    teensy.send(XIAO_REG_FEATURE, featureId);
-    teensy.send(XIAO_REG_COM,     scaledCOM);
-
-    // ── 7. Debug output ───────────────────────────────────────────────────────
-    SPRINTF(SPRINT_RESULTS, "[RES]",
-        "mode=0 feat=%d com=%.1f blk=%d sil=%d red=%d gL=%d gR=%d",
-        featureId, centerOfMass, blackCount, silverCount, redCount, greenLeft, greenRight);
-
-    // ── 8. LineCount probe (debug only — does NOT affect what we send) ─────────
-    //  Layer 1: count all border crossings.  Layer 2: classify 1 in + N out.
-    //  Result is stored; in OUTPUT_STREAM the stream task emits the full "[LC]"
-    //  line under the serial mutex (so the viewer can overlay box + in/out).
+    // ── 6. LineCount: in/out detection → focused-out → pixel lookahead error ──
+    //  Layer 1 counts border crossings, Layer 2 classifies 1 in + N out, then the
+    //  focused-out is the main steering target. The in-point is blended in only
+    //  as a small pixel-space stabilizer; no angle conversion is used here.
     LineCounts lc;
     lc_detectCrossings(fb, lc);
     LineClass cls = lc_updateIn(lc);
-    lc_storeDebug(lc, cls);
+    int fo = lc_focusedOut(lc, cls.inIndex);
+
+    static float s_lastErr = (float)LF_ERROR_CENTER;   // held across frames on loss
+    static float s_lastErrPx = 0.0f;
+    float pixelErr;
+    float errPx;
+    if (lc_slopeError(lc, cls.inIndex, fo, pixelErr, &errPx)) {
+        s_lastErr = pixelErr;
+        s_lastErrPx = errPx;
+    }  // else hold last
+    uint8_t errByte = (uint8_t)constrain((int)(s_lastErr + 0.5f), 0, 254);
+
+    lc_storeDebug(lc, cls, fo, errByte, s_lastErrPx);
+
+    // ── 7. Send to Teensy ─────────────────────────────────────────────────────
+    //  COM register now carries the pixel-space lookahead error (held on loss).
+    //  The row-55 center-of-mass is kept only for the green windows above.
+    teensy.send(XIAO_REG_FEATURE, featureId);
+    teensy.send(XIAO_REG_COM,     errByte);
+
+    // ── 8. Debug output ───────────────────────────────────────────────────────
+    SPRINTF(SPRINT_RESULTS, "[RES]",
+        "mode=0 feat=%d com=%.1f err=%d epx=%.1f blk=%d sil=%d red=%d gL=%d gR=%d",
+        featureId, centerOfMass, errByte, s_lastErrPx, blackCount, silverCount, redCount, greenLeft, greenRight);
 #ifndef OUTPUT_STREAM
+    int xIn = (cls.inIndex >= 0 && cls.inIndex < lc.count) ? lc.crossings[cls.inIndex].pixelX : -1;
+    int xOut = (fo >= 0 && fo < lc.count) ? lc.crossings[fo].pixelX : -1;
     SPRINTF(SPRINT_RESULTS, "[LC]",
-        "n=%d in=%d held=%d out=%d inPos=%.0f inY=%d",
-        lc.count, cls.inIndex, cls.inHeld ? 1 : 0, cls.outCount, cls.inPos,
-        (cls.inIndex >= 0) ? lc.crossings[cls.inIndex].pixelY : 0);
+        "n=%d in=%d fo=%d xi=%d xo=%d epx=%.1f err=%d held=%d out=%d",
+        lc.count, cls.inIndex, fo, xIn, xOut, s_lastErrPx, errByte, cls.inHeld ? 1 : 0, cls.outCount);
 #endif
 }

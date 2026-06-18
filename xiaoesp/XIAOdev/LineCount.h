@@ -71,13 +71,23 @@ LineClass lc_updateIn(const LineCounts& lc);
 // re-seeds from the base case.
 void lc_resetTracking();
 
+// ── Line-follow error ────────────────────────────────────────────────────────
+// Focused-out crossing: the out (any crossing that is not `inIndex`) closest to
+// the view centre, tie-broken toward the higher one (smaller pixelY). -1 if none.
+int  lc_focusedOut(const LineCounts& lc, int inIndex);
+
+// Line error (0..254, 127 = centred) from pixel-space lookahead/position error.
+// The focused out-point is the main target; the in-point is a small stabilizer.
+// Returns false when in/out are not both available (caller should hold last).
+bool lc_slopeError(const LineCounts& lc, int inIndex, int outIndex, float& errOut, float* errPxOut = nullptr);
+
 // ── Debug bridge (for the esp32_camera_viewer overlay) ───────────────────────
 // The mode (Core 1) stores the latest result; the stream task (Core 0) formats
 // it into a "[LC] ..." text line and emits it under the serial mutex, so the
 // viewer can draw the ROI box + in/out crossing points over the camera image.
-void lc_storeDebug(const LineCounts& lc, const LineClass& cls);
+void lc_storeDebug(const LineCounts& lc, const LineClass& cls, int focusedOut, int errByte, float errPx);
 
-// Build a "[LC] box=.. n=.. in=.. held=.. out=.. p=x,y,i x,y,o .." line
+// Build a "[LC] box=.. n=.. in=.. fo=.. xi=.. xo=.. epx=.. err=.. ..." line
 // (newline-terminated, ASCII only) into buf. Returns bytes written, or 0.
 int  lc_formatDebug(char* buf, int bufLen);
 

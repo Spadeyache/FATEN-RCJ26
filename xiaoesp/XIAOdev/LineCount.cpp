@@ -27,15 +27,24 @@ static inline void lc_sample(camera_fb_t* fb, int x, int y, uint8_t edge, int i)
     s_edge[i]  = edge;
 }
 
-// Append a crossing (midpoint of a black run) to the output list.
-static inline void lc_registerCrossing(LineCounts& out, int midIdx, int len) {
+// Append a crossing (at loop sample `idx`) to the output list.
+static inline void lc_registerCrossing(LineCounts& out, int idx, int len) {
     if (out.count >= LC_MAX_CROSSINGS) return;
     Crossing& c = out.crossings[out.count++];
-    c.pos    = (float)midIdx;
-    c.edge   = s_edge[midIdx];
-    c.pixelX = s_px[midIdx];
-    c.pixelY = s_py[midIdx];
+    c.pos    = (float)idx;
+    c.edge   = s_edge[idx];
+    c.pixelX = s_px[idx];
+    c.pixelY = s_py[idx];
     c.width  = (uint8_t)(len > 255 ? 255 : len);
+}
+
+// Turn one black run into a single crossing at the run midpoint. Keep the
+// line-follow error path free of edge/side-line special cases: a line on the
+// side should naturally create a large pixel-position error. If intersection
+// counting later needs edge splitting, it should live in a separate scoped path.
+static void lc_emitRun(LineCounts& out, int start, int runStartK, int len, int P) {
+    if (len < LC_RUN_MIN_LEN) return;
+    lc_registerCrossing(out, (start + runStartK + len / 2) % P, len);
 }
 
 // ── Layer 1 ──────────────────────────────────────────────────────────────────
@@ -78,13 +87,11 @@ void lc_detectCrossings(camera_fb_t* fb, LineCounts& out) {
             if (len == 0) runStartK = k;
             len++;
         } else if (len > 0) {
-            if (len >= LC_RUN_MIN_LEN)
-                lc_registerCrossing(out, (start + runStartK + len / 2) % P, len);
+            lc_emitRun(out, start, runStartK, len, P);
             len = 0;
         }
     }
-    if (len >= LC_RUN_MIN_LEN)
-        lc_registerCrossing(out, (start + runStartK + len / 2) % P, len);
+    if (len > 0) lc_emitRun(out, start, runStartK, len, P);
 }
 
 // ── Layer 2 helpers ──────────────────────────────────────────────────────────
@@ -169,32 +176,85 @@ LineClass lc_updateIn(const LineCounts& lc) {
     return r;
 }
 
+// ── Line-follow error ────────────────────────────────────────────────────────
+int lc_focusedOut(const LineCounts& lc, int inIndex) {
+    int best = -1, bestDx = 1000;
+    uint8_t bestY = 0;
+    for (int i = 0; i < lc.count; i++) {
+        if (i == inIndex) continue;
+        int dx = (int)((float)lc.crossings[i].pixelX - LF_CENTER_X);
+        if (dx < 0) dx = -dx;
+        // most centered; tie → higher (smaller pixelY)
+        if (best < 0 || dx < bestDx ||
+            (dx == bestDx && lc.crossings[i].pixelY < bestY)) {
+            best = i; bestDx = dx; bestY = lc.crossings[i].pixelY;
+        }
+    }
+    return best;
+}
+
+bool lc_slopeError(const LineCounts& lc, int inIndex, int outIndex, float& errOut, float* errPxOut) {
+    if (inIndex < 0 || outIndex < 0) return false;
+
+    const Crossing& in  = lc.crossings[inIndex];
+    const Crossing& out = lc.crossings[outIndex];
+
+    // Pixel-space lookahead/position error, not an angle. The focused out-point
+    // is the main steering target; the in-point is blended in only to damp jitter.
+    float errPx =
+        (1.0f - LF_IN_BLEND) * ((float)out.pixelX - LF_CENTER_X)
+      + LF_IN_BLEND          * ((float)in.pixelX  - LF_CENTER_X);
+
+    float e = (float)LF_ERROR_CENTER + errPx * LF_PX_SCALE;
+
+    if (e < 0.0f)   e = 0.0f;
+    if (e > 254.0f) e = 254.0f;
+    if (errPxOut) *errPxOut = errPx;
+    errOut = e;
+    return true;
+}
+
 // ── Debug bridge ─────────────────────────────────────────────────────────────
 static LineCounts s_dbgLc;
 static LineClass  s_dbgCls;
+static int        s_dbgFo  = -1;
+static int        s_dbgErr = LF_ERROR_CENTER;
+static float      s_dbgErrPx = 0.0f;
 static bool       s_dbgValid = false;
 
-void lc_storeDebug(const LineCounts& lc, const LineClass& cls) {
+void lc_storeDebug(const LineCounts& lc, const LineClass& cls, int focusedOut, int errByte, float errPx) {
     s_dbgLc    = lc;
     s_dbgCls   = cls;
+    s_dbgFo    = focusedOut;
+    s_dbgErr   = errByte;
+    s_dbgErrPx = errPx;
     s_dbgValid = true;
 }
 
 int lc_formatDebug(char* buf, int bufLen) {
     if (!s_dbgValid || bufLen < 48) return 0;
 
+    const int xi = (s_dbgCls.inIndex >= 0 && s_dbgCls.inIndex < s_dbgLc.count)
+        ? s_dbgLc.crossings[s_dbgCls.inIndex].pixelX : -1;
+    const int xo = (s_dbgFo >= 0 && s_dbgFo < s_dbgLc.count)
+        ? s_dbgLc.crossings[s_dbgFo].pixelX : -1;
+
     int o = snprintf(buf, bufLen,
-        "[LC] box=%d,%d,%d,%d n=%d in=%d held=%d out=%d p=",
+        "[LC] box=%d,%d,%d,%d n=%d in=%d fo=%d xi=%d xo=%d epx=%.1f err=%d held=%d out=%d p=",
         LC_ROI_X_MIN, LC_ROI_Y_TOP, LC_ROI_X_MAX, LC_ROI_Y_BOT,
-        s_dbgLc.count, s_dbgCls.inIndex, s_dbgCls.inHeld ? 1 : 0, s_dbgCls.outCount);
+        s_dbgLc.count, s_dbgCls.inIndex, s_dbgFo, xi, xo, s_dbgErrPx, s_dbgErr,
+        s_dbgCls.inHeld ? 1 : 0, s_dbgCls.outCount);
 
     int nshow = s_dbgLc.count;
-    if (nshow > 8) nshow = 8;   // cap so the line stays bounded
+    if (nshow > LC_MAX_CROSSINGS) nshow = LC_MAX_CROSSINGS;
     for (int i = 0; i < nshow && o < bufLen - 16; i++) {
+        char role = 'o';
+        if (i == s_dbgCls.inIndex) role = 'i';
+        else if (i == s_dbgFo)     role = 'f';
         o += snprintf(buf + o, bufLen - o, "%s%d,%d,%c",
             (i ? " " : ""),
             s_dbgLc.crossings[i].pixelX, s_dbgLc.crossings[i].pixelY,
-            (i == s_dbgCls.inIndex) ? 'i' : 'o');
+            role);
     }
     if (o < bufLen - 1) { buf[o++] = '\n'; buf[o] = '\0'; }
     return o;

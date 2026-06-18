@@ -13,6 +13,10 @@
 #define OUTPUT_STREAM
 // #define OUTPUT_LOG
 
+// In OUTPUT_STREAM builds, set to 0 to send only the ASCII debug overlay lines
+// ([LC] box/points/error) and skip the binary camera image payload.
+#define STREAM_SEND_CAMERA_IMAGES 1
+
 // ── Serial baud rates ────────────────────────────────────────────────────────
 #define SERIAL_DEBUG_BAUD    115200
 #define SERIAL_TEENSY_BAUD   4000000
@@ -105,3 +109,9 @@
 #define LC_RUN_MIN_LEN         3   // min contiguous black samples on the border to count a line (≈ line width)
 #define LC_MATCH_GATE         30   // max loop-distance (samples) for the tracker to accept a match
 #define LC_LOST_FRAMES         5   // frames the IN may stay unseen before the base case re-seeds
+
+// ── Line-follow error from pixel-space lookahead/position ────────────────────
+#define LF_CENTER_X           80.0f   // image column where a correctly centred line appears
+#define LF_IN_BLEND            0.30f  // small stabilizing blend from the near/in point
+#define LF_PX_SCALE            3.2f   // error-byte units per pixel of horizontal displacement
+#define LF_ERROR_CENTER      127      // error byte that means centred

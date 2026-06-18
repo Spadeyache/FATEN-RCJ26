@@ -719,14 +719,25 @@ const enc        = new TextEncoder();
 // ── Parser ────────────────────────────────────────────────────────────────────
 const MAGIC    = new Uint8Array([0xAA, 0x55, 0xBB, 0x44]);
 const META_LEN = 8;
-const ST_TEXT = 0, ST_MAGIC = 1, ST_META = 2, ST_PIXELS = 3;
+const CRC_LEN  = 2;
+const ST_TEXT = 0, ST_MAGIC = 1, ST_META = 2, ST_PIXELS = 3, ST_CRC = 4;
 let   parserState = ST_TEXT, magicPos = 0;
 let   metaBuf = new Uint8Array(META_LEN), metaPos = 0;
+let   crcBuf  = new Uint8Array(CRC_LEN),  crcPos  = 0;
 let   pixPos = 0, pixTotal = 0;
 let   frameW = 0, frameH = 0, frameErr = 0;
+let   droppedFrames = 0;
+let   frameHasCrc = false;   // new firmware appends a checksum; old firmware does not
+
+// Fletcher-16 — must match fletcher16() in XIAOdev.ino exactly.
+function fletcher16(data, n) {
+  let s1 = 0, s2 = 0;
+  for (let i = 0; i < n; i++) { s1 = (s1 + data[i]) % 255; s2 = (s2 + s1) % 255; }
+  return ((s2 << 8) | s1) & 0xFFFF;
+}
 
 // Text accumulator — fixed buffer, no per-byte allocation
-let txtBuf = new Uint8Array(256), txtLen = 0, txtTimer = 0;
+let txtBuf = new Uint8Array(512), txtLen = 0, txtTimer = 0;
 
 // ── Overlay dirty flag ────────────────────────────────────────────────────────
 let overlayDirty = true;
@@ -821,22 +832,25 @@ function renderMarkerList() {
 // ═════════════════════════════════════════════════════════════════════════════
 //  LINECOUNT OVERLAY  — ROI box + in/out crossing points (from [LC] lines)
 // ═════════════════════════════════════════════════════════════════════════════
-let lcData = null;        // { box:[x0,y0,x1,y1], crossings:[{x,y,role}], inIdx, held, out }
+let lcData = null;        // { box:[x0,y0,x1,y1], crossings:[{x,y,role}], inIdx, foIdx, held, out }
 let lcOverlayOn = true;
 const LC_IN_COLOR  = '#2ecc71';   // green  = the line the robot is on (in)
 const LC_OUT_COLOR = '#e8840a';   // orange = branches (out)
+const LC_FO_COLOR  = '#f0c040';   // yellow = focused out used for slope error
 
-// [LC] box=20,15,139,110 n=3 in=1 held=0 out=2 p=120,110,i 80,15,o 40,60,o
+// [LC] box=20,15,139,110 n=3 in=1 fo=2 xi=120 xo=80 epx=12.0 err=165 held=0 out=2 p=120,110,i 80,15,f 40,60,o
 function parseLC(text) {
   const box  = text.match(/box=(\d+),(\d+),(\d+),(\d+)/);
   const inM  = text.match(/\bin=(-?\d+)/);
+  const foM  = text.match(/\bfo=(-?\d+)/);
+  const errM = text.match(/\berr=(-?\d+)/);
   const held = text.match(/\bheld=(\d+)/);
   const out  = text.match(/\bout=(\d+)/);
   const crossings = [];
   const pIdx = text.indexOf('p=');
   if (pIdx >= 0) {
     for (const p of text.slice(pIdx + 2).trim().split(/\s+/)) {
-      const m = p.match(/^(\d+),(\d+),([io])$/);
+      const m = p.match(/^(\d+),(\d+),([iof])$/);
       if (m) crossings.push({ x: +m[1], y: +m[2], role: m[3] });
     }
   }
@@ -844,10 +858,13 @@ function parseLC(text) {
     box:   box ? [+box[1], +box[2], +box[3], +box[4]] : null,
     crossings,
     inIdx: inM  ? +inM[1]  : -1,
+    foIdx: foM  ? +foM[1]  : -1,
+    err:   errM ? +errM[1] : null,
     held:  held ? +held[1] : 0,
     out:   out  ? +out[1]  : 0,
   };
   markDirty();
+  drawOverlay();
 }
 
 function drawLcOverlay() {
@@ -858,19 +875,39 @@ function drawLcOverlay() {
     octx.lineWidth = 1;
     octx.strokeRect(d.box[0] + .5, d.box[1] + .5, d.box[2] - d.box[0], d.box[3] - d.box[1]);
   }
-  for (const c of d.crossings) {
+  d.crossings.forEach((c, idx) => {
     octx.beginPath();
     octx.arc(c.x + .5, c.y + .5, 2.6, 0, Math.PI * 2);
     octx.fillStyle = (c.role === 'i') ? LC_IN_COLOR : LC_OUT_COLOR;
     octx.fill();
     octx.lineWidth = 0.6; octx.strokeStyle = 'rgba(0,0,0,0.6)'; octx.stroke();
+    // Ring the focused-out (the out used for the slope error). The firmware
+    // also marks it as role "f" so the outline still shows if indices shift.
+    if (idx === d.foIdx || c.role === 'f') {
+      octx.beginPath();
+      octx.arc(c.x + .5, c.y + .5, 4.6, 0, Math.PI * 2);
+      octx.lineWidth = 1; octx.strokeStyle = LC_FO_COLOR; octx.stroke();
+    }
+  });
+  // Heading line: in → focused-out (the slope the error comes from).
+  const inC = d.crossings[d.inIdx];
+  const foC = d.crossings[d.foIdx];
+  if (inC && foC) {
+    octx.beginPath();
+    octx.moveTo(inC.x + .5, inC.y + .5);
+    octx.lineTo(foC.x + .5, foC.y + .5);
+    octx.lineWidth = 1; octx.strokeStyle = LC_FO_COLOR; octx.stroke();
   }
-  const inC = d.crossings.find(c => c.role === 'i');
   if (inC) {
     octx.fillStyle = LC_IN_COLOR;
     octx.font = '6px monospace';
     octx.fillText('in ' + inC.x + ',' + inC.y,
       Math.min(inC.x + 4, overlay.width - 34), Math.max(inC.y - 3, 7));
+  }
+  if (d.err !== null) {
+    octx.fillStyle = (d.err === 127) ? '#5b9cf6' : LC_FO_COLOR;
+    octx.font = '7px monospace';
+    octx.fillText('err ' + d.err, 3, 9);   // 127 = straight
   }
 }
 
@@ -1132,7 +1169,7 @@ function emitTextByte(b) {
   if (b === 0x0D) return;
   if (b === 0x0A) { clearTimeout(txtTimer); txtTimer = 0; flushTxt(); return; }
   if (b === 0x09 || (b >= 0x20 && b <= 0x7E)) {
-    if (txtLen < 256) { txtBuf[txtLen++] = b; }
+    if (txtLen < txtBuf.length) { txtBuf[txtLen++] = b; }
     else { txtLen = 0; return; }
     clearTimeout(txtTimer);
     txtTimer = setTimeout(() => { txtLen = 0; txtTimer = 0; }, 200);
@@ -1173,15 +1210,18 @@ function processChunk(chunk) {
         metaBuf.set(chunk.subarray(i, i + avail), metaPos);
         metaPos += avail; i += avail;
         if (metaPos === META_LEN) {
+          frameW = frameH = 0;
           frameW = metaBuf[0] | (metaBuf[1] << 8);
           frameH = metaBuf[2] | (metaBuf[3] << 8);
-          let e  = metaBuf[4] | (metaBuf[5]<<8) | (metaBuf[6]<<16) | (metaBuf[7]<<24);
-          frameErr = (e & 0x80000000) ? e - 0x100000000 : e;
+          // New firmware puts payload length here; old firmware put 0 (err field).
+          const field4 = (metaBuf[4] | (metaBuf[5]<<8) | (metaBuf[6]<<16) | (metaBuf[7]<<24)) >>> 0;
           pixTotal = frameW * frameH * 2;
-          if (pixTotal > 0 && frameW < 4096 && frameH < 4096) {
+          if (frameW > 0 && frameH > 0 && frameW <= 1024 && frameH <= 1024 && pixTotal > 0 &&
+              (field4 === 0 || field4 === pixTotal)) {
+            frameHasCrc = (field4 === pixTotal);          // length present → checksum follows
             if (pixBuf.length < pixTotal) pixBuf = new Uint8Array(pixTotal);
             pixPos = 0; parserState = ST_PIXELS;
-          } else { parserState = ST_TEXT; }
+          } else { parserState = ST_TEXT; }   // implausible header (false MAGIC lock) → resync
         }
         break;
       }
@@ -1190,7 +1230,23 @@ function processChunk(chunk) {
         const avail = Math.min(pixTotal - pixPos, len - i);
         pixBuf.set(chunk.subarray(i, i + avail), pixPos);
         pixPos += avail; i += avail;
-        if (pixPos === pixTotal) { renderFrame(); parserState = ST_TEXT; }
+        if (pixPos === pixTotal) {
+          if (frameHasCrc) { crcPos = 0; parserState = ST_CRC; }
+          else { renderFrame(); parserState = ST_TEXT; }   // old firmware: no checksum
+        }
+        break;
+      }
+
+      case ST_CRC: {
+        const avail = Math.min(CRC_LEN - crcPos, len - i);
+        crcBuf.set(chunk.subarray(i, i + avail), crcPos);
+        crcPos += avail; i += avail;
+        if (crcPos === CRC_LEN) {
+          const rxCrc = crcBuf[0] | (crcBuf[1] << 8);
+          if (rxCrc !== fletcher16(pixBuf, pixTotal)) droppedFrames++;  // corruption meter only
+          renderFrame();                   // always render so the screen is never black
+          parserState = ST_TEXT;           // resync on the next MAGIC
+        }
         break;
       }
     }
@@ -1240,7 +1296,7 @@ function renderFrame() {
   drawOverlay(); // skips if not dirty
 
   frameCountEl.textContent  = ++totalFrames;
-  errOverlayEl.textContent  = 'err: ' + frameErr;
+  errOverlayEl.textContent  = 'corrupt: ' + droppedFrames;
   fpsFrames++;
   const now = performance.now(), el = now - lastFpsTime;
   if (el >= 1000) {
