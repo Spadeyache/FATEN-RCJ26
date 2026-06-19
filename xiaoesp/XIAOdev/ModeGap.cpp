@@ -4,69 +4,54 @@
 #include "serial_print.h"
 #include <math.h>
 
-void modeGapRun(camera_fb_t* fb, YacheEncodedSerial& teensy) {
-    // ── 1. Collect per-row black centroids for regression ─────────────────────
-    // Samples: (y, centerX) for each row that contains black pixels.
-    float sampleY[GAP_SCAN_ROW_COUNT];
-    float sampleX[GAP_SCAN_ROW_COUNT];
-    uint8_t nSamples = 0;
+// Gap mode local tuning. Keep these here so gap behavior can be tuned without
+// touching the shared line-follow configuration.
+static const uint8_t GAP_FRONT_ROW = 5;
+static const uint8_t GAP_BACK_ROW = 60;
+static const uint8_t GAP_BLACK_THRESHOLD = 5;
+static const uint8_t GAP_ANGLE_CENTER_BYTE = 127;
 
+static uint8_t rowBlackCom(camera_fb_t* fb, uint8_t row, float& comOut) {
     cameraData pixels[160] = {};
+    scanRow(fb, row, 0, 159, pixels);
 
-    for (uint8_t i = 0; i < GAP_SCAN_ROW_COUNT; i++) {
-        uint8_t row = GAP_SCAN_ROW_START + i;
-        scanRow(fb, row, 0, 159, pixels);
-
-        int32_t weightedSum = 0;
-        uint8_t blackCount  = 0;
-        for (uint8_t c = 0; c < 160; c++) {
-            if (isBlack(pixels[c])) { weightedSum += c; blackCount++; }
-        }
-
-        if (blackCount > 0) {
-            sampleY[nSamples] = (float)row;
-            sampleX[nSamples] = (float)weightedSum / blackCount;
-            nSamples++;
+    uint16_t weightedSum = 0;
+    uint8_t blackCount = 0;
+    for (uint8_t x = 0; x < 160; x++) {
+        if (isBlack(pixels[x])) {
+            weightedSum += x;
+            blackCount++;
         }
     }
 
-    // ── 2. Also send COM from the standard SCAN_ROW ───────────────────────────
-    scanRow(fb, SCAN_ROW, SCAN_COL_MIN, SCAN_COL_MAX, pixels);
-    int32_t wSum = 0; uint8_t bCnt = 0;
-    for (uint8_t c = SCAN_COL_MIN; c <= SCAN_COL_MAX; c++) {
-        if (isBlack(pixels[c])) { wSum += c; bCnt++; }
-    }
-    float com = (bCnt > 0) ? (float)wSum / bCnt : (SCAN_COL_MIN + SCAN_COL_MAX) / 2.0f;
-    uint8_t scaledCOM = (uint8_t)constrain(
-        map((long)(com * 10), (long)(SCAN_COL_MIN * 10), (long)(SCAN_COL_MAX * 10), 0, 254), 0, 254);
-    teensy.send(XIAO_REG_COM, scaledCOM);
+    comOut = (blackCount > 0) ? ((float)weightedSum / blackCount) : 80.0f;
+    return blackCount;
+}
 
-    // ── 3. Least-squares slope: x = a*y + b  →  a = (n·Σxy − Σx·Σy) / (n·Σy² − (Σy)²)
-    //      Then angle = atan(a) in degrees.
+void modeGapRun(camera_fb_t* fb, YacheEncodedSerial& teensy) {
+    float frontCom = 80.0f;
+    float backCom = 80.0f;
+    const uint8_t frontBlack = rowBlackCom(fb, GAP_FRONT_ROW, frontCom);
+    const uint8_t backBlack = rowBlackCom(fb, GAP_BACK_ROW, backCom);
+
+    // FLAG is high when the front row sees the line. Teensy uses this to stop
+    // the straight gap move and start angle alignment.
+    const uint8_t frontLineSeen = (frontBlack > GAP_BLACK_THRESHOLD) ? 1 : 0;
+
     float angleDeg = 0.0f;
-    uint8_t encodedAngle = GAP_ANGLE_CENTER;
-
-    if (nSamples >= 2) {
-        float sumY = 0, sumX = 0, sumYY = 0, sumXY = 0;
-        for (uint8_t i = 0; i < nSamples; i++) {
-            sumY  += sampleY[i];
-            sumX  += sampleX[i];
-            sumYY += sampleY[i] * sampleY[i];
-            sumXY += sampleX[i] * sampleY[i];
-        }
-        float denom = (float)nSamples * sumYY - sumY * sumY;
-        if (fabsf(denom) > 1e-4f) {
-            float slope = ((float)nSamples * sumXY - sumX * sumY) / denom;
-            angleDeg    = atan(slope) * (180.0f / (float)M_PI);
-        }
-        encodedAngle = (uint8_t)constrain(
-            GAP_ANGLE_CENTER + (int)(angleDeg * GAP_ANGLE_SCALE), 0, 254);
+    if (frontBlack > GAP_BLACK_THRESHOLD && backBlack > GAP_BLACK_THRESHOLD) {
+        const float dx = frontCom - backCom;
+        const float dy = (float)GAP_BACK_ROW - (float)GAP_FRONT_ROW;
+        angleDeg = atan2f(dx, dy) * (180.0f / (float)M_PI);
     }
 
+    const uint8_t encodedAngle = (uint8_t)constrain(
+        (int)(GAP_ANGLE_CENTER_BYTE + angleDeg), 0, 254);
+
+    teensy.send(XIAO_REG_FLAG, frontLineSeen);
     teensy.send(XIAO_REG_ANGLE, encodedAngle);
 
-    // ── 4. Debug output ───────────────────────────────────────────────────────
     SPRINTF(SPRINT_RESULTS, "[RES]",
-        "mode=3 ang=%.1f enc=%d samples=%d com=%.1f",
-        angleDeg, encodedAngle, nSamples, com);
+        "mode=3 front=%d back=%d flag=%d fcom=%.1f bcom=%.1f ang=%.1f enc=%d",
+        frontBlack, backBlack, frontLineSeen, frontCom, backCom, angleDeg, encodedAngle);
 }

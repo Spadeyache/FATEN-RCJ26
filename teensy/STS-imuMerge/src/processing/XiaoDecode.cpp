@@ -32,6 +32,7 @@ uint8_t command()    { return _command; }
 float   lineError()  { return _lineError; }
 float   gapAngle()   { return _gapAngle; }
 bool    commitFlag() { return _commitFlag; }
+bool    gapFrontFlag() { return _commitFlag; }
 
 void setMode(XiaoMode m) {
     Sensors::XIAO_link::send(XIAO_REG_MODE, (uint8_t)m);

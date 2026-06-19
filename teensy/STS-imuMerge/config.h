@@ -136,7 +136,7 @@ enum XiaoMode : uint8_t {
 #define FILTER_THRESHOLD_RED      5   // red line
 #define FILTER_THRESHOLD_SILVER   4   // silver (evac entry)
 #define FILTER_THRESHOLD_UTURN    3   // U-turn — confirmed when seen > 2 times
-#define FILTER_THRESHOLD_LINELOST 3   // sustained line loss → gap
+#define FILTER_THRESHOLD_LINELOST 10   // sustained line loss → gap
 
 // =============================================================================
 //  K230D AI processor

@@ -28,6 +28,8 @@ FLASHMEM void setup() {
     // analogWrite(BUZZER_PIN, 30);
     pinMode(STS_EN_PIN, OUTPUT);
     digitalWrite(STS_EN_PIN, HIGH);
+    // pinMode(BUZZER_PIN, OUTPUT);
+    // tone(BUZZER_PIN, 2000, 300);
 
     Actions::Drive::init();
     // Actions::Arm::init();           // servos + KRS, sets initial pose
@@ -40,6 +42,7 @@ FLASHMEM void setup() {
 
     // Confirmation beep
     // delay(50); analogWrite(BUZZER_PIN, 160); delay(40); analogWrite(BUZZER_PIN, 0);
+    delay(50); digitalWrite(BUZZER_PIN, HIGH); delay(400); analogWrite(BUZZER_PIN, 0);
 }
 
 void loop() {

@@ -1,4 +1,4 @@
-﻿#include "Drive.h"
+#include "Drive.h"
 #include "WeightDistribution.h"
 #include "../../config.h"
 #include "../../pins_teensy.h"

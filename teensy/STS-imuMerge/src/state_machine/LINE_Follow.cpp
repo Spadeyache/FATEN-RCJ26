@@ -4,6 +4,7 @@
 #include "../../pins_teensy.h"
 
 #include "../sensors/Touch.h"
+#include "../sensors/XIAO_link.h"
 #include "../processing/XiaoDecode.h"
 #include "../actions/Drive.h"
 #include "../actions/Turn.h"
@@ -53,25 +54,42 @@ void update() {
 
     switch (Processing::XiaoDecode::command()) {
         case FEAT_UTURN:
-#if PRINT_ACTIONS
-            Serial.println("Action: U-Turn");
-#endif
+            #if PRINT_ACTIONS
+                        Serial.println("Action: U-Turn");
+            #endif
             Actions::Turn::turn(180.0f, 60.0f);
+
+            // After the timed U-turn, keep spinning with the same motor power
+            // until XIAO's SearchLine mode sees the black line again.
+            Actions::Drive::stop();
+            Processing::XiaoDecode::setMode(XIAO_MODE_SEARCH_LINE);
+            delay(200);
+            Processing::XiaoDecode::clearFilter();
+
+            while (Processing::XiaoDecode::command() != FEAT_SEARCH_LINE_BLACK) {
+                Sensors::XIAO_link::tick();
+                Processing::XiaoDecode::tick();
+                Actions::Drive::motor(60.0f, -60.0f);
+            }
+
+            Actions::Drive::stop();
+            Processing::XiaoDecode::setMode(XIAO_MODE_LINE);
+            delay(200);
             Processing::XiaoDecode::clearFilter();
             return;
 
-        // case FEAT_RED:
-        //     StateMachine::transitionTo(StateMachine::STALLED_RED);
-        //     return;
+        case FEAT_RED:
+            StateMachine::transitionTo(StateMachine::STALLED_RED);
+            return;
 
         // case FEAT_SILVER:
         //     Actions::Drive::stop();
         //     StateMachine::transitionTo(StateMachine::EVAC_ENTRY);
         //     return;
 
-        // case FEAT_LINE_LOST:
-        //     StateMachine::transitionTo(StateMachine::LINE_GAP);
-        //     return;
+        case FEAT_LINE_LOST:
+            StateMachine::transitionTo(StateMachine::LINE_GAP);
+            return;
 
         default:
             Actions::Drive::runLinePID();

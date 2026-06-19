@@ -10,6 +10,25 @@ static const uint8_t GREEN_WINDOW  = 25;
 static const uint8_t LINE_HALF_W   = 4;    // half-width of the black line
 static const uint8_t GREEN_GAP     = 0;    // gap between line edge and green window
 
+static uint8_t countBlackOnRoiRow(camera_fb_t* fb, uint8_t row) {
+    cameraData rowPixels[160] = {};
+    scanRow(fb, row, LC_ROI_X_MIN, LC_ROI_X_MAX, rowPixels);
+
+    uint8_t count = 0;
+    for (uint8_t x = LC_ROI_X_MIN; x <= LC_ROI_X_MAX; x++) {
+        if (isBlack(rowPixels[x])) count++;
+    }
+    return count;
+}
+
+static uint8_t countSilverOnColumn(camera_fb_t* fb, uint8_t col) {
+    uint8_t count = 0;
+    for (uint8_t y = LF_SILVER_SIDE_ROW_MIN; y <= LF_SILVER_SIDE_ROW_MAX; y++) {
+        if (isSilver(updateRawGrayHSV(fb, col, y))) count++; Serial.println("*");
+    }
+    return count;
+}
+
 void modeLineFollowRun(camera_fb_t* fb, YacheEncodedSerial& teensy) {
 
 //integrate the old row 55 line follow. + add a rectangle that triggers two point line follow when gap, 90 deg, intersection
@@ -66,11 +85,18 @@ void modeLineFollowRun(camera_fb_t* fb, YacheEncodedSerial& teensy) {
     else if (greenLeft  > LF_GREEN_PixCOUNT_THRESHOLD)                                            rawGreen = 2; // left
     else if (greenRight > LF_GREEN_PixCOUNT_THRESHOLD)                                            rawGreen = 3; // right
 
+    const uint8_t silverSideLeft = countSilverOnColumn(fb, LF_SILVER_SIDE_COL_LEFT);
+    const uint8_t silverSideRight = countSilverOnColumn(fb, LF_SILVER_SIDE_COL_RIGHT);
+    const bool sideSilverDetected =
+        silverSideLeft > LF_SILVER_SIDE_THRESHOLD ||
+        silverSideRight > LF_SILVER_SIDE_THRESHOLD;
+
+
     // ── 6. Row-55 colour readout (display only) ───────────────────────────────
     uint8_t rowLeft = ROW55_WHITE, rowRight = ROW55_WHITE;
     if (redCount > LF_RED_PixCOUNT_THRESHOLD) {
         rowLeft = rowRight = ROW55_RED;
-    } else if (silverCount > LF_SILVER_PixCOUNT_THRESHOLD) {
+    } else if (silverCount > LF_SILVER_PixCOUNT_THRESHOLD || sideSilverDetected) {
         rowLeft = rowRight = ROW55_SILVER;
     } else {
         const bool linePresent = (blackCount > 5);
@@ -83,6 +109,16 @@ void modeLineFollowRun(camera_fb_t* fb, YacheEncodedSerial& teensy) {
     lc_detectCrossings(fb, lc);
     LineClass cls = lc_updateIn(lc);
     int fo = lc_focusedOut(lc, cls.inIndex);
+    const uint8_t topBlackCount = countBlackOnRoiRow(fb, LC_ROI_Y_TOP);
+    const uint8_t bottomBlackCount = countBlackOnRoiRow(fb, LC_ROI_Y_BOT);
+    const bool topBottomLost =
+        topBlackCount <= LF_EDGE_BLACK_THRESHOLD &&
+        bottomBlackCount <= LF_EDGE_BLACK_THRESHOLD;
+    const uint8_t silverSideLeft = countSilverOnColumn(fb, LF_SILVER_SIDE_COL_LEFT);
+    const uint8_t silverSideRight = countSilverOnColumn(fb, LF_SILVER_SIDE_COL_RIGHT);
+    const bool sideSilverDetected =
+        silverSideLeft > LF_SILVER_SIDE_THRESHOLD ||
+        silverSideRight > LF_SILVER_SIDE_THRESHOLD;
 
     // ── 8. Green vote filter → committed goal ─────────────────────────────────
     //  Green left/right are handled locally now: a confirmed turn seeds a virtual
@@ -113,10 +149,10 @@ void modeLineFollowRun(camera_fb_t* fb, YacheEncodedSerial& teensy) {
     //  red/silver/line-lost are raw (the Teensy moving-average filters them);
     //  U-turn is already GreenFilter-confirmed here.
     uint8_t featureId = FEAT_NONE;
-    if (blackCount <= 5)                            featureId = FEAT_LINE_LOST;
+    if (topBottomLost)                              featureId = FEAT_LINE_LOST;
     if (greenCmd == 1)                              featureId = FEAT_UTURN;
     if (redCount    > LF_RED_PixCOUNT_THRESHOLD)    featureId = FEAT_RED;
-    if (silverCount > LF_SILVER_PixCOUNT_THRESHOLD) featureId = FEAT_SILVER;
+    if (silverCount > LF_SILVER_PixCOUNT_THRESHOLD || sideSilverDetected) featureId = FEAT_SILVER;
 
     // ── 11. Store debug + send to Teensy ──────────────────────────────────────
     lc_storeDebug(lc, cls, fo, errByte, s_lastErrPx);
@@ -129,9 +165,10 @@ void modeLineFollowRun(camera_fb_t* fb, YacheEncodedSerial& teensy) {
 
     // ── 12. Debug output ──────────────────────────────────────────────────────
     SPRINTF(SPRINT_RESULTS, "[RES]",
-        "mode=0 feat=%d com=%.1f err=%d epx=%.1f blk=%d sil=%d red=%d gL=%d gR=%d gc=%d cmt=%d",
-        featureId, centerOfMass, errByte, s_lastErrPx, blackCount, silverCount, redCount,
-        greenLeft, greenRight, greenCmd, commitActive ? 1 : 0);
+        "mode=0 feat=%d com=%.1f err=%d epx=%.1f blk=%d sil=%d sL=%d sR=%d red=%d gL=%d gR=%d gc=%d cmt=%d",
+        featureId, centerOfMass, errByte, s_lastErrPx, blackCount, silverCount,
+        silverSideLeft, silverSideRight, redCount, greenLeft, greenRight, greenCmd,
+        commitActive ? 1 : 0);
 #ifndef OUTPUT_STREAM
     int xIn  = (cls.inIndex >= 0 && cls.inIndex < lc.count) ? lc.crossings[cls.inIndex].pixelX : -1;
     int xOut = (steerOut    >= 0 && steerOut    < lc.count) ? lc.crossings[steerOut].pixelX    : -1;

@@ -16,7 +16,7 @@
 // In OUTPUT_STREAM builds, set to 0 to send only the ASCII debug overlay lines
 // ([LC] box/points/error and [ROW] scan colors) and skip the binary camera
 // image payload. This makes the point/box stream much more robust while tuning.
-#define STREAM_SEND_CAMERA_IMAGES 0
+#define STREAM_SEND_CAMERA_IMAGES 1
 
 // ── Serial baud rates ────────────────────────────────────────────────────────
 #define SERIAL_DEBUG_BAUD    115200
@@ -92,6 +92,11 @@
 #define LF_RED_PixCOUNT_THRESHOLD      30   // Min red Pixel count → report FEAT_RED
 #define LF_BLACK_PixCOUNT_THRESHOLD    35   // Min black pixels → report FEAT_BLACK_INTERSECT
 #define LF_GREEN_PixCOUNT_THRESHOLD    5    // pixels needed to confirm green
+#define LF_SILVER_SIDE_COL_LEFT        15   // vertical side silver scan column
+#define LF_SILVER_SIDE_COL_RIGHT      145   // 160 - 15
+#define LF_SILVER_SIDE_ROW_MIN          0
+#define LF_SILVER_SIDE_ROW_MAX         70
+#define LF_SILVER_SIDE_THRESHOLD       12   // hits in either side column -> FEAT_SILVER
 
 // ── Mode 1 : SearchLine ──────────────────────────────────────────────────────
 // Rectangular scan region (inclusive). Frame is 160 x 120.
@@ -108,12 +113,6 @@
 #define NOGI_SCAN_ROW 15
 #define NOGI_BLACK_THRESHOLD  6   // Total black pixels across all rows → detect
 
-// ── Mode 3 : Gap (line-angle estimation) ────────────────────────────────────
-#define GAP_SCAN_ROW_START    45   // Top row of multi-row scan window
-#define GAP_SCAN_ROW_COUNT    12   // Number of rows in window
-#define GAP_ANGLE_CENTER     127   // Encoded value for 0°
-#define GAP_ANGLE_SCALE     1.41f  // Degrees-to-counts: ±90° maps to ±127 counts
-
 // ── LineCount : border-crossing detection + in/out tracking ─────────────────
 // Rectangle whose border we sample (frame is 160 x 120; keep ≥2 px from edges
 // because updateRawGrayHSV() samples around each point). Widen beyond the 50–110
@@ -126,6 +125,7 @@
 #define LC_RUN_MIN_LEN         3   // min contiguous black samples on the border to count a line (≈ line width)
 #define LC_MATCH_GATE         30   // max loop-distance (samples) for the tracker to accept a match
 #define LC_LOST_FRAMES         5   // frames the IN may stay unseen before the base case re-seeds
+#define LF_EDGE_BLACK_THRESHOLD 5  // top/bottom ROI row black count <= this means that edge has no line
 
 // ── Line-follow error from pixel-space lookahead/position ────────────────────
 #define LF_CENTER_X           80.0f   // image column where a correctly centred line appears

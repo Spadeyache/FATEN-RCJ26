@@ -26,6 +26,7 @@ uint8_t command();        // confirmed FEAT_* event (FEAT_NONE if none)
 float   lineError();      // 0..254
 float   gapAngle();       // 0..254
 bool    commitFlag();     // XIAO green-turn commit in progress → freeze transitions
+bool    gapFrontFlag();   // GAP mode: front row sees the black line
 
 void    setMode(XiaoMode m);
 void    clearFilter();    // forget votes after a mode change / state transition
