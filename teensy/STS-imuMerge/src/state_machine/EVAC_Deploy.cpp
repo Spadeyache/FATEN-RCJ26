@@ -1,4 +1,4 @@
-﻿#include "EVAC_Deploy.h"
+#include "EVAC_Deploy.h"
 #include "StateMachine.h"
 #include "../../config.h"
 

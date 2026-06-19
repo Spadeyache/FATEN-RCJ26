@@ -1,4 +1,4 @@
-﻿#include "EVAC_Exit.h"
+#include "EVAC_Exit.h"
 #include "StateMachine.h"
 #include "../../config.h"
 

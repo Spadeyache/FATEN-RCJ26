@@ -6,7 +6,7 @@
 #include "config.h"
 #include "serial_print.h"
 #include "ModeLineFollow.h"
-#include "ModeEvac.h"
+#include "ModeSearchLine.h"
 #include "ModeNoGI.h"
 #include "ModeGap.h"
 #include "LineCount.h"
@@ -100,9 +100,10 @@ void setup() {
         Serial.println("FATAL: FreeRTOS primitives failed");
         while (true) delay(1000);
     }
-    logf("Stream image payload disabled; sending [LC] debug only\n");
+    logf("Stream image payload disabled; sending [LC]/[ROW] debug only\n");
 #endif
 #endif
+    pinMode(LED_BUILTIN, OUTPUT);
 }
 
 // ── Main loop (Core 1) ─────────────────────────────────────────────────────────
@@ -118,13 +119,17 @@ void loop() {
     if (!fb) { logf("Frame grab failed\n"); return; }
 
     // ── Dispatch to active mode ───────────────────────────────────────────────
+    bool ranLineFollow = false;
     switch (mode) {
-        case MODE_LINEFOLLOW: modeLineFollowRun(fb, teensy); break;
-        case MODE_EVAC:       modeEvacRun(fb, teensy);       break;
-        case MODE_NOGI:       modeNoGIRun(fb, teensy);       break;
-        case MODE_GAP:        modeGapRun(fb, teensy);        break;
-        default:              modeLineFollowRun(fb, teensy); break;
+        // Old mode-indicator LED behavior disabled:
+        //   LineFollow/default wrote HIGH, other states wrote LOW.
+        case MODE_LINEFOLLOW: ranLineFollow = true; modeLineFollowRun(fb, teensy); break;
+        case MODE_SEARCH_LINE: modeSearchLineRun(fb, teensy);                      break;
+        case MODE_NOGI:       modeNoGIRun(fb, teensy);                             break;
+        case MODE_GAP:        modeGapRun(fb, teensy);                              break;
+        default:              ranLineFollow = true; modeLineFollowRun(fb, teensy); break;
     }
+    digitalWrite(LED_BUILTIN, (ranLineFollow && lc_commitLocked()) ? LOW : HIGH);
 
 #ifdef OUTPUT_STREAM
 #if STREAM_SEND_CAMERA_IMAGES

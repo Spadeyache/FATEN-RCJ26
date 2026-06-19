@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 // =============================================================================
 //  yacheVL53L7CX â€” thin wrapper around STM32duino_VL53L7CX.

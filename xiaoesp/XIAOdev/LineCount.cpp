@@ -291,11 +291,21 @@ bool lc_slopeError(const LineCounts& lc, int inIndex, int outIndex, float& errOu
     const Crossing& in  = lc.crossings[inIndex];
     const Crossing& out = lc.crossings[outIndex];
 
-    // Pixel-space lookahead/position error, not an angle. The focused out-point
-    // is the main steering target; the in-point is blended in only to damp jitter.
-    float errPx =
-        (1.0f - LF_IN_BLEND) * ((float)out.pixelX - LF_CENTER_X)
-      + LF_IN_BLEND          * ((float)in.pixelX  - LF_CENTER_X);
+    const float outDx = (float)out.pixelX - LF_CENTER_X;
+    const float inDx  = (float)in.pixelX  - LF_CENTER_X;
+
+    // Pixel-space lookahead/position error, not an angle. The out/front point
+    // is the main lookahead target; the in/back point keeps the near line centred.
+    float errPx = (1.0f - LF_IN_BLEND) * outDx + LF_IN_BLEND * inDx;
+
+    // If the steering goal itself is in the near side range, multiply the whole
+    // blended error so the output naturally saturates toward 0/254. This keeps
+    // high T-intersection branches from causing a hard turn while still making
+    // near-side goals very aggressive.
+    const float absOutDx = (outDx < 0.0f) ? -outDx : outDx;
+    if (out.pixelY >= LF_SIDE_Y_MIN && absOutDx > LF_GOAL_SIDE_THRESHOLD) {
+        errPx *= LF_GOAL_SIDE_MULT;
+    }
 
     float e = (float)LF_ERROR_CENTER + errPx * LF_PX_SCALE;
 

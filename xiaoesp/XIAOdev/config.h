@@ -14,38 +14,47 @@
 // #define OUTPUT_LOG
 
 // In OUTPUT_STREAM builds, set to 0 to send only the ASCII debug overlay lines
-// ([LC] box/points/error) and skip the binary camera image payload.
-#define STREAM_SEND_CAMERA_IMAGES 1
+// ([LC] box/points/error and [ROW] scan colors) and skip the binary camera
+// image payload. This makes the point/box stream much more robust while tuning.
+#define STREAM_SEND_CAMERA_IMAGES 0
 
 // ── Serial baud rates ────────────────────────────────────────────────────────
 #define SERIAL_DEBUG_BAUD    115200
 #define SERIAL_TEENSY_BAUD   4000000
 
-// ── Serial register IDs (shared protocol with Teensy) ───────────────────────
-#define XIAO_REG_FEATURE   0x01   // Xiao → Teensy : detected feature
-#define XIAO_REG_COM       0x02   // Xiao → Teensy : line center-of-mass
-#define XIAO_REG_MODE      0x03   // Teensy → Xiao : active mode
-#define XIAO_REG_ANGLE     0x04   // Xiao → Teensy : gap line angle (mode 3)
+// ═════════════════════════════════════════════════════════════════════════════
+//  XIAO ↔ Teensy protocol  —  KEEP IN SYNC with teensy/STS-imuMerge/config.h
+//  3-byte frames [255, reg, value]; value 0..254.
+//
+//    reg 0x01 FEATURE  X→T  per-frame event (FEAT_* below; meaning is mode-scoped)
+//    reg 0x02 COM      X→T  line error 0..254 (127 = centred)
+//    reg 0x03 MODE     T→X  active XIAO mode (MODE_*)
+//    reg 0x04 ANGLE    X→T  gap line angle (gap mode)
+//    reg 0x05 FLAG     X→T  1 while a green-turn commit is in progress, else 0
+// ═════════════════════════════════════════════════════════════════════════════
+#define XIAO_REG_FEATURE   0x01
+#define XIAO_REG_COM       0x02
+#define XIAO_REG_MODE      0x03
+#define XIAO_REG_ANGLE     0x04
+#define XIAO_REG_FLAG      0x05
 
-// Feature IDs sent on XIAO_REG_FEATURE
+// FEATURE byte — LINE-follow mode events (the clean contract):
 #define FEAT_NONE          0
-#define FEAT_UTURN         1
-#define FEAT_GREEN_LEFT    2
-#define FEAT_GREEN_RIGHT   3
-#define FEAT_RED           4
-#define FEAT_SILVER        5   // line-follow silver
-#define FEAT_BLACK_INTERSECT 6
-#define FEAT_EVAC_SILVER   5   // evac-mode silver tape
-#define FEAT_EVAC_BLACK    6   // evac-mode black return line
-#define FEAT_NOGI_INTERSECT 6  // no-green intersection detected
-#define FEAT_NO_LINE       8   // line lost: blackCount == 0, COM fell back to midpoint
+#define FEAT_UTURN         1   // confirmed by the XIAO GreenFilter (both-green)
+#define FEAT_RED           2   // raw red on the scan row
+#define FEAT_SILVER        3   // raw silver on the scan row
+#define FEAT_LINE_LOST     4   // raw "no line" on the scan row
+
+// FEATURE byte — mode-scoped codes for SEARCH_LINE / NOGI modes (separate code space):
+#define FEAT_SEARCH_LINE_SILVER 5   // SEARCH_LINE mode: silver tape
+#define FEAT_SEARCH_LINE_BLACK  6   // SEARCH_LINE mode: black return line
+#define FEAT_NOGI_INTERSECT 6   // NOGI mode: intersection
 
 // Mode IDs received on XIAO_REG_MODE
 #define MODE_LINEFOLLOW    0
-#define MODE_EVAC          1
+#define MODE_SEARCH_LINE   1
 #define MODE_NOGI          2
 #define MODE_GAP           3
-// evac position correct mode
 
 //  Camera Vision range
 #define SCAN_COL_MIN       50   // First column (inclusive)
@@ -84,15 +93,15 @@
 #define LF_BLACK_PixCOUNT_THRESHOLD    35   // Min black pixels → report FEAT_BLACK_INTERSECT
 #define LF_GREEN_PixCOUNT_THRESHOLD    5    // pixels needed to confirm green
 
-// ── Mode 1 : Evac ────────────────────────────────────────────────────────────
+// ── Mode 1 : SearchLine ──────────────────────────────────────────────────────
 // Rectangular scan region (inclusive). Frame is 160 x 120.
-#define EVAC_SCAN_X_MIN        50
-#define EVAC_SCAN_X_MAX       110
-#define EVAC_SCAN_Y_MIN        15
-#define EVAC_SCAN_Y_MAX        60
-#define EVAC_SCAN_STEP          4   // sample every Nth pixel in x and y
-#define EVAC_SILVER_THRESHOLD   5   // Min silver samples in region → FEAT_EVAC_SILVER
-#define EVAC_BLACK_THRESHOLD    5   // Min black samples in region  → FEAT_EVAC_BLACK
+#define SEARCH_LINE_SCAN_X_MIN        50
+#define SEARCH_LINE_SCAN_X_MAX       110
+#define SEARCH_LINE_SCAN_Y_MIN        15
+#define SEARCH_LINE_SCAN_Y_MAX        60
+#define SEARCH_LINE_SCAN_STEP          4   // sample every Nth pixel in x and y
+#define SEARCH_LINE_SILVER_THRESHOLD   5   // Min silver samples in region → FEAT_SEARCH_LINE_SILVER
+#define SEARCH_LINE_BLACK_THRESHOLD    5   // Min black samples in region  → FEAT_SEARCH_LINE_BLACK
 
 // ── Mode 2 : No-Green Intersection ──────────────────────────────────────────
 // #define NOGI_SCAN_ROW_COUNT   15   // Rows scanned: y = 0 .. NOGI_SCAN_ROW_COUNT-1
@@ -123,6 +132,9 @@
 #define LF_IN_BLEND            0.30f  // small stabilizing blend from the near/in point
 #define LF_PX_SCALE            3.2f   // error-byte units per pixel of horizontal displacement
 #define LF_ERROR_CENTER      127      // error byte that means centred
+#define LF_SIDE_Y_MIN         50      // only side-boost near the robot, not high T-intersection branches
+#define LF_GOAL_SIDE_THRESHOLD 18.0f  // px from centre before the goal/out point is treated as "on the side"
+#define LF_GOAL_SIDE_MULT      4.0f   // multiplier for the blended error when the goal is in the side range
 
 // ── Green command filter (rolling-window vote; mirrors Teensy CommandFilter) ─
 #define GF_QUEUE_SIZE         15   // rolling window of raw green observations

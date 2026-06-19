@@ -27,15 +27,32 @@
 
 #define XIAO_BAUD           4000000UL
 
-// XIAO register IDs — shared protocol with xiaoesp32/. Keep in sync.
-#define XIAO_REG_FEATURE    0x01   // Xiao → Teensy : detected feature
-#define XIAO_REG_COM        0x02   // Xiao → Teensy : line centre-of-mass
-#define XIAO_REG_MODE       0x03   // Teensy → Xiao : active mode
-#define XIAO_REG_ANGLE      0x04   // Xiao → Teensy : gap line angle (mode 3)
+// XIAO register IDs — shared protocol with xiaoesp/XIAOdev/config.h. KEEP IN SYNC.
+//   reg 0x01 FEATURE  X→T  per-frame event (FEAT_* below)
+//   reg 0x02 COM      X→T  line error 0..254 (127 = centred)
+//   reg 0x03 MODE     T→X  active XIAO mode
+//   reg 0x04 ANGLE    X→T  gap line angle (gap mode)
+//   reg 0x05 FLAG     X→T  1 while a green-turn commit is in progress, else 0
+#define XIAO_REG_FEATURE    0x01
+#define XIAO_REG_COM        0x02
+#define XIAO_REG_MODE       0x03
+#define XIAO_REG_ANGLE      0x04
+#define XIAO_REG_FLAG       0x05
+
+// FEATURE byte — LINE-follow events (the clean contract; keep in sync with XIAO):
+#define FEAT_NONE           0
+#define FEAT_UTURN          1   // XIAO GreenFilter-confirmed both-green
+#define FEAT_RED            2   // raw red on the scan row (Teensy filters)
+#define FEAT_SILVER         3   // raw silver on the scan row (Teensy filters)
+#define FEAT_LINE_LOST      4   // raw "no line" on the scan row (Teensy filters)
+
+// FEATURE byte — mode-scoped codes for SEARCH_LINE / NOGI modes (separate code space):
+#define FEAT_SEARCH_LINE_SILVER 5   // SEARCH_LINE mode: silver tape
+#define FEAT_SEARCH_LINE_BLACK  6   // SEARCH_LINE mode: black return line (LINE_Obstacle waits on this)
 
 enum XiaoMode : uint8_t {
     XIAO_MODE_LINE = 0,
-    XIAO_MODE_EVAC = 1,
+    XIAO_MODE_SEARCH_LINE = 1,
     XIAO_MODE_NOGI = 2,
     XIAO_MODE_GAP  = 3,
 };
@@ -99,7 +116,6 @@ enum XiaoMode : uint8_t {
 // =============================================================================
 //  State machine timings
 // =============================================================================
-#define DISABLE_GREEN_MS    750     // green-turn cooldown after firing one
 
 // EVAC search victim sweep
 #define EVAC_SEARCH_SPIN_LEFT       -40.0f
@@ -113,14 +129,14 @@ enum XiaoMode : uint8_t {
 #define EVAC_GRAB_STOP_REQUIRED        3
 
 // =============================================================================
-//  CommandFilter — vote thresholds
+//  CommandFilter — moving-average vote thresholds (votes within the last
+//  FILTER_QUEUE_SIZE frames needed to confirm each event)
 // =============================================================================
-#define FILTER_QUEUE_SIZE             15
-#define FILTER_THRESHOLD               4   // green left/right
-#define FILTER_THRESHOLD_RED           5
-#define FILTER_THRESHOLD_SILVER        4
-#define FILTER_THRESHOLD_INTERSECTION  6   // no-green intersection (NGI)
-#define FILTER_THRESHOLD_NOLINE        3   // sustained line loss
+#define FILTER_QUEUE_SIZE        15
+#define FILTER_THRESHOLD_RED      5   // red line
+#define FILTER_THRESHOLD_SILVER   4   // silver (evac entry)
+#define FILTER_THRESHOLD_UTURN    3   // U-turn — confirmed when seen > 2 times
+#define FILTER_THRESHOLD_LINELOST 3   // sustained line loss → gap
 
 // =============================================================================
 //  K230D AI processor

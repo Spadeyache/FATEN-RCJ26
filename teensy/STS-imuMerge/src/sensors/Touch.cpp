@@ -1,4 +1,4 @@
-﻿#include "Touch.h"
+#include "Touch.h"
 #include "../../config.h"
 #include "../../pins_teensy.h"
 #include <Arduino.h>

@@ -1,4 +1,4 @@
-﻿#include "StateMachine.h"
+#include "StateMachine.h"
 #include "LINE_Follow.h"
 #include "LINE_Obstacle.h"
 #include "LINE_Gap.h"
@@ -71,7 +71,7 @@ void tick() {
         case STALLED_RED:
             // Idle until XIAO clears the red signal.
             Actions::Drive::stop();
-            if (Processing::XiaoDecode::command() != 4) {
+            if (Processing::XiaoDecode::command() != FEAT_RED) {
                 Processing::XiaoDecode::clearFilter();
 #if PRINT_STATE
                 Serial.println("Red cleared â†’ LINE_FOLLOW");

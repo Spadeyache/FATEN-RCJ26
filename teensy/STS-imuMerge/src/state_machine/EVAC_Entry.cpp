@@ -1,4 +1,4 @@
-﻿#include "EVAC_Entry.h"
+#include "EVAC_Entry.h"
 #include "StateMachine.h"
 #include "../../config.h"
 #include "../../pins_teensy.h"

@@ -1,4 +1,4 @@
-﻿#include "Forward.h"
+#include "Forward.h"
 #include "Drive.h"
 #include "../../config.h"
 #include "../sensors/IMU.h"

@@ -1,4 +1,4 @@
-﻿#include "XIAO_link.h"
+#include "XIAO_link.h"
 #include "../../config.h"
 #include "../../pins_teensy.h"
 #include "../drivers/yacheEncodedSerial.h"

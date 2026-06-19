@@ -1,4 +1,4 @@
-﻿#include "Arm.h"
+#include "Arm.h"
 #include "../../config.h"
 #include "../../pins_teensy.h"
 

@@ -1,4 +1,4 @@
-﻿#include "LINE_Obstacle.h"
+#include "LINE_Obstacle.h"
 #include "StateMachine.h"
 #include "../../config.h"
 #include "../../pins_teensy.h"
@@ -18,7 +18,7 @@
 //  Sequence (preserved verbatim from the original FOLLOWING_LINE inline block):
 //    1. Debounce 50 ms â€” confirm bumper still pressed
 //    2. Back off 50 mm, turn -80Â°, nudge forward 2 mm
-//    3. Switch XIAO into EVAC mode (looking for black line) and crawl
+//    3. Switch XIAO into SEARCH_LINE mode (looking for black line) and crawl
 //       forward + conductivity-driven micro-turns until xiaoCommand reports
 //       a black line (cmd 6 or 7).
 //    4. Restore XIAO line-follow mode, drive forward 50 mm, hand back to
@@ -44,14 +44,13 @@ void update() {
         Actions::Forward::forward(70, 2);
 
         Actions::Drive::stop();
-        Processing::XiaoDecode::setMode(XIAO_MODE_EVAC);
+        Processing::XiaoDecode::setMode(XIAO_MODE_SEARCH_LINE);
         delay(200);
         Processing::XiaoDecode::clearFilter();
 
         // Crawl forward; if conductivity probe sees the floor, micro-turn
-        // and nudge until XIAO reports a black line (cmd 6 / 7).
-        while (Processing::XiaoDecode::command() != 6
-            && Processing::XiaoDecode::command() != 7) {
+        // and nudge until XIAO (in SEARCH_LINE mode) reports the black return line.
+        while (Processing::XiaoDecode::command() != FEAT_SEARCH_LINE_BLACK) {
             Sensors::XIAO_link::tick();
             Processing::XiaoDecode::tick();
             Sensors::Touch::tick();
@@ -59,8 +58,7 @@ void update() {
             if (Sensors::Touch::conduct0()) {
                 analogWrite(BUZZER_PIN, 80);
                 Actions::Turn::turn(-20.0f);
-                if (Processing::XiaoDecode::command() == 6
-                 || Processing::XiaoDecode::command() == 7) {
+                if (Processing::XiaoDecode::command() == FEAT_SEARCH_LINE_BLACK) {
                     Processing::XiaoDecode::clearFilter();
                     break;
                 }

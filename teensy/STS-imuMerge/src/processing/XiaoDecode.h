@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 // =============================================================================
 //  Processing::XiaoDecode â€” interprets the XIAO register cache.
@@ -22,9 +22,10 @@ namespace XiaoDecode {
 
 void tick(bool instantRun = false);  // re-runs filter every 20 ms (or instantly)
 
-uint8_t command();        // confirmed command code (0 if none)
+uint8_t command();        // confirmed FEAT_* event (FEAT_NONE if none)
 float   lineError();      // 0..254
 float   gapAngle();       // 0..254
+bool    commitFlag();     // XIAO green-turn commit in progress → freeze transitions
 
 void    setMode(XiaoMode m);
 void    clearFilter();    // forget votes after a mode change / state transition

@@ -11,6 +11,14 @@ static const uint8_t LINE_HALF_W   = 4;    // half-width of the black line
 static const uint8_t GREEN_GAP     = 0;    // gap between line edge and green window
 
 void modeLineFollowRun(camera_fb_t* fb, YacheEncodedSerial& teensy) {
+
+//integrate the old row 55 line follow. + add a rectangle that triggers two point line follow when gap, 90 deg, intersection
+
+//xiao has if its intense black ckeck for contnue line. do the two point line follow untill xx
+//same for when detect green it does the agressive two point
+
+//ignore above. I need to make the gain more aggresive in a manner that it can deal with the error with the goal point stayinf in the front row. if it goes to the side its ultra strong gain
+
     // ── 1. Scan the line-follow row ───────────────────────────────────────────
     cameraData pixels[160] = {};
     scanRow(fb, SCAN_ROW, SCAN_COL_MIN, SCAN_COL_MAX, pixels);
@@ -100,11 +108,13 @@ void modeLineFollowRun(camera_fb_t* fb, YacheEncodedSerial& teensy) {
     if (fresh) { s_lastErr = pixelErr; s_lastErrPx = errPx; }
     uint8_t errByte = (uint8_t)constrain((int)(s_lastErr + 0.5f), 0, 254);
 
-    // ── 10. Feature priority (green L/R migrated to the commit above) ─────────
+    // ── 10. FEATURE event for the Teensy (priority silver > red > U-turn > lost)
+    //  Green L/R are handled locally by the commit, so they are NOT reported.
+    //  red/silver/line-lost are raw (the Teensy moving-average filters them);
+    //  U-turn is already GreenFilter-confirmed here.
     uint8_t featureId = FEAT_NONE;
-    if (greenCmd == 1)                                                  featureId = FEAT_UTURN;
-    else if (!commitActive && blackCount > LF_BLACK_PixCOUNT_THRESHOLD) featureId = FEAT_BLACK_INTERSECT;
-    if (!commitActive && blackCount <= 5)           featureId = FEAT_NO_LINE;
+    if (blackCount <= 5)                            featureId = FEAT_LINE_LOST;
+    if (greenCmd == 1)                              featureId = FEAT_UTURN;
     if (redCount    > LF_RED_PixCOUNT_THRESHOLD)    featureId = FEAT_RED;
     if (silverCount > LF_SILVER_PixCOUNT_THRESHOLD) featureId = FEAT_SILVER;
 
@@ -115,6 +125,7 @@ void modeLineFollowRun(camera_fb_t* fb, YacheEncodedSerial& teensy) {
 
     teensy.send(XIAO_REG_FEATURE, featureId);
     teensy.send(XIAO_REG_COM,     errByte);
+    teensy.send(XIAO_REG_FLAG,    lc_commitActive() ? 1 : 0);   // freeze Teensy transitions mid-commit
 
     // ── 12. Debug output ──────────────────────────────────────────────────────
     SPRINTF(SPRINT_RESULTS, "[RES]",

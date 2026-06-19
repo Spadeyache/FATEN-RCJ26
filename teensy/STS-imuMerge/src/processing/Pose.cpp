@@ -1,4 +1,4 @@
-﻿#include "Pose.h"
+#include "Pose.h"
 #include "../../config.h"
 #include <math.h>
 

@@ -1093,7 +1093,7 @@ document.querySelectorAll('.filter-btn').forEach(btn => {
 // ── Live metrics ──────────────────────────────────────────────────────────────
 // Parses key=value pairs out of [RES] lines and updates the metric chips.
 // Supports floats, ints, and negative numbers.
-const MODE_NAMES = { '0':'LINE', '1':'EVAC', '2':'NOGI', '3':'GAP' };
+const MODE_NAMES = { '0':'LINE', '1':'SEARCH_LINE', '2':'NOGI', '3':'GAP' };
 
 function parseResLine(text) {
   // Strip the [RES] prefix

@@ -1,4 +1,4 @@
-﻿#include "IMU.h"
+#include "IMU.h"
 #include "../../config.h"
 #include "../../pins_teensy.h"
 #include "../drivers/yacheMPU6050.h"

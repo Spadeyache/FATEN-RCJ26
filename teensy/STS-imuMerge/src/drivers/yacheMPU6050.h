@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 // =============================================================================
 //  yacheMPU6050 â€” MPU-6050 + Madgwick filter (no DMP).
