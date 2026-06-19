@@ -52,11 +52,11 @@
 #define SCAN_COL_MAX       110  // Last column (inclusive)
 
 // ── Camera scan — line-follow row ────────────────────────────────────────────
-#define SCAN_ROW           55   // Y row used for line-follow scan
+#define SCAN_ROW           67   // Y row used for line-follow scan
 
 // ── Color thresholds ─────────────────────────────────────────────────────────
 // Applied to calibrated data (vision.cpp rgb888Calibration) unless noted "raw"
-#define BLACK_GRAY_MAX     15   // Calibrated grayscale ≤ this → black
+#define BLACK_GRAY_MAX     5   // Calibrated grayscale ≤ this → black
 
 #define SILVER_RAW_R_MIN   250  // Raw (pre-calibration) R ≥ this
 #define SILVER_RAW_G_MIN   252  // Raw G ≥ this
@@ -69,6 +69,14 @@
 
 #define RED_SAT_MIN        80
 #define RED_VAL_MIN        40
+
+// ── Pixel sampling window used by updateRawGrayHSV() ─────────────────────────
+// Width/height must be odd. A 5x1 sample gives horizontal smoothing without
+// mixing neighboring rows.
+#define VISION_SAMPLE_BOX_W 5
+#define VISION_SAMPLE_BOX_H 1
+#define VISION_SAMPLE_HALF_W ((VISION_SAMPLE_BOX_W - 1) / 2)
+#define VISION_SAMPLE_HALF_H ((VISION_SAMPLE_BOX_H - 1) / 2)
 
 // ── Mode 0 : Line Follow ─────────────────────────────────────────────────────
 #define LF_SILVER_PixCOUNT_THRESHOLD   4    // Min silver Pixel count → report FEAT_SILVER
@@ -99,11 +107,11 @@
 
 // ── LineCount : border-crossing detection + in/out tracking ─────────────────
 // Rectangle whose border we sample (frame is 160 x 120; keep ≥2 px from edges
-// because updateRawGrayHSV() averages a 5x5 box). Widen beyond the 50–110
+// because updateRawGrayHSV() samples around each point). Widen beyond the 50–110
 // line-follow band so side branches are visible at the edge.
-#define LC_ROI_X_MIN          40
-#define LC_ROI_X_MAX         119
-#define LC_ROI_Y_TOP          15   // top edge (far from robot, small pixelY)
+#define LC_ROI_X_MIN          (32 + VISION_SAMPLE_HALF_W)
+#define LC_ROI_X_MAX          (132 - VISION_SAMPLE_HALF_W)
+#define LC_ROI_Y_TOP          5   // top edge (far from robot, small pixelY)
 #define LC_ROI_Y_BOT         65   // bottom edge (near robot, large pixelY)
 
 #define LC_RUN_MIN_LEN         3   // min contiguous black samples on the border to count a line (≈ line width)
@@ -115,3 +123,24 @@
 #define LF_IN_BLEND            0.30f  // small stabilizing blend from the near/in point
 #define LF_PX_SCALE            3.2f   // error-byte units per pixel of horizontal displacement
 #define LF_ERROR_CENTER      127      // error byte that means centred
+
+// ── Green command filter (rolling-window vote; mirrors Teensy CommandFilter) ─
+#define GF_QUEUE_SIZE         15   // rolling window of raw green observations
+#define GF_VOTES               4   // left/right votes in window → confirm a turn
+#define GF_UTURN_VOTES         2   // pure both-green frames → confirm a U-turn
+#define GF_BOTH_VOTES          4   // left AND right each ≥ this → also a U-turn
+
+// ── Committed goal (green turn): virtual mid-edge point, tracked until the line
+//    settles back to a single continuation (intersection passed) ─────────────
+#define COMMIT_END_OUTS       1     // "single continuation" = exactly this many outs
+#define COMMIT_END_FRAMES    15     // consecutive single-out *loop* frames to end (≈0.5s at camera rate,
+                                    //   not viewer rate — lc_commitUpdate runs every loop)
+#define COMMIT_ARM_TIMEOUT   45     // loop frames after a green to actually reach a branch (outCount>=2);
+                                    //   if none appears, cancel the commit (a stray/false green fizzles)
+#define COMMIT_SIDE_MARGIN   10     // px past LF_CENTER_X an out must be to ACQUIRE the lock; until a
+                                    //   branch is genuinely on that side we don't lock (steering stays
+                                    //   on the centred focused-out)
+#define COMMIT_TRACK_GATE  50.0f    // once locked, follow that branch by nearest perimeter-pos within this
+                                    //   gate (loop samples). Pos distinguishes edges/corners → holds the
+                                    //   branch identity far better than pixelX as crossings converge.
+#define COMMIT_SINGLE_OUT_FRAMES 6   // clear commit after seeing only one out for this many frames

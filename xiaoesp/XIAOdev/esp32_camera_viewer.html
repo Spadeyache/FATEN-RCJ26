@@ -259,6 +259,23 @@ canvas { display: block; image-rendering: pixelated; }
   text-transform: uppercase; letter-spacing: 0.08em;
   margin: 2px 0 0 2px;
 }
+.row55-bar {
+  display: flex; width: 320px; height: 16px;
+  margin-top: 3px; overflow: hidden;
+  border: 1px solid var(--border); border-radius: 4px;
+  background: #111; box-shadow: inset 0 1px 3px rgba(0,0,0,0.4);
+}
+.row55-half {
+  flex: 1; position: relative; height: 100%;
+  color: #f4f4f4; font: 700 9px/14px monospace;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.8);
+}
+.row55-half span {
+  position: absolute; top: 0; left: 5px;
+  pointer-events: none;
+}
+.row55-half.right span { left: auto; right: 5px; }
+.row55-half + .row55-half { border-left: 1px solid rgba(0,0,0,0.65); }
 
 .fps-overlay {
   position: absolute; top: 8px; right: 8px;
@@ -557,6 +574,10 @@ canvas { display: block; image-rendering: pixelated; }
           <div class="fps-overlay" id="fpsLabel">-- fps</div>
           <div class="err-overlay" id="errOverlay">err: &mdash;</div>
         </div>
+        <div class="row55-bar" id="row55Bar" title="Row 55 color classification">
+          <div class="row55-half left" id="row55Left"><span>L</span></div>
+          <div class="row55-half right" id="row55Right"><span>R</span></div>
+        </div>
         <div class="cam-caption">Raw</div>
       </div>
 
@@ -598,6 +619,7 @@ canvas { display: block; image-rendering: pixelated; }
       <button class="filter-btn active" data-tag="ALL">ALL</button>
       <button class="filter-btn" data-tag="RES">[RES]</button>
       <button class="filter-btn" data-tag="LC">[LC]</button>
+      <button class="filter-btn" data-tag="ROW">[ROW]</button>
       <button class="filter-btn" data-tag="CLS">[CLS]</button>
       <button class="filter-btn" data-tag="PIX">[PIX]</button>
       <button class="filter-btn" data-tag="SIN">[SIN]</button>
@@ -638,6 +660,9 @@ const canvas         = document.getElementById('cam');
 const ctx            = canvas.getContext('2d');
 const overlay        = document.getElementById('overlay');
 const octx           = overlay.getContext('2d');
+const row55Bar       = document.getElementById('row55Bar');
+const row55LeftEl    = document.getElementById('row55Left');
+const row55RightEl   = document.getElementById('row55Right');
 const offsetCanvas   = document.getElementById('camOffset');
 const offsetCtx      = offsetCanvas.getContext('2d');
 const connectBtn     = document.getElementById('connectBtn');
@@ -683,6 +708,7 @@ canvas.style.width  = (160 * scale) + 'px';
 canvas.style.height = (120 * scale) + 'px';
 offsetCanvas.style.width  = (160 * scale) + 'px';
 offsetCanvas.style.height = (120 * scale) + 'px';
+row55Bar.style.width = canvas.style.width;
 
 // ── Calibration (hardcoded to match vision.cpp) ───────────────────────────────
 const calActive = true;
@@ -836,13 +862,21 @@ let lcData = null;        // { box:[x0,y0,x1,y1], crossings:[{x,y,role}], inIdx,
 let lcOverlayOn = true;
 const LC_IN_COLOR  = '#2ecc71';   // green  = the line the robot is on (in)
 const LC_OUT_COLOR = '#e8840a';   // orange = branches (out)
-const LC_FO_COLOR  = '#f0c040';   // yellow = focused out used for slope error
+const LC_FO_COLOR  = LC_OUT_COLOR; // orange ring = focused out used for normal steering
+const LC_COMMIT_COLOR = LC_IN_COLOR; // green outer ring = committed green-turn goal
 
 // [LC] box=20,15,139,110 n=3 in=1 fo=2 xi=120 xo=80 epx=12.0 err=165 held=0 out=2 p=120,110,i 80,15,f 40,60,o
 function parseLC(text) {
   const box  = text.match(/box=(\d+),(\d+),(\d+),(\d+)/);
   const inM  = text.match(/\bin=(-?\d+)/);
   const foM  = text.match(/\bfo=(-?\d+)/);
+  const stM  = text.match(/\bsteer=(-?\d+)/);
+  const actM = text.match(/\bact=(\d+)/);
+  const lockM = text.match(/\block=(\d+)/);
+  const progM = text.match(/\bprog=(\d+)/);
+  const cmtM = text.match(/\bcmt=(\d+)/);
+  const cmsM = text.match(/\bcms=(\d+)/);
+  const gM   = text.match(/\bg=(\d+)/);
   const errM = text.match(/\berr=(-?\d+)/);
   const held = text.match(/\bheld=(\d+)/);
   const out  = text.match(/\bout=(\d+)/);
@@ -850,18 +884,23 @@ function parseLC(text) {
   const pIdx = text.indexOf('p=');
   if (pIdx >= 0) {
     for (const p of text.slice(pIdx + 2).trim().split(/\s+/)) {
-      const m = p.match(/^(\d+),(\d+),([iof])$/);
+      const m = p.match(/^(\d+),(\d+),([iofc])$/);
       if (m) crossings.push({ x: +m[1], y: +m[2], role: m[3] });
     }
   }
   lcData = {
-    box:   box ? [+box[1], +box[2], +box[3], +box[4]] : null,
+    box:     box ? [+box[1], +box[2], +box[3], +box[4]] : null,
     crossings,
-    inIdx: inM  ? +inM[1]  : -1,
-    foIdx: foM  ? +foM[1]  : -1,
-    err:   errM ? +errM[1] : null,
-    held:  held ? +held[1] : 0,
-    out:   out  ? +out[1]  : 0,
+    inIdx:   inM  ? +inM[1]  : -1,
+    foIdx:   foM  ? +foM[1]  : -1,
+    steerIdx:stM  ? +stM[1]  : -1,
+    active:  actM ? +actM[1] : (cmtM ? +cmtM[1] : 0),
+    commit:  lockM ? +lockM[1] : (cmtM ? +cmtM[1] : 0),
+    cms:     progM ? +progM[1] : (cmsM ? +cmsM[1] : 0),
+    green:   gM   ? +gM[1]   : 0,
+    err:     errM ? +errM[1] : null,
+    held:    held ? +held[1] : 0,
+    out:     out  ? +out[1]  : 0,
   };
   markDirty();
   drawOverlay();
@@ -875,28 +914,39 @@ function drawLcOverlay() {
     octx.lineWidth = 1;
     octx.strokeRect(d.box[0] + .5, d.box[1] + .5, d.box[2] - d.box[0], d.box[3] - d.box[1]);
   }
+  // Steering target = the crossing the error is computed to. Focused keeps the
+  // old orange double circle; committed adds a green outer ring around the out.
+  const steerIdx   = (d.steerIdx >= 0) ? d.steerIdx : d.foIdx;
+  const steerColor = d.commit ? LC_COMMIT_COLOR : LC_FO_COLOR;
+
   d.crossings.forEach((c, idx) => {
     octx.beginPath();
     octx.arc(c.x + .5, c.y + .5, 2.6, 0, Math.PI * 2);
     octx.fillStyle = (c.role === 'i') ? LC_IN_COLOR : LC_OUT_COLOR;
     octx.fill();
     octx.lineWidth = 0.6; octx.strokeStyle = 'rgba(0,0,0,0.6)'; octx.stroke();
-    // Ring the focused-out (the out used for the slope error). The firmware
-    // also marks it as role "f" so the outline still shows if indices shift.
+    // Focused-out ring: orange, matching the older focused-point display.
     if (idx === d.foIdx || c.role === 'f') {
       octx.beginPath();
       octx.arc(c.x + .5, c.y + .5, 4.6, 0, Math.PI * 2);
       octx.lineWidth = 1; octx.strokeStyle = LC_FO_COLOR; octx.stroke();
     }
+    // Committed target ring: the point remains orange like any out point, with
+    // a green outer circle so it is distinct from focused-out.
+    if (d.commit && (idx === steerIdx || c.role === 'c')) {
+      octx.beginPath();
+      octx.arc(c.x + .5, c.y + .5, 5.8, 0, Math.PI * 2);
+      octx.lineWidth = 1.2; octx.strokeStyle = LC_COMMIT_COLOR; octx.stroke();
+    }
   });
-  // Heading line: in → focused-out (the slope the error comes from).
+  // Heading line: in → steering target (the displacement the error comes from).
   const inC = d.crossings[d.inIdx];
-  const foC = d.crossings[d.foIdx];
-  if (inC && foC) {
+  const stC = d.crossings[steerIdx];
+  if (inC && stC) {
     octx.beginPath();
     octx.moveTo(inC.x + .5, inC.y + .5);
-    octx.lineTo(foC.x + .5, foC.y + .5);
-    octx.lineWidth = 1; octx.strokeStyle = LC_FO_COLOR; octx.stroke();
+    octx.lineTo(stC.x + .5, stC.y + .5);
+    octx.lineWidth = 1; octx.strokeStyle = steerColor; octx.stroke();
   }
   if (inC) {
     octx.fillStyle = LC_IN_COLOR;
@@ -905,10 +955,56 @@ function drawLcOverlay() {
       Math.min(inC.x + 4, overlay.width - 34), Math.max(inC.y - 3, 7));
   }
   if (d.err !== null) {
-    octx.fillStyle = (d.err === 127) ? '#5b9cf6' : LC_FO_COLOR;
+    octx.fillStyle = (d.err === 127) ? '#5b9cf6' : steerColor;
     octx.font = '7px monospace';
     octx.fillText('err ' + d.err, 3, 9);   // 127 = straight
   }
+  // Commit / green state readout.
+  if (d.commit) {
+    octx.fillStyle = LC_COMMIT_COLOR;
+    octx.font = '7px monospace';
+    octx.fillText('LOCK 1out ' + d.cms, 3, 19);
+  } else if (d.active) {
+    octx.fillStyle = LC_COMMIT_COLOR;
+    octx.font = '7px monospace';
+    octx.fillText('COMMIT', 3, 19);
+  } else if (d.green) {
+    octx.fillStyle = LC_IN_COLOR;
+    octx.font = '7px monospace';
+    octx.fillText(d.green === 1 ? 'U-TURN' : (d.green === 2 ? 'green L' : 'green R'), 3, 19);
+  }
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  ROW-55 COLOR STRIP  — display-only classification from [ROW] lines
+// ═════════════════════════════════════════════════════════════════════════════
+const ROW55_COLORS = {
+  white:  '#dddddd',
+  green:  '#2ecc71',
+  red:    '#e05252',
+  silver: '#c0c0c0',
+  black:  '#222222',
+};
+let row55Data = { left: 'white', right: 'white' };
+
+function row55Color(name) {
+  return ROW55_COLORS[name] || ROW55_COLORS.white;
+}
+
+function updateRow55Bar() {
+  row55LeftEl.style.background = row55Color(row55Data.left);
+  row55RightEl.style.background = row55Color(row55Data.right);
+  row55LeftEl.title = 'L: ' + row55Data.left;
+  row55RightEl.title = 'R: ' + row55Data.right;
+}
+
+function parseROW(text) {
+  const l = text.match(/\bl=(white|green|red|silver|black)\b/);
+  const r = text.match(/\br=(white|green|red|silver|black)\b/);
+  if (l) row55Data.left = l[1];
+  if (r) row55Data.right = r[1];
+  updateRow55Bar();
+  markDirty();
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -966,7 +1062,7 @@ function classify(t) {
 }
 // ── Serial filter ─────────────────────────────────────────────────────────────
 // Known tag prefixes produced by serial_print.h on Xiao.
-const KNOWN_TAGS = ['[RES]', '[LC]', '[CLS]', '[PIX]', '[SIN]', '[SOUT]'];
+const KNOWN_TAGS = ['[RES]', '[LC]', '[ROW]', '[CLS]', '[PIX]', '[SIN]', '[SOUT]'];
 let activeFilter = 'ALL';   // 'ALL' | '[RES]' | '[CLS]' | ... | 'UNTAGGED'
 
 function lineTag(text) {
@@ -1061,6 +1157,8 @@ function appendLine(text) {
   if (text.startsWith('[RES]')) updateMetrics(parseResLine(text));
   // Update the line-detection overlay from [LC] lines
   if (text.startsWith('[LC]')) parseLC(text);
+  // Update the row-55 color strip from [ROW] lines
+  if (text.startsWith('[ROW]')) parseROW(text);
 }
 
 autoScrollBtn.onclick = () => {
@@ -1143,6 +1241,7 @@ scaleBtn.onclick = () => {
   canvas.style.height  = (canvas.height * scale)+'px';
   overlay.style.width  = canvas.style.width;
   overlay.style.height = canvas.style.height;
+  row55Bar.style.width = canvas.style.width;
   scaleBtn.textContent = scale+'x';
   markDirty();
 };
@@ -1261,6 +1360,7 @@ function renderFrame() {
   if (w !== canvas.width || h !== canvas.height) {
     canvas.width = w; canvas.height = h;
     canvas.style.width  = (w * scale)+'px'; canvas.style.height = (h * scale)+'px';
+    row55Bar.style.width = canvas.style.width;
     imageData = ctx.createImageData(w, h);
     sizeLabel.textContent  = w+'\xd7'+h;
     bytesLabel.textContent = w * h * 2;
@@ -1322,6 +1422,7 @@ async function readLoop() {
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 renderMarkerList();
+updateRow55Bar();
 syncOverlaySize(160, 120);
 syncOffsetSize(160, 120);
 </script>

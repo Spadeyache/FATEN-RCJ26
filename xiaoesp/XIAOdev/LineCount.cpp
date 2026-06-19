@@ -117,6 +117,7 @@ int lc_lowestPixel(const LineCounts& lc) {
     int     best = -1;
     uint8_t maxY = 0;
     for (int i = 0; i < lc.count; i++) {
+        if (lc.crossings[i].edge == LC_EDGE_TOP) continue;
         if (best < 0 || lc.crossings[i].pixelY > maxY) {
             maxY = lc.crossings[i].pixelY;
             best = i;
@@ -128,6 +129,91 @@ int lc_lowestPixel(const LineCounts& lc) {
 void lc_resetTracking() {
     s_hasPrev    = false;
     s_lostFrames = 0;
+}
+
+// ── Committed goal (green turn) ──────────────────────────────────────────────
+static bool  s_cActive = false;
+static bool  s_cLeft   = false;  // committed side: true = left branch, false = right
+static int   s_cSingle = 0;      // consecutive frames with a single continuation
+static bool  s_cSeen   = false;  // have we actually reached the branch (outCount >= 2) yet?
+static bool  s_cLocked = false;  // acquired a committed-side branch and now sticking to it
+static float s_cLockPos = 0.0f;  // last locked branch perimeter-pos (for nearest-pos tracking)
+static int   s_cFrames = 0;      // loop frames since the commit started (for the arm timeout)
+
+void lc_commitStart(bool left) {
+    s_cLeft   = left;
+    s_cActive = true;
+    s_cSingle = 0;
+    s_cSeen   = false;
+    s_cLocked = false;
+    s_cFrames = 0;
+}
+
+void lc_commitClear() { s_cActive = false; s_cSingle = 0; s_cSeen = false; s_cLocked = false; }
+bool lc_commitActive() { return s_cActive; }
+bool lc_commitLocked() { return s_cActive && s_cLocked; }
+int  lc_commitProgress() { return s_cActive ? s_cSingle : 0; }
+
+bool lc_commitUpdate(const LineCounts& lc, int inIndex, int outCount, int& outIdx) {
+    outIdx = -1;
+    if (!s_cActive) return false;
+
+    // Arm timeout: a green should be immediately followed by the intersection. If
+    // we never reach a branch (outCount never hit 2) within COMMIT_ARM_TIMEOUT
+    // frames, the green was stray/false — cancel so the commit can't linger.
+    if (!s_cSeen && ++s_cFrames >= COMMIT_ARM_TIMEOUT) {
+        s_cActive = false; s_cLocked = false; return false;
+    }
+
+    // Don't end on the *approach*: a green is confirmed while the line still looks
+    // like 1-in/1-out (the branch hasn't entered the ROI yet). Only after we have
+    // actually seen the branch (outCount >= 2) does the single-out end-condition
+    // arm. Then, once the line settles back to a single continuation for N frames
+    // in a row, the intersection is behind us and the commit ends.
+    if (outCount >= 2) {
+        s_cSeen   = true;   // reached the intersection
+        s_cSingle = 0;
+    } else if (s_cSeen && outCount == COMMIT_END_OUTS) {
+        if (++s_cSingle >= COMMIT_END_FRAMES) {
+            s_cActive = false; s_cSingle = 0; s_cSeen = false; s_cLocked = false; return false;
+        }
+    } else {
+        s_cSingle = 0;      // approach (not yet seen) or line lost → no progress
+    }
+
+    int best = -1;
+    if (!s_cLocked) {
+        // ACQUIRE: the extreme out genuinely on the committed side (past the
+        // margin). Until one appears (approach / only a centred continuation)
+        // there is no lock — outIdx stays -1 and steering uses the focused-out.
+        for (int i = 0; i < lc.count; i++) {
+            if (i == inIndex) continue;
+            const float x = (float)lc.crossings[i].pixelX;
+            const bool onSide = s_cLeft ? (x <= LF_CENTER_X - COMMIT_SIDE_MARGIN)
+                                        : (x >= LF_CENTER_X + COMMIT_SIDE_MARGIN);
+            if (!onSide) continue;
+            if (best < 0 ||
+                ( s_cLeft && x < (float)lc.crossings[best].pixelX) ||
+                (!s_cLeft && x > (float)lc.crossings[best].pixelX)) best = i;
+        }
+        if (best >= 0) { s_cLocked = true; s_cLockPos = lc.crossings[best].pos; }
+    } else {
+        // STICKY: follow the locked branch by nearest perimeter-pos. Pos walks
+        // continuously along the border as the branch rotates, so it keeps the
+        // same identity (unlike pixelX, which aliases across edges). Hold
+        // (outIdx = -1) on a brief miss; the commit ends via the single-out
+        // streak above, not by releasing the lock.
+        float bd = 1e9f;
+        for (int i = 0; i < lc.count; i++) {
+            if (i == inIndex) continue;
+            float d = lc_loopDist(s_cLockPos, lc.crossings[i].pos, lc.perimeter);
+            if (d < bd) { bd = d; best = i; }
+        }
+        if (best >= 0 && bd <= COMMIT_TRACK_GATE) s_cLockPos = lc.crossings[best].pos;
+        else best = -1;     // lost this frame → hold, stay locked
+    }
+    outIdx = best;
+    return true;
 }
 
 // ── Layer 2 ──────────────────────────────────────────────────────────────────
@@ -150,8 +236,14 @@ LineClass lc_updateIn(const LineCounts& lc) {
     if (s_hasPrev) {
         idx = lc_trackPoint(s_prevInPos, lc);
         if (idx >= 0) {
-            s_prevInPos  = lc.crossings[idx].pos;   // matched → advance the track
-            s_lostFrames = 0;
+            if (lc.crossings[idx].edge == LC_EDGE_TOP) {
+                idx = -1;
+                s_hasPrev = false;
+                s_lostFrames = 0;
+            } else {
+                s_prevInPos  = lc.crossings[idx].pos;   // matched → advance the track
+                s_lostFrames = 0;
+            }
         } else {
             // Transient miss: hold previous pos rather than latch onto a branch.
             r.inHeld = true;
@@ -221,6 +313,19 @@ static int        s_dbgFo  = -1;
 static int        s_dbgErr = LF_ERROR_CENTER;
 static float      s_dbgErrPx = 0.0f;
 static bool       s_dbgValid = false;
+static int        s_dbgSteer  = -1;
+static bool       s_dbgCommitActive = false;
+static bool       s_dbgCommitLocked = false;
+static int        s_dbgCommitProgress = 0;
+static uint8_t    s_dbgGreen  = 0;
+
+void lc_storeSteer(int steerOut, bool commitActive, bool commitLocked, int commitProgress, uint8_t greenCmd) {
+    s_dbgSteer          = steerOut;
+    s_dbgCommitActive   = commitActive;
+    s_dbgCommitLocked   = commitLocked;
+    s_dbgCommitProgress = commitProgress;
+    s_dbgGreen          = greenCmd;
+}
 
 void lc_storeDebug(const LineCounts& lc, const LineClass& cls, int focusedOut, int errByte, float errPx) {
     s_dbgLc    = lc;
@@ -234,22 +339,21 @@ void lc_storeDebug(const LineCounts& lc, const LineClass& cls, int focusedOut, i
 int lc_formatDebug(char* buf, int bufLen) {
     if (!s_dbgValid || bufLen < 48) return 0;
 
-    const int xi = (s_dbgCls.inIndex >= 0 && s_dbgCls.inIndex < s_dbgLc.count)
-        ? s_dbgLc.crossings[s_dbgCls.inIndex].pixelX : -1;
-    const int xo = (s_dbgFo >= 0 && s_dbgFo < s_dbgLc.count)
-        ? s_dbgLc.crossings[s_dbgFo].pixelX : -1;
-
+    // Compact header — only what the viewer overlay needs, so the points after
+    // "p=" are never crowded out of the line buffer.
     int o = snprintf(buf, bufLen,
-        "[LC] box=%d,%d,%d,%d n=%d in=%d fo=%d xi=%d xo=%d epx=%.1f err=%d held=%d out=%d p=",
+        "[LC] box=%d,%d,%d,%d n=%d in=%d fo=%d steer=%d act=%d lock=%d prog=%d sn=%d oc=%d g=%d err=%d p=",
         LC_ROI_X_MIN, LC_ROI_Y_TOP, LC_ROI_X_MAX, LC_ROI_Y_BOT,
-        s_dbgLc.count, s_dbgCls.inIndex, s_dbgFo, xi, xo, s_dbgErrPx, s_dbgErr,
-        s_dbgCls.inHeld ? 1 : 0, s_dbgCls.outCount);
+        s_dbgLc.count, s_dbgCls.inIndex, s_dbgFo, s_dbgSteer,
+        s_dbgCommitActive ? 1 : 0, s_dbgCommitLocked ? 1 : 0, s_dbgCommitProgress,
+        s_cSeen ? 1 : 0, s_dbgCls.outCount, s_dbgGreen, s_dbgErr);
 
     int nshow = s_dbgLc.count;
     if (nshow > LC_MAX_CROSSINGS) nshow = LC_MAX_CROSSINGS;
     for (int i = 0; i < nshow && o < bufLen - 16; i++) {
         char role = 'o';
         if (i == s_dbgCls.inIndex) role = 'i';
+        else if (i == s_dbgSteer)  role = 'c';   // committed steering target
         else if (i == s_dbgFo)     role = 'f';
         o += snprintf(buf + o, bufLen - o, "%s%d,%d,%c",
             (i ? " " : ""),
@@ -258,4 +362,31 @@ int lc_formatDebug(char* buf, int bufLen) {
     }
     if (o < bufLen - 1) { buf[o++] = '\n'; buf[o] = '\0'; }
     return o;
+}
+
+// ── Row-55 debug bridge ──────────────────────────────────────────────────────
+static uint8_t s_row55Left  = ROW55_WHITE;
+static uint8_t s_row55Right = ROW55_WHITE;
+static bool    s_row55Valid = false;
+
+static const char* row55_className(uint8_t c) {
+    switch (c) {
+        case ROW55_GREEN:  return "green";
+        case ROW55_RED:    return "red";
+        case ROW55_SILVER: return "silver";
+        case ROW55_BLACK:  return "black";
+        default:           return "white";
+    }
+}
+
+void row55_storeDebug(uint8_t leftClass, uint8_t rightClass) {
+    s_row55Left  = leftClass;
+    s_row55Right = rightClass;
+    s_row55Valid = true;
+}
+
+int row55_formatDebug(char* buf, int bufLen) {
+    if (!s_row55Valid || bufLen < 24) return 0;
+    return snprintf(buf, bufLen, "[ROW] l=%s r=%s\n",
+        row55_className(s_row55Left), row55_className(s_row55Right));
 }

@@ -18,6 +18,14 @@
 
 #define LC_MAX_CROSSINGS 16
 
+enum Row55Class : uint8_t {
+    ROW55_WHITE  = 0,
+    ROW55_GREEN  = 1,
+    ROW55_RED    = 2,
+    ROW55_SILVER = 3,
+    ROW55_BLACK  = 4
+};
+
 // Edge ids around the loop.
 enum LcEdge : uint8_t { LC_EDGE_BOTTOM = 0, LC_EDGE_RIGHT = 1, LC_EDGE_TOP = 2, LC_EDGE_LEFT = 3 };
 
@@ -71,6 +79,23 @@ LineClass lc_updateIn(const LineCounts& lc);
 // re-seeds from the base case.
 void lc_resetTracking();
 
+// ── Committed goal (green turn) ──────────────────────────────────────────────
+// On a confirmed green, seed a virtual goal at the middle of the left or right
+// ROI edge and track it (like the in-point, gated) for COMMIT_MS so the steering
+// target follows the chosen branch through the intersection.
+void lc_commitStart(bool left);              // left=true → middle-left, else middle-right
+void lc_commitClear();                        // cancel immediately
+bool lc_commitActive();                       // currently committed?
+bool lc_commitLocked();                       // committed AND stuck to a committed-side branch
+int  lc_commitProgress();                     // consecutive single-out frames so far (0..COMMIT_END_FRAMES)
+
+// Advance the commit one frame. `outCount` is this frame's number of outs (from
+// LineClass). Returns whether the commit is still active; sets `outIdx` to the
+// matched crossing this frame, or -1 if the goal wasn't seen (caller holds last
+// error). Ends (returns false) once the line has shown a single continuation
+// (outCount == COMMIT_END_OUTS) for COMMIT_END_FRAMES consecutive frames.
+bool lc_commitUpdate(const LineCounts& lc, int inIndex, int outCount, int& outIdx);
+
 // ── Line-follow error ────────────────────────────────────────────────────────
 // Focused-out crossing: the out (any crossing that is not `inIndex`) closest to
 // the view centre, tie-broken toward the higher one (smaller pixelY). -1 if none.
@@ -90,5 +115,13 @@ void lc_storeDebug(const LineCounts& lc, const LineClass& cls, int focusedOut, i
 // Build a "[LC] box=.. n=.. in=.. fo=.. xi=.. xo=.. epx=.. err=.. ..." line
 // (newline-terminated, ASCII only) into buf. Returns bytes written, or 0.
 int  lc_formatDebug(char* buf, int bufLen);
+
+// Steering/commit debug bridge: extra fields appended to the "[LC]" line so the
+// viewer can show the active steering target, commit state and green state.
+void lc_storeSteer(int steerOut, bool commitActive, bool commitLocked, int commitProgress, uint8_t greenCmd);
+
+// Row-55 debug bridge: display-only left/right color classes for the viewer.
+void row55_storeDebug(uint8_t leftClass, uint8_t rightClass);
+int  row55_formatDebug(char* buf, int bufLen);
 
 #endif // LINECOUNT_H

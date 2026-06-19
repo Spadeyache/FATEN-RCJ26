@@ -3,8 +3,6 @@
 #include "serial_print.h"
 #include <Arduino.h>
 
-#define boxlength 5 //must be odd
-
 // const float R_Gain = 1.0;
 // const float G_Gain = 1.0;
 // const float B_Gain = 1.0;
@@ -78,7 +76,9 @@ HSV rgb888_to_hsv(uint8_t r8, uint8_t g8, uint8_t b8) {
     return res;
 }
 
-// remember it returns the 5x5box(maybe I need to add edge case)
+// Returns the averaged sample around the requested point. Current sample is
+// 1 row x 5 columns: enough horizontal smoothing for binary color checks
+// without mixing neighboring rows.
 cameraData updateRawGrayHSV(camera_fb_t* fb, uint8_t coordX, uint8_t coordY, bool print) {
 
     cameraData res = {0};
@@ -88,17 +88,19 @@ cameraData updateRawGrayHSV(camera_fb_t* fb, uint8_t coordX, uint8_t coordY, boo
     int w = fb->width;
     int h = fb->height;
     
-    // edge case: add later if needed
-    if (coordX <= (boxlength - 1)/2) return res;
-    if (coordX >= w - (boxlength - 1)/2) return res;
-    if (coordY <= (boxlength - 1)/2) return res;
-    if (coordY >= h - (boxlength - 1)/2) return res;
+    const int halfW = VISION_SAMPLE_HALF_W;
+    const int halfH = VISION_SAMPLE_HALF_H;
+
+    if (coordX < halfW) return res;
+    if (coordX >= w - halfW) return res;
+    if (coordY < halfH) return res;
+    if (coordY >= h - halfH) return res;
 
     long rSum = 0, gSum = 0, bSum = 0;
     int count = 0;
-    // 1. Average a 1x1 box around center (identical logic to debugGray)
-    for (int dy = -(boxlength - 1)/2; dy <= (boxlength - 1)/2; dy++) {
-        for (int dx = -(boxlength - 1)/2; dx <= (boxlength - 1)/2; dx++) {
+    // 1. Average the configured sample box around center.
+    for (int dy = -halfH; dy <= halfH; dy++) {
+        for (int dx = -halfW; dx <= halfW; dx++) {
             int x = coordX + dx;
             int y = coordY + dy;
             if (x < 0 || x >= w || y < 0 || y >= h) continue;

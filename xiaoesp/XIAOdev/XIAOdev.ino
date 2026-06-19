@@ -95,6 +95,11 @@ void setup() {
     xTaskCreatePinnedToCore(streamTask, "streamTask", 4096, nullptr, 1, &streamTaskHandle, 0);
     logf("Stream task on Core 0\n");
 #else
+    serialMutex = xSemaphoreCreateMutex();
+    if (!serialMutex) {
+        Serial.println("FATAL: FreeRTOS primitives failed");
+        while (true) delay(1000);
+    }
     logf("Stream image payload disabled; sending [LC] debug only\n");
 #endif
 #endif
@@ -145,8 +150,14 @@ static void sendLineCountDebugOnly() {
     lastSent = now;
 
     char lcLine[320];
+    char rowLine[48];
     int lcLen = lc_formatDebug(lcLine, sizeof(lcLine));
+    int rowLen = row55_formatDebug(rowLine, sizeof(rowLine));
+
+    if (serialMutex) xSemaphoreTake(serialMutex, portMAX_DELAY);
     if (lcLen > 0) Serial.write((const uint8_t*)lcLine, lcLen);
+    if (rowLen > 0) Serial.write((const uint8_t*)rowLine, rowLen);
+    if (serialMutex) xSemaphoreGive(serialMutex);
 }
 #endif
 
@@ -173,7 +184,9 @@ void streamTask(void* pvParameters) {
         // LineCount overlay line — ASCII, emitted under the mutex *before* the
         // frame so the viewer parses it as text (never inside the pixel bytes).
         char lcLine[320];
+        char rowLine[48];
         int  lcLen = lc_formatDebug(lcLine, sizeof(lcLine));
+        int  rowLen = row55_formatDebug(rowLine, sizeof(rowLine));
 
         // Frame integrity: send payload length + a Fletcher-16 checksum so the
         // viewer can drop torn frames and resync instead of rendering garbage.
@@ -182,6 +195,7 @@ void streamTask(void* pvParameters) {
 
         xSemaphoreTake(serialMutex, portMAX_DELAY);
         if (lcLen > 0) Serial.write((const uint8_t*)lcLine, lcLen);
+        if (rowLen > 0) Serial.write((const uint8_t*)rowLine, rowLen);
         Serial.write(MAGIC_IMAGE,      4);
         Serial.write((uint8_t*)&w,     2);
         Serial.write((uint8_t*)&h,     2);
