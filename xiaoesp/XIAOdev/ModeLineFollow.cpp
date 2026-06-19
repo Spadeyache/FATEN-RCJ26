@@ -85,12 +85,6 @@ void modeLineFollowRun(camera_fb_t* fb, YacheEncodedSerial& teensy) {
     else if (greenLeft  > LF_GREEN_PixCOUNT_THRESHOLD)                                            rawGreen = 2; // left
     else if (greenRight > LF_GREEN_PixCOUNT_THRESHOLD)                                            rawGreen = 3; // right
 
-    const uint8_t silverSideLeft = countSilverOnColumn(fb, LF_SILVER_SIDE_COL_LEFT);
-    const uint8_t silverSideRight = countSilverOnColumn(fb, LF_SILVER_SIDE_COL_RIGHT);
-    const bool sideSilverDetected =
-        silverSideLeft > LF_SILVER_SIDE_THRESHOLD ||
-        silverSideRight > LF_SILVER_SIDE_THRESHOLD;
-
 
     // ── 6. Row-55 colour readout (display only) ───────────────────────────────
     uint8_t rowLeft = ROW55_WHITE, rowRight = ROW55_WHITE;
