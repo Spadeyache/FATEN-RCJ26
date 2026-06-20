@@ -129,7 +129,7 @@
 
 // ── Line-follow error from pixel-space lookahead/position ────────────────────
 #define LF_CENTER_X           80.0f   // image column where a correctly centred line appears
-#define LF_IN_BLEND            0.30f  // small stabilizing blend from the near/in point
+#define LF_IN_BLEND            0.00f  // small stabilizing blend from the near/in point
 #define LF_PX_SCALE            3.2f   // error-byte units per pixel of horizontal displacement
 #define LF_ERROR_CENTER      127      // error byte that means centred
 #define LF_SIDE_Y_MIN         50      // only side-boost near the robot, not high T-intersection branches
