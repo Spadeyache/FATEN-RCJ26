@@ -92,8 +92,8 @@
 #define LF_RED_PixCOUNT_THRESHOLD      30   // Min red Pixel count → report FEAT_RED
 #define LF_BLACK_PixCOUNT_THRESHOLD    35   // Min black pixels → report FEAT_BLACK_INTERSECT
 #define LF_GREEN_PixCOUNT_THRESHOLD    5    // pixels needed to confirm green
-#define LF_SILVER_SIDE_COL_LEFT        15   // vertical side silver scan column
-#define LF_SILVER_SIDE_COL_RIGHT      145   // 160 - 15
+#define LF_SILVER_SIDE_COL_LEFT        25   // vertical side silver scan column
+#define LF_SILVER_SIDE_COL_RIGHT      135   // 160 - 15
 #define LF_SILVER_SIDE_ROW_MIN          0
 #define LF_SILVER_SIDE_ROW_MAX         70
 #define LF_SILVER_SIDE_THRESHOLD       12   // hits in either side column -> FEAT_SILVER

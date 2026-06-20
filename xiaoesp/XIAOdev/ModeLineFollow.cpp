@@ -24,7 +24,7 @@ static uint8_t countBlackOnRoiRow(camera_fb_t* fb, uint8_t row) {
 static uint8_t countSilverOnColumn(camera_fb_t* fb, uint8_t col) {
     uint8_t count = 0;
     for (uint8_t y = LF_SILVER_SIDE_ROW_MIN; y <= LF_SILVER_SIDE_ROW_MAX; y++) {
-        if (isSilver(updateRawGrayHSV(fb, col, y))) count++; Serial.println("*");
+        if (isSilver(updateRawGrayHSV(fb, col, y))) count++;
     }
     return count;
 }
@@ -87,17 +87,6 @@ void modeLineFollowRun(camera_fb_t* fb, YacheEncodedSerial& teensy) {
 
 
     // ── 6. Row-55 colour readout (display only) ───────────────────────────────
-    uint8_t rowLeft = ROW55_WHITE, rowRight = ROW55_WHITE;
-    if (redCount > LF_RED_PixCOUNT_THRESHOLD) {
-        rowLeft = rowRight = ROW55_RED;
-    } else if (silverCount > LF_SILVER_PixCOUNT_THRESHOLD || sideSilverDetected) {
-        rowLeft = rowRight = ROW55_SILVER;
-    } else {
-        const bool linePresent = (blackCount > 5);
-        rowLeft  = (greenLeft  > LF_GREEN_PixCOUNT_THRESHOLD) ? ROW55_GREEN : (linePresent ? ROW55_BLACK : ROW55_WHITE);
-        rowRight = (greenRight > LF_GREEN_PixCOUNT_THRESHOLD) ? ROW55_GREEN : (linePresent ? ROW55_BLACK : ROW55_WHITE);
-    }
-
     // ── 7. LineCount: in/out detection → focused-out ──────────────────────────
     LineCounts lc;
     lc_detectCrossings(fb, lc);
@@ -113,6 +102,17 @@ void modeLineFollowRun(camera_fb_t* fb, YacheEncodedSerial& teensy) {
     const bool sideSilverDetected =
         silverSideLeft > LF_SILVER_SIDE_THRESHOLD ||
         silverSideRight > LF_SILVER_SIDE_THRESHOLD;
+
+    uint8_t rowLeft = ROW55_WHITE, rowRight = ROW55_WHITE;
+    if (redCount > LF_RED_PixCOUNT_THRESHOLD) {
+        rowLeft = rowRight = ROW55_RED;
+    } else if (silverCount > LF_SILVER_PixCOUNT_THRESHOLD || sideSilverDetected) {
+        rowLeft = rowRight = ROW55_SILVER;
+    } else {
+        const bool linePresent = (blackCount > 5);
+        rowLeft  = (greenLeft  > LF_GREEN_PixCOUNT_THRESHOLD) ? ROW55_GREEN : (linePresent ? ROW55_BLACK : ROW55_WHITE);
+        rowRight = (greenRight > LF_GREEN_PixCOUNT_THRESHOLD) ? ROW55_GREEN : (linePresent ? ROW55_BLACK : ROW55_WHITE);
+    }
 
     // ── 8. Green vote filter → committed goal ─────────────────────────────────
     //  Green left/right are handled locally now: a confirmed turn seeds a virtual
@@ -143,7 +143,12 @@ void modeLineFollowRun(camera_fb_t* fb, YacheEncodedSerial& teensy) {
     //  red/silver/line-lost are raw (the Teensy moving-average filters them);
     //  U-turn is already GreenFilter-confirmed here.
     uint8_t featureId = FEAT_NONE;
-    if (topBottomLost)                              featureId = FEAT_LINE_LOST;
+    if (topBottomLost) {
+        featureId = FEAT_LINE_LOST;
+        // Lost line: send the center error byte, equivalent to steering toward
+        // the camera center instead of holding the last seen line error.
+        errByte = LF_ERROR_CENTER;
+    }
     if (greenCmd == 1)                              featureId = FEAT_UTURN;
     if (redCount    > LF_RED_PixCOUNT_THRESHOLD)    featureId = FEAT_RED;
     if (silverCount > LF_SILVER_PixCOUNT_THRESHOLD || sideSilverDetected) featureId = FEAT_SILVER;

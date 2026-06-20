@@ -39,19 +39,19 @@ void modeGapRun(camera_fb_t* fb, YacheEncodedSerial& teensy) {
     const uint8_t frontLineSeen = (frontBlack > GAP_BLACK_THRESHOLD) ? 1 : 0;
 
     float angleDeg = 0.0f;
-    if (frontBlack > GAP_BLACK_THRESHOLD && backBlack > GAP_BLACK_THRESHOLD) {
-        const float dx = frontCom - backCom;
+    const float dx = frontCom - backCom;
+    if (frontBlack > 0 && backBlack > 0) {
         const float dy = (float)GAP_BACK_ROW - (float)GAP_FRONT_ROW;
         angleDeg = atan2f(dx, dy) * (180.0f / (float)M_PI);
     }
 
     const uint8_t encodedAngle = (uint8_t)constrain(
-        (int)(GAP_ANGLE_CENTER_BYTE + angleDeg), 0, 254);
+        (int)roundf((float)GAP_ANGLE_CENTER_BYTE + angleDeg), 0, 254);
 
     teensy.send(XIAO_REG_FLAG, frontLineSeen);
     teensy.send(XIAO_REG_ANGLE, encodedAngle);
 
     SPRINTF(SPRINT_RESULTS, "[RES]",
-        "mode=3 front=%d back=%d flag=%d fcom=%.1f bcom=%.1f ang=%.1f enc=%d",
-        frontBlack, backBlack, frontLineSeen, frontCom, backCom, angleDeg, encodedAngle);
+        "mode=3 front=%d back=%d flag=%d fcom=%.1f bcom=%.1f dx=%.1f ang=%.1f enc=%d",
+        frontBlack, backBlack, frontLineSeen, frontCom, backCom, dx, angleDeg, encodedAngle);
 }
