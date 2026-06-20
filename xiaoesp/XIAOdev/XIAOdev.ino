@@ -6,6 +6,7 @@
 #include "config.h"
 #include "serial_print.h"
 #include "ModeLineFollow.h"
+#include "ModeLineFollow2.h"
 #include "ModeSearchLine.h"
 #include "ModeNoGI.h"
 #include "ModeGap.h"
@@ -61,6 +62,8 @@ static void logf(const char* fmt, ...) {
 
 // ── Setup ──────────────────────────────────────────────────────────────────────
 void setup() {
+    // Serial.begin(115200);
+    // while(true){Serial.println("start");}
     esp_log_level_set("*", ESP_LOG_NONE);   // suppress HAL noise on USB serial
 
     Serial.begin(SERIAL_DEBUG_BAUD);
@@ -119,17 +122,16 @@ void loop() {
     if (!fb) { logf("Frame grab failed\n"); return; }
 
     // ── Dispatch to active mode ───────────────────────────────────────────────
-    bool ranLineFollow = false;
+    //  Line-follow now uses the clean two-row modeLineFollow2Run (it owns the
+    //  LED for black-saturation). The old modeLineFollowRun (green/commit/in-out)
+    //  is kept in ModeLineFollow.cpp but no longer called.
     switch (mode) {
-        // Old mode-indicator LED behavior disabled:
-        //   LineFollow/default wrote HIGH, other states wrote LOW.
-        case MODE_LINEFOLLOW: ranLineFollow = true; modeLineFollowRun(fb, teensy); break;
-        case MODE_SEARCH_LINE: modeSearchLineRun(fb, teensy);                      break;
-        case MODE_NOGI:       modeNoGIRun(fb, teensy);                             break;
-        case MODE_GAP:        modeGapRun(fb, teensy);                              break;
-        default:              ranLineFollow = true; modeLineFollowRun(fb, teensy); break;
+        case MODE_LINEFOLLOW:  modeLineFollow2Run(fb, teensy); break;
+        case MODE_SEARCH_LINE: modeSearchLineRun(fb, teensy);  break;
+        case MODE_NOGI:        modeNoGIRun(fb, teensy);        break;
+        case MODE_GAP:         modeGapRun(fb, teensy);         break;
+        default:               modeLineFollow2Run(fb, teensy); break;
     }
-    digitalWrite(LED_BUILTIN, (ranLineFollow && lc_commitLocked()) ? LOW : HIGH);
 
 #ifdef OUTPUT_STREAM
 #if STREAM_SEND_CAMERA_IMAGES

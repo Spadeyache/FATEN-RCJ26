@@ -16,7 +16,7 @@
 // In OUTPUT_STREAM builds, set to 0 to send only the ASCII debug overlay lines
 // ([LC] box/points/error and [ROW] scan colors) and skip the binary camera
 // image payload. This makes the point/box stream much more robust while tuning.
-#define STREAM_SEND_CAMERA_IMAGES 1
+#define STREAM_SEND_CAMERA_IMAGES 0
 
 // ── Serial baud rates ────────────────────────────────────────────────────────
 #define SERIAL_DEBUG_BAUD    115200
@@ -92,6 +92,21 @@
 #define LF_RED_PixCOUNT_THRESHOLD      30   // Min red Pixel count → report FEAT_RED
 #define LF_BLACK_PixCOUNT_THRESHOLD    35   // Min black pixels → report FEAT_BLACK_INTERSECT
 #define LF_GREEN_PixCOUNT_THRESHOLD    5    // pixels needed to confirm green
+
+// ── Mode 0b : Line Follow 2 (clean two-row CoM; no green/commit) ─────────────
+//  Row NEAR (60): black center-of-mass → line error (0..254, 127 = centre).
+//                 < LF2_NOLINE_BLACK_MIN black px on this row → no line.
+//  Row FAR  (40): edge cases — red (FEAT_RED) and black saturation (→ LED on).
+#define LF2_ROW_NEAR             60   // lower row used for the steering error
+#define LF2_ROW_FAR              40   // front/look-ahead row used for edge cases
+#define LF2_NOLINE_BLACK_MIN      5   // near-row black px below this → no line (error = centre)
+#define LF2_SATURATION_BLACK_MIN 30   // far-row black px above this → saturated bar ahead (LED)
+// Continuous-through-intersection handling:
+#define LF2_ROW_TOP               5   // far row: does the line continue straight past the bar?
+#define LF2_GREEN_ROW_A          40   // green scan row A (on the saturation line)
+#define LF2_GREEN_ROW_B          55   // green scan row B (40 + 15, toward the robot)
+#define LF2_STRAIGHT_BLACK_MIN    5   // row-TOP black >= this → the line continues straight
+#define LF2_STRAIGHT_DEG       25.0f  // in→out angle below this ends a committed green turn
 #define LF_SILVER_SIDE_COL_LEFT        25   // vertical side silver scan column
 #define LF_SILVER_SIDE_COL_RIGHT      135   // 160 - 15
 #define LF_SILVER_SIDE_ROW_MIN          0

@@ -129,13 +129,23 @@ inline float robotRoll()  { return -Sensors::IMU::getPitch(); }   // + = left si
 //   Two gain sets, switched together with the base speed: the moment
 //   frictionCircAdj drops the base below FRIC_SPEED_FLAT (i.e. on a slope), the
 //   controller also swaps to the *_SLOPE gains. Flat ground uses the *_FLAT set.
-constexpr float PID_KP_FLAT  = 2.95f;   // TODO: tune for fast flat-line racing
+constexpr float PID_KP_FLAT  = 4.95f;   // TODO: tune for fast flat-line racing
 constexpr float PID_KI_FLAT  = 0.0f;
-constexpr float PID_KD_FLAT  = 2.35f;
+constexpr float PID_KD_FLAT  = 0.0f;
 
 constexpr float PID_KP_SLOPE = 0.85f;   // validated slope tune
 constexpr float PID_KI_SLOPE = 0.0f;
 constexpr float PID_KD_SLOPE = 0.65f;
+
+// Hardcoded line-PID test mode. Enable while developing/tuning raw PID gains:
+// this bypasses pitch/roll gain scheduling, gravAdj, and rotAxisAdj.
+constexpr bool  PID_USE_HARDCODED_TEST = true;
+constexpr float PID_TEST_BASE_SPEED    = 70.0f;
+constexpr float PID_TEST_KP            = 4.95f;
+constexpr float PID_TEST_KI            = 0.0f;
+constexpr float PID_TEST_KD            = 0.0f;
+constexpr float PID_TEST_MIN_SPEED     = -70.0f;
+constexpr float PID_TEST_MAX_SPEED     = 70.0f;
 
 constexpr float PID_INTEGRAL_LIMIT = 500.0f;
 constexpr float LINE_EMA_ALPHA     = 0.3f;    // error smoothing  (currently disabled)
@@ -263,6 +273,30 @@ void runLinePID() {
 
     integral += rawError * dt;
     integral  = constrain(integral, -PID_INTEGRAL_LIMIT, PID_INTEGRAL_LIMIT);
+
+    if (PID_USE_HARDCODED_TEST) {
+        const float correction =
+            PID_TEST_KP * rawError +
+            PID_TEST_KI * integral +
+            PID_TEST_KD * derivative;
+
+        const float leftSpeed = constrain(
+            PID_TEST_BASE_SPEED + correction,
+            PID_TEST_MIN_SPEED,
+            PID_TEST_MAX_SPEED);
+        const float rightSpeed = constrain(
+            PID_TEST_BASE_SPEED - correction,
+            PID_TEST_MIN_SPEED,
+            PID_TEST_MAX_SPEED);
+
+        motor(leftSpeed, rightSpeed, false);
+
+#if PRINT_PID
+        Serial.printf("PID TEST err:%.1f drv:%.1f corr:%.1f L:%.0f R:%.0f\n",
+                      rawError, derivative, correction, leftSpeed, rightSpeed);
+#endif
+        return;
+    }
 
     // Base speed: frictionCircAdj picks 70 on flat / 55 once tilted past 8°.
     const float base = frictionCircAdj();

@@ -106,6 +106,10 @@ int  lc_focusedOut(const LineCounts& lc, int inIndex);
 // Returns false when in/out are not both available (caller should hold last).
 bool lc_slopeError(const LineCounts& lc, int inIndex, int outIndex, float& errOut, float* errPxOut = nullptr);
 
+// Angle (degrees) of the in→out vector from straight-up (0 = vertical/straight).
+// Used to decide when a committed turn has straightened out. 90 if in/out missing.
+float lc_inOutAngleDeg(const LineCounts& lc, int inIndex, int outIndex);
+
 // ── Debug bridge (for the esp32_camera_viewer overlay) ───────────────────────
 // The mode (Core 1) stores the latest result; the stream task (Core 0) formats
 // it into a "[LC] ..." text line and emits it under the serial mutex, so the

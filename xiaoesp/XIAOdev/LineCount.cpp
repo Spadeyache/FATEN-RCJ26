@@ -316,6 +316,14 @@ bool lc_slopeError(const LineCounts& lc, int inIndex, int outIndex, float& errOu
     return true;
 }
 
+float lc_inOutAngleDeg(const LineCounts& lc, int inIndex, int outIndex) {
+    if (inIndex < 0 || outIndex < 0) return 90.0f;   // unknown → "not straight"
+    const float dx = (float)lc.crossings[outIndex].pixelX - (float)lc.crossings[inIndex].pixelX;
+    float dy = (float)lc.crossings[inIndex].pixelY - (float)lc.crossings[outIndex].pixelY; // up +
+    if (dy < 1.0f) dy = 1.0f;
+    return fabsf(atan2f(dx, dy)) * 57.2957795f;       // 0 = vertical/straight
+}
+
 // ── Debug bridge ─────────────────────────────────────────────────────────────
 static LineCounts s_dbgLc;
 static LineClass  s_dbgCls;
