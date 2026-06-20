@@ -1,7 +1,7 @@
 #pragma once
 
 // =============================================================================
-//  yacheVL53L7CX â€” thin wrapper around STM32duino_VL53L7CX.
+//  yacheVL53L7CX - thin wrapper around STM32duino_VL53L7CX.
 //
 //  Phase 1: single front sensor on Wire1 at default IÂ²C address (0x52),
 //  no LPn juggling. Array-ready for phase 2 (multi-sensor on same bus).
@@ -19,7 +19,7 @@
 
 #include <Arduino.h>
 #include <Wire.h>
-#include <vl53l7cx_class.h>
+#include "../vendor/STM32duino_VL53L7CX/vl53l7cx_class.h"
 #include <arm_math.h>
 #include "../../pins_teensy.h"
 

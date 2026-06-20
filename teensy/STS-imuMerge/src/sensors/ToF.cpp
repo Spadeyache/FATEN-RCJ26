@@ -3,7 +3,7 @@
 #include <Wire.h>
 
 // =============================================================================
-//  Sensors::ToF — 4x VL53L7CX on TOF_WIRE (primary I2C / Wire0).
+//  Sensors::ToF - 4x VL53L7CX on TOF_WIRE.
 //
 //  All VL53L7CX power up at the same default I2C address (0x52). To run several
 //  on one bus we hold every sensor in reset via its XSHUT pin, then bring them
@@ -51,7 +51,7 @@ namespace {
 
 void init() {
     if (_initialised) return;
-    TOF_WIRE.begin();   // primary I2C (Wire0); ToF has its own bus
+    TOF_WIRE.begin();   // ToF has its own bus; see TOF_WIRE in pins_teensy.h.
 
     // 1. Hold every XSHUT sensor in reset (low = off). Sensors with no XSHUT
     //    (pin == -1) stay powered on at the default 0x52.

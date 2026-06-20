@@ -64,9 +64,8 @@
 // =============================================================================
 //  ToF — VL53L7CX 4-sensor array (on its own I2C bus)
 // =============================================================================
-//   Bus: primary I2C (Wire0). On Teensy the primary bus object is `Wire`
-//   (SDA0 = pin 18, SCL0 = pin 19).
-#define TOF_WIRE            Wire     // Wire0 / primary I2C bus
+//   Bus: Wire1 on Teensy 4.1 (SDA1 = pin 17, SCL1 = pin 16).
+#define TOF_WIRE            Wire1
 
 //   Array-wide config.
 #define TOF_COUNT              4

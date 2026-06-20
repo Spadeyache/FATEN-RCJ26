@@ -1,7 +1,7 @@
 #pragma once
 
 // =============================================================================
-//  Sensors::ToF â€” VL53L7CX array on Wire1.
+//  Sensors::ToF - VL53L7CX array on TOF_WIRE.
 //  Passthrough to yacheVL53L7CX driver. processing/Mapping consumes the frames.
 // =============================================================================
 
@@ -12,7 +12,7 @@
 namespace Sensors {
 namespace ToF {
 
-void init();                                          // calls Wire1.begin()
+void init();                                          // calls TOF_WIRE.begin()
 yacheVL53L7CX& sensor(uint8_t i);                     // i < TOF_COUNT
 uint8_t        count();
 

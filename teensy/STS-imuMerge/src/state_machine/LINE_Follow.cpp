@@ -1,4 +1,4 @@
-﻿#include "LINE_Follow.h"
+#include "LINE_Follow.h"
 #include "StateMachine.h"
 #include "../../config.h"
 #include "../../pins_teensy.h"
