@@ -15,6 +15,9 @@ namespace Sensors {
 namespace ToF {
 
 namespace {
+    constexpr uint32_t TOF_INIT_I2C_HZ = 400000;  // Firmware upload speed.
+    constexpr uint32_t TOF_RUN_I2C_HZ  = 400000;  // Runtime ranging/read speed.
+
     yacheVL53L7CX _tof[TOF_COUNT] = {
         yacheVL53L7CX(TOF_WIRE, -1, -1),
         yacheVL53L7CX(TOF_WIRE, -1, -1),
@@ -38,15 +41,17 @@ namespace {
 void init() {
     if (_initialised) return;
     TOF_WIRE.begin();   // ToF has its own bus; see TOF_WIRE in pins_teensy.h.
-    TOF_WIRE.setClock(50000);
-    delay(100);
+    TOF_WIRE.setClock(TOF_INIT_I2C_HZ);
+    delay(20);
     clearFL();
 
     _tof[0].setMountTransform(TOF0_DX_MM, TOF0_DY_MM, deg2rad(TOF0_YAW_DEG));
+    const uint32_t t0 = millis();
     if (!_tof[0].begin(8, TOF_FREQ_HZ, 0x52)) {
         Serial.println("[ToF] FL init FAILED @0x52");
     } else {
-        Serial.println("[ToF] FL ready @0x52");
+        TOF_WIRE.setClock(TOF_RUN_I2C_HZ);
+        Serial.printf("[ToF] FL ready @0x52 in %lu ms\n", (unsigned long)(millis() - t0));
     }
 
     _initialised = true;

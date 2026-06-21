@@ -38,7 +38,7 @@ FLASHMEM void setup() {
     // Sensors::Touch::init();
     Sensors::XIAO_link::init();
     // Sensors::K230_link::init();
-    // Sensors::ToF::init();  // Slow VL53L7CX firmware init; defer until mapping/evac needs it.
+    Sensors::ToF::init();  // Slow VL53L7CX firmware init; defer until mapping/evac needs it.
 
     StateMachine::init();
 
