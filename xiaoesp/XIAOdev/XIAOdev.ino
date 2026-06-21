@@ -114,6 +114,11 @@ void loop() {
     // ── Receive current mode from Teensy ──────────────────────────────────────
     teensy.update();
     uint8_t mode = teensy.get(XIAO_REG_MODE);   // default 0 if Teensy hasn't sent yet
+    static uint8_t s_prevMode = 255;
+    if (mode != s_prevMode) {
+        if (mode == MODE_LINEFOLLOW) modeLineFollowReset();
+        s_prevMode = mode;
+    }
 
     SPRINTF(SPRINT_SERIAL_IN, "[SIN]", "mode=%d", mode);
 

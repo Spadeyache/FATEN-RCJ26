@@ -41,6 +41,7 @@ constexpr uint8_t COLOR_ROW = 25;
 constexpr uint8_t COLOR_X_MIN = ARC_LEFT_X;
 constexpr uint8_t COLOR_X_MAX = ARC_RIGHT_X;
 constexpr uint8_t RED_THRESHOLD = 30;
+constexpr uint8_t GAP_BLACK_MAX = 5;
 constexpr uint8_t GREEN_WINDOW = 25;
 constexpr uint8_t GREEN_LINE_HALF_W = 4;
 constexpr uint8_t GREEN_PX_THRESHOLD = 5;
@@ -76,6 +77,9 @@ bool    s_commitSeenBranch = false;
 bool    s_commitLocked = false;
 float   s_commitLockPos = 0.0f;
 uint8_t s_commitSettle = 0;
+uint8_t s_lastErr = LF_ERROR_CENTER;
+float   s_lastAngle = 0.0f;
+float   s_lastPos = 0.0f;
 
 void addSample(int x, int y, uint8_t edge) {
     if (s_sampleCount >= ARC_MAX_SAMPLES) return;
@@ -381,11 +385,16 @@ uint8_t arcAngleError(const LineCounts& lc, int inIndex, int outIndex, float& an
 
 }  // namespace
 
-void modeLineFollowRun(camera_fb_t* fb, YacheEncodedSerial& teensy) {
-    static uint8_t s_lastErr = LF_ERROR_CENTER;
-    static float s_lastAngle = 0.0f;
-    static float s_lastPos = 0.0f;
+void modeLineFollowReset() {
+    resetGreenFilter();
+    clearCommit();
+    lc_resetTracking();
+    s_lastErr = LF_ERROR_CENTER;
+    s_lastAngle = 0.0f;
+    s_lastPos = 0.0f;
+}
 
+void modeLineFollowRun(camera_fb_t* fb, YacheEncodedSerial& teensy) {
     LineCounts lc;
     detectArcCrossings(fb, lc);
 
@@ -397,17 +406,19 @@ void modeLineFollowRun(camera_fb_t* fb, YacheEncodedSerial& teensy) {
     float colorCom;
     uint8_t colorBlack, redCount;
     scanColorRow(fb, colorCom, colorBlack, redCount);
+    const bool gapDetected = colorBlack <= GAP_BLACK_MAX;
     const bool intersectionSaturated = colorBlack > INTERSECTION_BLACK_SAT_THRESHOLD;
 
     uint8_t greenLeft = 0, greenRight = 0;
     uint8_t rawGreen = rawGreenOnColorRow(fb, colorCom, greenLeft, greenRight);
     uint8_t greenCmd = 0;
-    if (intersectionSaturated) {
+    if (intersectionSaturated || gapDetected) {
         resetGreenFilter();
         rawGreen = 0;
     } else if (!s_commitActive) {
         greenCmd = updateGreenFilter(rawGreen);
         if (greenCmd != 0) resetGreenFilter();
+        if (greenCmd == 1) clearCommit();
         if (greenCmd == 2) startCommit(true);
         if (greenCmd == 3) startCommit(false);
     }
@@ -430,6 +441,7 @@ void modeLineFollowRun(camera_fb_t* fb, YacheEncodedSerial& teensy) {
     }
 
     if (greenCmd == 1) featureId = FEAT_UTURN;
+    if (gapDetected) featureId = FEAT_LINE_LOST;
     if (redCount > RED_THRESHOLD) featureId = FEAT_RED;
     if (silverDetected) featureId = FEAT_SILVER;
     updateCommitSettle(cls, lc.count);
@@ -453,9 +465,9 @@ void modeLineFollowRun(camera_fb_t* fb, YacheEncodedSerial& teensy) {
     teensy.send(XIAO_REG_FLAG, s_commitActive ? 1 : 0);
 
     SPRINTF(SPRINT_RESULTS, "[RES]",
-        "mode=0 arc=1 feat=%d err=%d n=%d in=%d out=%d fresh=%d ang=%.1f pos=%.1f sL=%d sR=%d red=%d blk25=%d sat=%d gL=%d gR=%d rawG=%d gc=%d cmt=%d",
+        "mode=0 arc=1 feat=%d err=%d n=%d in=%d out=%d fresh=%d ang=%.1f pos=%.1f sL=%d sR=%d red=%d blk25=%d gap=%d sat=%d gL=%d gR=%d rawG=%d gc=%d cmt=%d",
         featureId, errByte, lc.count, cls.inIndex, steerOut, fresh ? 1 : 0,
         s_lastAngle, s_lastPos, silverLeft, silverRight, redCount, colorBlack,
-        intersectionSaturated ? 1 : 0, greenLeft, greenRight, rawGreen, greenCmd,
-        s_commitActive ? 1 : 0);
+        gapDetected ? 1 : 0, intersectionSaturated ? 1 : 0, greenLeft, greenRight,
+        rawGreen, greenCmd, s_commitActive ? 1 : 0);
 }
