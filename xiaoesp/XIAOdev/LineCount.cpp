@@ -336,6 +336,8 @@ static bool       s_dbgCommitActive = false;
 static bool       s_dbgCommitLocked = false;
 static int        s_dbgCommitProgress = 0;
 static uint8_t    s_dbgGreen  = 0;
+static bool       s_dbgHasArc = false;
+static uint8_t    s_dbgArc[10] = {};
 
 void lc_storeSteer(int steerOut, bool commitActive, bool commitLocked, int commitProgress, uint8_t greenCmd) {
     s_dbgSteer          = steerOut;
@@ -352,6 +354,20 @@ void lc_storeDebug(const LineCounts& lc, const LineClass& cls, int focusedOut, i
     s_dbgErr   = errByte;
     s_dbgErrPx = errPx;
     s_dbgValid = true;
+    s_dbgHasArc = false;
+}
+
+void lc_storeArcRoi(uint8_t topX, uint8_t topY,
+                    uint8_t leftX, uint8_t leftY,
+                    uint8_t rightX, uint8_t rightY,
+                    uint8_t bottomLeftX, uint8_t bottomLeftY,
+                    uint8_t bottomRightX, uint8_t bottomRightY) {
+    s_dbgArc[0] = topX;         s_dbgArc[1] = topY;
+    s_dbgArc[2] = leftX;        s_dbgArc[3] = leftY;
+    s_dbgArc[4] = rightX;       s_dbgArc[5] = rightY;
+    s_dbgArc[6] = bottomLeftX;  s_dbgArc[7] = bottomLeftY;
+    s_dbgArc[8] = bottomRightX; s_dbgArc[9] = bottomRightY;
+    s_dbgHasArc = true;
 }
 
 int lc_formatDebug(char* buf, int bufLen) {
@@ -359,17 +375,24 @@ int lc_formatDebug(char* buf, int bufLen) {
 
     // Compact header — only what the viewer overlay needs, so the points after
     // "p=" are never crowded out of the line buffer.
-    int o = snprintf(buf, bufLen,
-        "[LC] arc=%d,%d,%d,%d,%d,%d,%d,%d,%d,%d box=%d,%d,%d,%d n=%d in=%d fo=%d steer=%d act=%d lock=%d prog=%d sn=%d oc=%d g=%d err=%d p=",
-        LF_ARC_TOP_X, LF_ARC_TOP_Y,
-        LF_ARC_LEFT_X, LF_ARC_SIDE_Y,
-        LF_ARC_RIGHT_X, LF_ARC_SIDE_Y,
-        LF_ARC_LEFT_X, LF_ARC_BOTTOM_Y,
-        LF_ARC_RIGHT_X, LF_ARC_BOTTOM_Y,
-        LC_ROI_X_MIN, LC_ROI_Y_TOP, LC_ROI_X_MAX, LC_ROI_Y_BOT,
-        s_dbgLc.count, s_dbgCls.inIndex, s_dbgFo, s_dbgSteer,
-        s_dbgCommitActive ? 1 : 0, s_dbgCommitLocked ? 1 : 0, s_dbgCommitProgress,
-        s_cSeen ? 1 : 0, s_dbgCls.outCount, s_dbgGreen, s_dbgErr);
+    int o = 0;
+    if (s_dbgHasArc) {
+        o = snprintf(buf, bufLen,
+            "[LC] arc=%d,%d,%d,%d,%d,%d,%d,%d,%d,%d box=%d,%d,%d,%d n=%d in=%d fo=%d steer=%d act=%d lock=%d prog=%d sn=%d oc=%d g=%d err=%d p=",
+            s_dbgArc[0], s_dbgArc[1], s_dbgArc[2], s_dbgArc[3], s_dbgArc[4], s_dbgArc[5],
+            s_dbgArc[6], s_dbgArc[7], s_dbgArc[8], s_dbgArc[9],
+            LC_ROI_X_MIN, LC_ROI_Y_TOP, LC_ROI_X_MAX, LC_ROI_Y_BOT,
+            s_dbgLc.count, s_dbgCls.inIndex, s_dbgFo, s_dbgSteer,
+            s_dbgCommitActive ? 1 : 0, s_dbgCommitLocked ? 1 : 0, s_dbgCommitProgress,
+            s_cSeen ? 1 : 0, s_dbgCls.outCount, s_dbgGreen, s_dbgErr);
+    } else {
+        o = snprintf(buf, bufLen,
+            "[LC] box=%d,%d,%d,%d n=%d in=%d fo=%d steer=%d act=%d lock=%d prog=%d sn=%d oc=%d g=%d err=%d p=",
+            LC_ROI_X_MIN, LC_ROI_Y_TOP, LC_ROI_X_MAX, LC_ROI_Y_BOT,
+            s_dbgLc.count, s_dbgCls.inIndex, s_dbgFo, s_dbgSteer,
+            s_dbgCommitActive ? 1 : 0, s_dbgCommitLocked ? 1 : 0, s_dbgCommitProgress,
+            s_cSeen ? 1 : 0, s_dbgCls.outCount, s_dbgGreen, s_dbgErr);
+    }
 
     int nshow = s_dbgLc.count;
     if (nshow > LC_MAX_CROSSINGS) nshow = LC_MAX_CROSSINGS;
