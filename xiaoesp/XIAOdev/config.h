@@ -16,7 +16,7 @@
 // In OUTPUT_STREAM builds, set to 0 to send only the ASCII debug overlay lines
 // ([LC] box/points/error and [ROW] scan colors) and skip the binary camera
 // image payload. This makes the point/box stream much more robust while tuning.
-#define STREAM_SEND_CAMERA_IMAGES 0
+#define STREAM_SEND_CAMERA_IMAGES 1
 
 // ── Serial baud rates ────────────────────────────────────────────────────────
 #define SERIAL_DEBUG_BAUD    115200
@@ -134,7 +134,7 @@
 // line-follow band so side branches are visible at the edge.
 #define LC_ROI_X_MIN          (32 + VISION_SAMPLE_HALF_W)
 #define LC_ROI_X_MAX          (132 - VISION_SAMPLE_HALF_W)
-#define LC_ROI_Y_TOP          5   // top edge (far from robot, small pixelY)
+#define LC_ROI_Y_TOP         15   // top edge (far from robot, small pixelY)
 #define LC_ROI_Y_BOT         65   // bottom edge (near robot, large pixelY)
 
 #define LC_RUN_MIN_LEN         3   // min contiguous black samples on the border to count a line (≈ line width)
@@ -145,7 +145,7 @@
 // ── Line-follow error from pixel-space lookahead/position ────────────────────
 #define LF_CENTER_X           80.0f   // image column where a correctly centred line appears
 #define LF_IN_BLEND            0.00f  // small stabilizing blend from the near/in point
-#define LF_PX_SCALE            3.2f   // error-byte units per pixel of horizontal displacement
+#define LF_PX_SCALE            3.84f  // error-byte units per pixel of horizontal displacement
 #define LF_ERROR_CENTER      127      // error byte that means centred
 #define LF_SIDE_Y_MIN         50      // only side-boost near the robot, not high T-intersection branches
 #define LF_GOAL_SIDE_THRESHOLD 18.0f  // px from centre before the goal/out point is treated as "on the side"

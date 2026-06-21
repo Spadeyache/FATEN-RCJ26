@@ -129,7 +129,7 @@ inline float robotRoll()  { return -Sensors::IMU::getPitch(); }   // + = left si
 //   Two gain sets, switched together with the base speed: the moment
 //   frictionCircAdj drops the base below FRIC_SPEED_FLAT (i.e. on a slope), the
 //   controller also swaps to the *_SLOPE gains. Flat ground uses the *_FLAT set.
-constexpr float PID_KP_FLAT  = 3.15f;   // TODO: tune for fast flat-line racing
+constexpr float PID_KP_FLAT  = 2.05f;   // TODO: tune for fast flat-line racing
 constexpr float PID_KI_FLAT  = 0.0f;
 constexpr float PID_KD_FLAT  = 0.0f;
 
@@ -137,15 +137,10 @@ constexpr float PID_KP_SLOPE = 0.85f;   // validated slope tune
 constexpr float PID_KI_SLOPE = 0.0f;
 constexpr float PID_KD_SLOPE = 0.65f;
 
-// Hardcoded line-PID test mode. Enable while developing/tuning raw PID gains:
-// this bypasses pitch/roll gain scheduling, gravAdj, and rotAxisAdj.
-constexpr bool  PID_USE_HARDCODED_TEST = true;
-constexpr float PID_TEST_BASE_SPEED    = 70.0f;
-constexpr float PID_TEST_KP            = 4.95f;
-constexpr float PID_TEST_KI            = 0.0f;
-constexpr float PID_TEST_KD            = 0.0f;
-constexpr float PID_TEST_MIN_SPEED     = -70.0f;
-constexpr float PID_TEST_MAX_SPEED     = 70.0f;
+// Flat-surface PID tuning switch. When true, the line PID ignores IMU tilt for
+// gain scheduling, gravity compensation, pitch adjustment, and rear-wheel
+// rotation-axis scaling. The robot behaves as if pitch=roll=0 on every frame.
+constexpr bool PID_DISABLE_IMU_GAIN_ADJUST = true;
 
 constexpr float PID_INTEGRAL_LIMIT = 500.0f;
 constexpr float LINE_EMA_ALPHA     = 0.3f;    // error smoothing  (currently disabled)
@@ -176,13 +171,21 @@ inline float rollBoostFactor(float aRoll) {      // 1.0 → GRAV_BOOST_MAX as |r
     return 1.0f + (GRAV_BOOST_MAX - 1.0f) * (1.0f - expf(-aRoll / GRAV_ROLL_TAU));
 }
 
+inline float linePidPitch() {
+    return PID_DISABLE_IMU_GAIN_ADJUST ? 0.0f : robotPitch();
+}
+
+inline float linePidRoll() {
+    return PID_DISABLE_IMU_GAIN_ADJUST ? 0.0f : robotRoll();
+}
+
 // gravAdj — adjust the left right power to compensate the slop caused by gravity when robot turns. Reads roll.
 //   Flat (roll≈0): both sides symmetric (gain 1.0, no fold) → smooth
 //   differential for fast racing. Tilted: the *upper* side loses correction
 //   authority (→GRAV_GAIN_MIN) and, past GRAV_FOLD_TILT_DEG, snaps its inner
 //   wheel into reverse (the -25 fold + boost) to pivot steep turns using gravity.
 float gravAdj(Side side, float base, float correction, float pitchAdj) {
-    const float roll    = robotRoll();   // + = left side down
+    const float roll    = linePidRoll();   // + = left side down
     const float aRoll   = fabsf(roll);
     const bool  isUpper = (side == SIDE_LEFT) ? (roll < 0.0f) : (roll > 0.0f);
 
@@ -205,8 +208,8 @@ float gravAdj(Side side, float base, float correction, float pitchAdj) {
 //     roll  → de-rates only the DOWNHILL rear: → ROTAXIS_DOWN_MIN at ROTAXIS_ROLL_REF.
 //   Combined by min(), so a full slope gives downhill 0.6 / uphill 0.75.
 float rotAxisAdj(Wheel w) {
-    const float pitch = robotPitch();   // + = nose up   (fore/aft)
-    const float roll  = robotRoll();    // + = left down (sideways)
+    const float pitch = linePidPitch();   // + = nose up   (fore/aft)
+    const float roll  = linePidRoll();    // + = left down (sideways)
     const float tilt  = sqrtf(pitch * pitch + roll * roll);
     if (tilt < ROTAXIS_TILT_DEG) return 1.0f;
     if (wheelIsFront(w))         return 1.0f;   // front = reference axle
@@ -230,8 +233,8 @@ float rotAxisAdj(Wheel w) {
 //   FRIC_TILT_DEG (on a slope, less grip) drop to FRIC_SPEED_TILT, otherwise run
 //   the fast flat-ground speed FRIC_SPEED_FLAT. Reads pitch + roll.
 float frictionCircAdj() {
-    const float pitch = robotPitch();   // + = nose up
-    const float roll  = robotRoll();    // + = left down
+    const float pitch = linePidPitch();   // + = nose up
+    const float roll  = linePidRoll();    // + = left down
     if (fabsf(pitch) > FRIC_TILT_DEG || fabsf(roll) > FRIC_TILT_DEG)
         return FRIC_SPEED_TILT;
         digitalWrite(LED_PIN, HIGH);    
@@ -274,31 +277,8 @@ void runLinePID() {
     integral += rawError * dt;
     integral  = constrain(integral, -PID_INTEGRAL_LIMIT, PID_INTEGRAL_LIMIT);
 
-    if (PID_USE_HARDCODED_TEST) {
-        const float correction =
-            PID_TEST_KP * rawError +
-            PID_TEST_KI * integral +
-            PID_TEST_KD * derivative;
-
-        const float leftSpeed = constrain(
-            PID_TEST_BASE_SPEED + correction,
-            PID_TEST_MIN_SPEED,
-            PID_TEST_MAX_SPEED);
-        const float rightSpeed = constrain(
-            PID_TEST_BASE_SPEED - correction,
-            PID_TEST_MIN_SPEED,
-            PID_TEST_MAX_SPEED);
-
-        motor(leftSpeed, rightSpeed, false);
-
-#if PRINT_PID
-        Serial.printf("PID TEST err:%.1f drv:%.1f corr:%.1f L:%.0f R:%.0f\n",
-                      rawError, derivative, correction, leftSpeed, rightSpeed);
-#endif
-        return;
-    }
-
     // Base speed: frictionCircAdj picks 70 on flat / 55 once tilted past 8°.
+    // With PID_DISABLE_IMU_GAIN_ADJUST=true, this always selects flat speed.
     const float base = frictionCircAdj();
 
     // Gain scheduling tied to the base speed: the moment frictionCircAdj slows
@@ -309,7 +289,7 @@ void runLinePID() {
     const float kd = slope ? PID_KD_SLOPE : PID_KD_FLAT;
 
     const float correction = kp * rawError + ki * integral + kd * derivative;
-    const float pitchAdj   = robotPitch() * IMU_PITCH_GAIN;   // + = nose up
+    const float pitchAdj   = linePidPitch() * IMU_PITCH_GAIN;   // + = nose up
 
 // Steering speeds come from gravAdj (roll-driven). Flat → symmetric smooth
 // differential; sideways tilt → upper-side de-rate + reverse-bite pivot.

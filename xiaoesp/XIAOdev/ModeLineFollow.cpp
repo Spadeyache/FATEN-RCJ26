@@ -5,6 +5,8 @@
 #include "LineCount.h"
 #include "GreenFilter.h"
 
+#include <Arduino.h>
+
 // Width of the green-detection window on each side of the line
 static const uint8_t GREEN_WINDOW  = 25;
 static const uint8_t LINE_HALF_W   = 4;    // half-width of the black line
@@ -16,6 +18,17 @@ static uint8_t countBlackOnRoiRow(camera_fb_t* fb, uint8_t row) {
 
     uint8_t count = 0;
     for (uint8_t x = LC_ROI_X_MIN; x <= LC_ROI_X_MAX; x++) {
+        if (isBlack(rowPixels[x])) count++;
+    }
+    return count;
+}
+
+static uint8_t countBlackOnScanRow(camera_fb_t* fb, uint8_t row) {
+    cameraData rowPixels[160] = {};
+    scanRow(fb, row, SCAN_COL_MIN, SCAN_COL_MAX, rowPixels);
+
+    uint8_t count = 0;
+    for (uint8_t x = SCAN_COL_MIN; x <= SCAN_COL_MAX; x++) {
         if (isBlack(rowPixels[x])) count++;
     }
     return count;
@@ -94,6 +107,10 @@ void modeLineFollowRun(camera_fb_t* fb, YacheEncodedSerial& teensy) {
     int fo = lc_focusedOut(lc, cls.inIndex);
     const uint8_t topBlackCount = countBlackOnRoiRow(fb, LC_ROI_Y_TOP);
     const uint8_t bottomBlackCount = countBlackOnRoiRow(fb, LC_ROI_Y_BOT);
+    const uint8_t frontBlackCount = countBlackOnScanRow(fb, LF2_ROW_TOP);
+    const bool frontSaturated = frontBlackCount > LF2_SATURATION_BLACK_MIN;
+    digitalWrite(LED_BUILTIN, frontSaturated ? LOW : HIGH);   // ESP32 LED active-LOW
+
     const bool topBottomLost =
         topBlackCount <= LF_EDGE_BLACK_THRESHOLD &&
         bottomBlackCount <= LF_EDGE_BLACK_THRESHOLD;
@@ -164,10 +181,10 @@ void modeLineFollowRun(camera_fb_t* fb, YacheEncodedSerial& teensy) {
 
     // ── 12. Debug output ──────────────────────────────────────────────────────
     SPRINTF(SPRINT_RESULTS, "[RES]",
-        "mode=0 feat=%d com=%.1f err=%d epx=%.1f blk=%d sil=%d sL=%d sR=%d red=%d gL=%d gR=%d gc=%d cmt=%d",
-        featureId, centerOfMass, errByte, s_lastErrPx, blackCount, silverCount,
-        silverSideLeft, silverSideRight, redCount, greenLeft, greenRight, greenCmd,
-        commitActive ? 1 : 0);
+        "mode=0 feat=%d com=%.1f err=%d epx=%.1f blk=%d frontBlk=%d sat=%d sil=%d sL=%d sR=%d red=%d gL=%d gR=%d gc=%d cmt=%d",
+        featureId, centerOfMass, errByte, s_lastErrPx, blackCount,
+        frontBlackCount, frontSaturated ? 1 : 0, silverCount, silverSideLeft, silverSideRight,
+        redCount, greenLeft, greenRight, greenCmd, commitActive ? 1 : 0);
 #ifndef OUTPUT_STREAM
     int xIn  = (cls.inIndex >= 0 && cls.inIndex < lc.count) ? lc.crossings[cls.inIndex].pixelX : -1;
     int xOut = (steerOut    >= 0 && steerOut    < lc.count) ? lc.crossings[steerOut].pixelX    : -1;
