@@ -93,6 +93,20 @@
 #define LF_BLACK_PixCOUNT_THRESHOLD    35   // Min black pixels → report FEAT_BLACK_INTERSECT
 #define LF_GREEN_PixCOUNT_THRESHOLD    5    // pixels needed to confirm green
 
+// Mode 0 arc ROI used by the current black-line steering logic:
+// top arc through (80,5), (25,35), (135,35), with side lines down to y=65.
+#define LF_ARC_TOP_X          80
+#define LF_ARC_TOP_Y           5
+#define LF_ARC_LEFT_X         25
+#define LF_ARC_RIGHT_X       135
+#define LF_ARC_SIDE_Y         35
+#define LF_ARC_BOTTOM_Y       65
+#define LF_ARC_SAMPLE_STEP     1
+#define LF_ARC_ANGLE_SCALE   2.0f   // error-byte units per signed degree
+#define LF_ARC_IN_PX_SCALE   0.8f   // near/bottom crossing recentering blend
+#define LF_ARC_SIDE_GAIN_Y    35    // side exits at/below this row get turn boost
+#define LF_ARC_SIDE_GAIN_MULT 1.35f
+
 // ── Mode 0b : Line Follow 2 (clean two-row CoM; no green/commit) ─────────────
 //  Row NEAR (60): black center-of-mass → line error (0..254, 127 = centre).
 //                 < LF2_NOLINE_BLACK_MIN black px on this row → no line.
@@ -132,10 +146,10 @@
 // Rectangle whose border we sample (frame is 160 x 120; keep ≥2 px from edges
 // because updateRawGrayHSV() samples around each point). Widen beyond the 50–110
 // line-follow band so side branches are visible at the edge.
-#define LC_ROI_X_MIN          (32 + VISION_SAMPLE_HALF_W)
-#define LC_ROI_X_MAX          (132 - VISION_SAMPLE_HALF_W)
+#define LC_ROI_X_MIN          40// (32 + VISION_SAMPLE_HALF_W)
+#define LC_ROI_X_MAX          110// (132 - VISION_SAMPLE_HALF_W)
 #define LC_ROI_Y_TOP         15   // top edge (far from robot, small pixelY)
-#define LC_ROI_Y_BOT         65   // bottom edge (near robot, large pixelY)
+#define LC_ROI_Y_BOT         80   // 65 bottom edge (near robot, large pixelY)
 
 #define LC_RUN_MIN_LEN         3   // min contiguous black samples on the border to count a line (≈ line width)
 #define LC_MATCH_GATE         30   // max loop-distance (samples) for the tracker to accept a match

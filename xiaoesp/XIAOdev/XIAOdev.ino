@@ -122,9 +122,9 @@ void loop() {
     if (!fb) { logf("Frame grab failed\n"); return; }
 
     // ── Dispatch to active mode ───────────────────────────────────────────────
-    //  Line-follow now uses the clean two-row modeLineFollow2Run (it owns the
-    //  LED for black-saturation). The old modeLineFollowRun (green/commit/in-out)
-    //  is kept in ModeLineFollow.cpp but no longer called.
+    //  Line-follow mode 0 uses modeLineFollowRun(), currently the arc-ROI
+    //  black-line steering path. modeLineFollow2Run() remains available as a
+    //  fallback/default path for experiments.
     switch (mode) {
         // case MODE_LINEFOLLOW:  modeLineFollow2Run(fb, teensy); break;
         case MODE_LINEFOLLOW:  modeLineFollowRun(fb, teensy); break;
@@ -157,7 +157,7 @@ static void sendLineCountDebugOnly() {
     if ((uint32_t)(now - lastSent) < (1000UL / STREAM_FPS)) return;
     lastSent = now;
 
-    char lcLine[320];
+    char lcLine[384];
     char rowLine[48];
     int lcLen = lc_formatDebug(lcLine, sizeof(lcLine));
     int rowLen = row55_formatDebug(rowLine, sizeof(rowLine));
@@ -191,7 +191,7 @@ void streamTask(void* pvParameters) {
 
         // LineCount overlay line — ASCII, emitted under the mutex *before* the
         // frame so the viewer parses it as text (never inside the pixel bytes).
-        char lcLine[320];
+        char lcLine[384];
         char rowLine[48];
         int  lcLen = lc_formatDebug(lcLine, sizeof(lcLine));
         int  rowLen = row55_formatDebug(rowLine, sizeof(rowLine));

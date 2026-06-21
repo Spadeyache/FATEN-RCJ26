@@ -360,7 +360,12 @@ int lc_formatDebug(char* buf, int bufLen) {
     // Compact header — only what the viewer overlay needs, so the points after
     // "p=" are never crowded out of the line buffer.
     int o = snprintf(buf, bufLen,
-        "[LC] box=%d,%d,%d,%d n=%d in=%d fo=%d steer=%d act=%d lock=%d prog=%d sn=%d oc=%d g=%d err=%d p=",
+        "[LC] arc=%d,%d,%d,%d,%d,%d,%d,%d,%d,%d box=%d,%d,%d,%d n=%d in=%d fo=%d steer=%d act=%d lock=%d prog=%d sn=%d oc=%d g=%d err=%d p=",
+        LF_ARC_TOP_X, LF_ARC_TOP_Y,
+        LF_ARC_LEFT_X, LF_ARC_SIDE_Y,
+        LF_ARC_RIGHT_X, LF_ARC_SIDE_Y,
+        LF_ARC_LEFT_X, LF_ARC_BOTTOM_Y,
+        LF_ARC_RIGHT_X, LF_ARC_BOTTOM_Y,
         LC_ROI_X_MIN, LC_ROI_Y_TOP, LC_ROI_X_MAX, LC_ROI_Y_BOT,
         s_dbgLc.count, s_dbgCls.inIndex, s_dbgFo, s_dbgSteer,
         s_dbgCommitActive ? 1 : 0, s_dbgCommitLocked ? 1 : 0, s_dbgCommitProgress,

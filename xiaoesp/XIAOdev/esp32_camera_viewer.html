@@ -858,7 +858,7 @@ function renderMarkerList() {
 // ═════════════════════════════════════════════════════════════════════════════
 //  LINECOUNT OVERLAY  — ROI box + in/out crossing points (from [LC] lines)
 // ═════════════════════════════════════════════════════════════════════════════
-let lcData = null;        // { box:[x0,y0,x1,y1], crossings:[{x,y,role}], inIdx, foIdx, held, out }
+let lcData = null;        // { arc:[tx,ty,lx,ly,rx,ry,blx,bly,brx,bry], box:[x0,y0,x1,y1], crossings:[{x,y,role}], inIdx, foIdx, held, out }
 let lcOverlayOn = true;
 const LC_IN_COLOR  = '#2ecc71';   // green  = the line the robot is on (in)
 const LC_OUT_COLOR = '#e8840a';   // orange = branches (out)
@@ -867,6 +867,7 @@ const LC_COMMIT_COLOR = LC_IN_COLOR; // green outer ring = committed green-turn 
 
 // [LC] box=20,15,139,110 n=3 in=1 fo=2 xi=120 xo=80 epx=12.0 err=165 held=0 out=2 p=120,110,i 80,15,f 40,60,o
 function parseLC(text) {
+  const arc  = text.match(/arc=(\d+),(\d+),(\d+),(\d+),(\d+),(\d+),(\d+),(\d+),(\d+),(\d+)/);
   const box  = text.match(/box=(\d+),(\d+),(\d+),(\d+)/);
   const inM  = text.match(/\bin=(-?\d+)/);
   const foM  = text.match(/\bfo=(-?\d+)/);
@@ -889,6 +890,7 @@ function parseLC(text) {
     }
   }
   lcData = {
+    arc:     arc ? [+arc[1], +arc[2], +arc[3], +arc[4], +arc[5], +arc[6], +arc[7], +arc[8], +arc[9], +arc[10]] : null,
     box:     box ? [+box[1], +box[2], +box[3], +box[4]] : null,
     crossings,
     inIdx:   inM  ? +inM[1]  : -1,
@@ -906,10 +908,35 @@ function parseLC(text) {
   drawOverlay();
 }
 
+function drawArcRoi(a, held) {
+  const topX = a[0], topY = a[1];
+  const leftX = a[2], leftY = a[3];
+  const rightX = a[4], rightY = a[5];
+  const bottomLeftX = a[6], bottomY = a[7];
+  const bottomRightX = a[8];
+  const dx = rightX - topX;
+  const cy = (rightY * rightY - topY * topY + dx * dx) / (2 * (rightY - topY));
+  const r = cy - topY;
+  const leftA = Math.atan2(leftY - cy, leftX - topX);
+  const rightA = Math.atan2(rightY - cy, rightX - topX);
+
+  octx.strokeStyle = held ? LC_OUT_COLOR : '#5b9cf6';
+  octx.lineWidth = 1;
+  octx.beginPath();
+  octx.moveTo(bottomLeftX + .5, bottomY + .5);
+  octx.lineTo(bottomRightX + .5, bottomY + .5);
+  octx.lineTo(rightX + .5, rightY + .5);
+  octx.arc(topX + .5, cy + .5, r, rightA, leftA, true);
+  octx.lineTo(bottomLeftX + .5, bottomY + .5);
+  octx.stroke();
+}
+
 function drawLcOverlay() {
   if (!lcOverlayOn || !lcData) return;
   const d = lcData;
-  if (d.box) {
+  if (d.arc) {
+    drawArcRoi(d.arc, d.held);
+  } else if (d.box) {
     octx.strokeStyle = (d.held ? LC_OUT_COLOR : '#5b9cf6');
     octx.lineWidth = 1;
     octx.strokeRect(d.box[0] + .5, d.box[1] + .5, d.box[2] - d.box[0], d.box[3] - d.box[1]);

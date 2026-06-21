@@ -3,194 +3,215 @@
 #include "config.h"
 #include "serial_print.h"
 #include "LineCount.h"
-#include "GreenFilter.h"
 
 #include <Arduino.h>
+#include <math.h>
 
-// Width of the green-detection window on each side of the line
-static const uint8_t GREEN_WINDOW  = 25;
-static const uint8_t LINE_HALF_W   = 4;    // half-width of the black line
-static const uint8_t GREEN_GAP     = 0;    // gap between line edge and green window
+namespace {
 
-static uint8_t countBlackOnRoiRow(camera_fb_t* fb, uint8_t row) {
-    cameraData rowPixels[160] = {};
-    scanRow(fb, row, LC_ROI_X_MIN, LC_ROI_X_MAX, rowPixels);
+constexpr int ARC_MAX_SAMPLES = 340;
 
-    uint8_t count = 0;
-    for (uint8_t x = LC_ROI_X_MIN; x <= LC_ROI_X_MAX; x++) {
-        if (isBlack(rowPixels[x])) count++;
-    }
-    return count;
+uint8_t s_px[ARC_MAX_SAMPLES];
+uint8_t s_py[ARC_MAX_SAMPLES];
+uint8_t s_edge[ARC_MAX_SAMPLES];
+uint8_t s_black[ARC_MAX_SAMPLES];
+int     s_sampleCount = 0;
+bool    s_geometryReady = false;
+
+void addSample(int x, int y, uint8_t edge) {
+    if (s_sampleCount >= ARC_MAX_SAMPLES) return;
+    if (x < 0) x = 0;
+    if (x > 159) x = 159;
+    if (y < 0) y = 0;
+    if (y > 119) y = 119;
+
+    s_px[s_sampleCount] = (uint8_t)x;
+    s_py[s_sampleCount] = (uint8_t)y;
+    s_edge[s_sampleCount] = edge;
+    s_sampleCount++;
 }
 
-static uint8_t countBlackOnScanRow(camera_fb_t* fb, uint8_t row) {
-    cameraData rowPixels[160] = {};
-    scanRow(fb, row, SCAN_COL_MIN, SCAN_COL_MAX, rowPixels);
+void buildArcGeometry() {
+    if (s_geometryReady) return;
+    s_sampleCount = 0;
 
-    uint8_t count = 0;
-    for (uint8_t x = SCAN_COL_MIN; x <= SCAN_COL_MAX; x++) {
-        if (isBlack(rowPixels[x])) count++;
+    const float cx = (float)LF_ARC_TOP_X;
+    const float topY = (float)LF_ARC_TOP_Y;
+    const float sideX = (float)LF_ARC_RIGHT_X;
+    const float sideY = (float)LF_ARC_SIDE_Y;
+    const float dx = sideX - cx;
+    const float cy = (sideY * sideY - topY * topY + dx * dx) / (2.0f * (sideY - topY));
+    const float r = cy - topY;
+
+    // Closed loop order mirrors LineCount: bottom -> right side -> top arc -> left side.
+    for (int x = LF_ARC_LEFT_X; x <= LF_ARC_RIGHT_X; x += LF_ARC_SAMPLE_STEP) {
+        addSample(x, LF_ARC_BOTTOM_Y, LC_EDGE_BOTTOM);
     }
-    return count;
+    for (int y = LF_ARC_BOTTOM_Y - LF_ARC_SAMPLE_STEP; y >= LF_ARC_SIDE_Y; y -= LF_ARC_SAMPLE_STEP) {
+        addSample(LF_ARC_RIGHT_X, y, LC_EDGE_RIGHT);
+    }
+    for (int x = LF_ARC_RIGHT_X - LF_ARC_SAMPLE_STEP; x >= LF_ARC_LEFT_X; x -= LF_ARC_SAMPLE_STEP) {
+        const float xdx = (float)x - cx;
+        const float inside = r * r - xdx * xdx;
+        const int y = (inside > 0.0f) ? (int)(cy - sqrtf(inside) + 0.5f) : LF_ARC_SIDE_Y;
+        addSample(x, y, LC_EDGE_TOP);
+    }
+    for (int y = LF_ARC_SIDE_Y + LF_ARC_SAMPLE_STEP; y <= LF_ARC_BOTTOM_Y - LF_ARC_SAMPLE_STEP; y += LF_ARC_SAMPLE_STEP) {
+        addSample(LF_ARC_LEFT_X, y, LC_EDGE_LEFT);
+    }
+
+    s_geometryReady = true;
 }
 
-static uint8_t countSilverOnColumn(camera_fb_t* fb, uint8_t col) {
-    uint8_t count = 0;
-    for (uint8_t y = LF_SILVER_SIDE_ROW_MIN; y <= LF_SILVER_SIDE_ROW_MAX; y++) {
-        if (isSilver(updateRawGrayHSV(fb, col, y))) count++;
+void sampleArcLoop(camera_fb_t* fb) {
+    for (int i = 0; i < s_sampleCount; i++) {
+        cameraData d = updateRawGrayHSV(fb, s_px[i], s_py[i]);
+        s_black[i] = isBlack(d) ? 1 : 0;
     }
-    return count;
 }
+
+void registerCrossing(LineCounts& out, int idx, int len) {
+    if (out.count >= LC_MAX_CROSSINGS) return;
+    Crossing& c = out.crossings[out.count++];
+    c.pos = (float)idx;
+    c.edge = s_edge[idx];
+    c.pixelX = s_px[idx];
+    c.pixelY = s_py[idx];
+    c.width = (uint8_t)(len > 255 ? 255 : len);
+}
+
+void emitRun(LineCounts& out, int start, int runStartK, int len, int perimeter) {
+    if (len < LC_RUN_MIN_LEN) return;
+    registerCrossing(out, (start + runStartK + len / 2) % perimeter, len);
+}
+
+void detectArcCrossings(camera_fb_t* fb, LineCounts& out) {
+    out.count = 0;
+    out.perimeter = 0.0f;
+    if (!fb || !fb->buf) return;
+
+    buildArcGeometry();
+    sampleArcLoop(fb);
+
+    const int P = s_sampleCount;
+    out.perimeter = (float)P;
+    if (P == 0) return;
+
+    int start = -1;
+    for (int i = 0; i < P; i++) {
+        if (!s_black[i]) { start = i; break; }
+    }
+    if (start < 0) {
+        registerCrossing(out, P / 2, P);
+        return;
+    }
+
+    int len = 0;
+    int runStartK = 0;
+    for (int k = 0; k < P; k++) {
+        const int idx = (start + k) % P;
+        if (s_black[idx]) {
+            if (len == 0) runStartK = k;
+            len++;
+        } else if (len > 0) {
+            emitRun(out, start, runStartK, len, P);
+            len = 0;
+        }
+    }
+    if (len > 0) emitRun(out, start, runStartK, len, P);
+}
+
+int selectSteeringOut(const LineCounts& lc, int inIndex) {
+    int best = -1;
+    int bestRank = 1000;
+    int bestDx = 1000;
+
+    for (int i = 0; i < lc.count; i++) {
+        if (i == inIndex) continue;
+
+        int rank = 2;
+        if (lc.crossings[i].edge == LC_EDGE_TOP) rank = 0;
+        else if (lc.crossings[i].edge == LC_EDGE_LEFT || lc.crossings[i].edge == LC_EDGE_RIGHT) rank = 1;
+
+        int dx = (int)((float)lc.crossings[i].pixelX - LF_CENTER_X);
+        if (dx < 0) dx = -dx;
+
+        if (best < 0 || rank < bestRank || (rank == bestRank && dx < bestDx)) {
+            best = i;
+            bestRank = rank;
+            bestDx = dx;
+        }
+    }
+    return best;
+}
+
+uint8_t arcAngleError(const LineCounts& lc, int inIndex, int outIndex, float& angleOut, float& posOut) {
+    const Crossing& in = lc.crossings[inIndex];
+    const Crossing& out = lc.crossings[outIndex];
+
+    const float dx = (float)out.pixelX - (float)in.pixelX;
+    float dy = (float)in.pixelY - (float)out.pixelY;
+    if (dy < 1.0f) dy = 1.0f;
+
+    float angleDeg = atan2f(dx, dy) * 57.2957795f;
+    float sideMult = 1.0f;
+    if ((out.edge == LC_EDGE_LEFT || out.edge == LC_EDGE_RIGHT) && out.pixelY >= LF_ARC_SIDE_GAIN_Y) {
+        sideMult = LF_ARC_SIDE_GAIN_MULT;
+    }
+
+    const float inOffset = (float)in.pixelX - LF_CENTER_X;
+    float err = (float)LF_ERROR_CENTER +
+        angleDeg * LF_ARC_ANGLE_SCALE * sideMult +
+        inOffset * LF_ARC_IN_PX_SCALE;
+
+    if (err < 0.0f) err = 0.0f;
+    if (err > 254.0f) err = 254.0f;
+
+    angleOut = angleDeg;
+    posOut = inOffset;
+    return (uint8_t)(err + 0.5f);
+}
+
+}  // namespace
 
 void modeLineFollowRun(camera_fb_t* fb, YacheEncodedSerial& teensy) {
+    static uint8_t s_lastErr = LF_ERROR_CENTER;
+    static float s_lastAngle = 0.0f;
+    static float s_lastPos = 0.0f;
 
-//integrate the old row 55 line follow. + add a rectangle that triggers two point line follow when gap, 90 deg, intersection
-
-//xiao has if its intense black ckeck for contnue line. do the two point line follow untill xx
-//same for when detect green it does the agressive two point
-
-//ignore above. I need to make the gain more aggresive in a manner that it can deal with the error with the goal point stayinf in the front row. if it goes to the side its ultra strong gain
-
-    // ── 1. Scan the line-follow row ───────────────────────────────────────────
-    cameraData pixels[160] = {};
-    scanRow(fb, SCAN_ROW, SCAN_COL_MIN, SCAN_COL_MAX, pixels);
-
-    // ── 2. Count colours along the scan row ───────────────────────────────────
-    int32_t weightedSum = 0;
-    uint8_t blackCount  = 0;
-    uint8_t silverCount = 0;
-    uint8_t redCount    = 0;
-
-    for (uint8_t c = SCAN_COL_MIN; c <= SCAN_COL_MAX; c++) {
-        if (isBlack(pixels[c]))       { weightedSum += c; blackCount++; }
-        if (isSilver(pixels[c]))      { silverCount++; }
-        else if (isRed(pixels[c]))    { redCount++; }
-    }
-
-    // ── 3. Line centre-of-mass ────────────────────────────────────────────────
-    float centerOfMass = (blackCount > 0)
-        ? (float)weightedSum / blackCount
-        : (SCAN_COL_MIN + SCAN_COL_MAX) / 2.0f;
-
-    // ── 4. Green-detection windows (flanking the line) ────────────────────────
-    int16_t comInt = (int16_t)centerOfMass;
-
-    int16_t leftEndS    = comInt - LINE_HALF_W - GREEN_GAP;
-    int16_t rightStartS = comInt + LINE_HALF_W + GREEN_GAP;
-
-    uint8_t leftEnd    = (leftEndS    > 0)   ? (uint8_t)leftEndS    : 0;
-    uint8_t leftStart  = (leftEnd > GREEN_WINDOW) ? leftEnd - GREEN_WINDOW : 0;
-    uint8_t rightStart = (rightStartS < 159) ? (uint8_t)rightStartS : 159;
-    uint8_t rightEnd   = (rightStart + GREEN_WINDOW > 159) ? 159 : (uint8_t)(rightStart + GREEN_WINDOW);
-
-    uint8_t greenLeft = 0, greenRight = 0;
-
-    for (uint8_t c = leftStart; c < leftEnd; c++) {
-        if (c >= SCAN_COL_MIN && c <= SCAN_COL_MAX && isGreen(pixels[c])) greenLeft++;
-    }
-    for (uint8_t c = rightStart; c < rightEnd; c++) {
-        if (c >= SCAN_COL_MIN && c <= SCAN_COL_MAX && isGreen(pixels[c])) greenRight++;
-    }
-
-    // ── 5. Raw per-frame green observation (fed to the vote filter) ───────────
-    uint8_t rawGreen = 0;
-    if      (greenLeft > LF_GREEN_PixCOUNT_THRESHOLD && greenRight > LF_GREEN_PixCOUNT_THRESHOLD) rawGreen = 1; // U-turn
-    else if (greenLeft  > LF_GREEN_PixCOUNT_THRESHOLD)                                            rawGreen = 2; // left
-    else if (greenRight > LF_GREEN_PixCOUNT_THRESHOLD)                                            rawGreen = 3; // right
-
-
-    // ── 6. Row-55 colour readout (display only) ───────────────────────────────
-    // ── 7. LineCount: in/out detection → focused-out ──────────────────────────
     LineCounts lc;
-    lc_detectCrossings(fb, lc);
+    detectArcCrossings(fb, lc);
+
     LineClass cls = lc_updateIn(lc);
-    int fo = lc_focusedOut(lc, cls.inIndex);
-    const uint8_t topBlackCount = countBlackOnRoiRow(fb, LC_ROI_Y_TOP);
-    const uint8_t bottomBlackCount = countBlackOnRoiRow(fb, LC_ROI_Y_BOT);
-    const uint8_t frontBlackCount = countBlackOnScanRow(fb, LF2_ROW_TOP);
-    const bool frontSaturated = frontBlackCount > LF2_SATURATION_BLACK_MIN;
-    digitalWrite(LED_BUILTIN, frontSaturated ? LOW : HIGH);   // ESP32 LED active-LOW
+    const int steerOut = selectSteeringOut(lc, cls.inIndex);
 
-    const bool topBottomLost =
-        topBlackCount <= LF_EDGE_BLACK_THRESHOLD &&
-        bottomBlackCount <= LF_EDGE_BLACK_THRESHOLD;
-    const uint8_t silverSideLeft = countSilverOnColumn(fb, LF_SILVER_SIDE_COL_LEFT);
-    const uint8_t silverSideRight = countSilverOnColumn(fb, LF_SILVER_SIDE_COL_RIGHT);
-    const bool sideSilverDetected =
-        silverSideLeft > LF_SILVER_SIDE_THRESHOLD ||
-        silverSideRight > LF_SILVER_SIDE_THRESHOLD;
-
-    uint8_t rowLeft = ROW55_WHITE, rowRight = ROW55_WHITE;
-    if (redCount > LF_RED_PixCOUNT_THRESHOLD) {
-        rowLeft = rowRight = ROW55_RED;
-    } else if (silverCount > LF_SILVER_PixCOUNT_THRESHOLD || sideSilverDetected) {
-        rowLeft = rowRight = ROW55_SILVER;
-    } else {
-        const bool linePresent = (blackCount > 5);
-        rowLeft  = (greenLeft  > LF_GREEN_PixCOUNT_THRESHOLD) ? ROW55_GREEN : (linePresent ? ROW55_BLACK : ROW55_WHITE);
-        rowRight = (greenRight > LF_GREEN_PixCOUNT_THRESHOLD) ? ROW55_GREEN : (linePresent ? ROW55_BLACK : ROW55_WHITE);
-    }
-
-    // ── 8. Green vote filter → committed goal ─────────────────────────────────
-    //  Green left/right are handled locally now: a confirmed turn seeds a virtual
-    //  committed goal that is tracked for COMMIT_MS, steering the error through the
-    //  intersection. Only U-turn is reported to the Teensy (via FEATURE below).
-    uint8_t greenCmd = lc_commitActive() ? 0 : gf_update(rawGreen);
-    if (greenCmd == 2) { lc_commitStart(true);  gf_reset(); }   // green-left  → commit left
-    if (greenCmd == 3) { lc_commitStart(false); gf_reset(); }   // green-right → commit right
-
-    //  The commit holds until the line settles to a single continuation for
-    //  COMMIT_END_FRAMES consecutive frames (handled inside lc_commitUpdate).
-    int  commitIdx    = -1;
-    bool commitActive = lc_commitUpdate(lc, cls.inIndex, cls.outCount, commitIdx);
-    int  steerOut     = (commitActive && commitIdx >= 0) ? commitIdx : fo;
-
-    // ── 9. Pixel-lookahead error (held on loss / committed-but-unseen) ────────
-    static float s_lastErr   = (float)LF_ERROR_CENTER;
-    static float s_lastErrPx = 0.0f;
-    float pixelErr, errPx;
-    bool  fresh = false;
-    if (!(commitActive && commitIdx < 0))           // committed but goal unseen → hold last
-        fresh = lc_slopeError(lc, cls.inIndex, steerOut, pixelErr, &errPx);
-    if (fresh) { s_lastErr = pixelErr; s_lastErrPx = errPx; }
-    uint8_t errByte = (uint8_t)constrain((int)(s_lastErr + 0.5f), 0, 254);
-
-    // ── 10. FEATURE event for the Teensy (priority silver > red > U-turn > lost)
-    //  Green L/R are handled locally by the commit, so they are NOT reported.
-    //  red/silver/line-lost are raw (the Teensy moving-average filters them);
-    //  U-turn is already GreenFilter-confirmed here.
     uint8_t featureId = FEAT_NONE;
-    if (topBottomLost) {
-        featureId = FEAT_LINE_LOST;
-        // Lost line: send the center error byte, equivalent to steering toward
-        // the camera center instead of holding the last seen line error.
-        errByte = LF_ERROR_CENTER;
-    }
-    if (greenCmd == 1)                              featureId = FEAT_UTURN;
-    if (redCount    > LF_RED_PixCOUNT_THRESHOLD)    featureId = FEAT_RED;
-    if (silverCount > LF_SILVER_PixCOUNT_THRESHOLD || sideSilverDetected) featureId = FEAT_SILVER;
+    uint8_t errByte = s_lastErr;
+    bool fresh = false;
 
-    // ── 11. Store debug + send to Teensy ──────────────────────────────────────
-    lc_storeDebug(lc, cls, fo, errByte, s_lastErrPx);
-    lc_storeSteer(steerOut, commitActive, lc_commitLocked(), lc_commitProgress(), greenCmd);
-    row55_storeDebug(rowLeft, rowRight);
+    if (cls.inIndex >= 0 && steerOut >= 0) {
+        errByte = arcAngleError(lc, cls.inIndex, steerOut, s_lastAngle, s_lastPos);
+        s_lastErr = errByte;
+        fresh = true;
+    } else if (lc.count == 0 || !cls.inHeld) {
+        errByte = LF_ERROR_CENTER;
+        featureId = FEAT_LINE_LOST;
+        s_lastErr = errByte;
+        s_lastAngle = 0.0f;
+        s_lastPos = 0.0f;
+    }
+
+    lc_storeDebug(lc, cls, steerOut, errByte, s_lastAngle);
+    lc_storeSteer(steerOut, false, false, 0, 0);
+    row55_storeDebug(featureId == FEAT_LINE_LOST ? ROW55_WHITE : ROW55_BLACK,
+                     featureId == FEAT_LINE_LOST ? ROW55_WHITE : ROW55_BLACK);
 
     teensy.send(XIAO_REG_FEATURE, featureId);
-    teensy.send(XIAO_REG_COM,     errByte);
-    teensy.send(XIAO_REG_FLAG,    lc_commitActive() ? 1 : 0);   // freeze Teensy transitions mid-commit
+    teensy.send(XIAO_REG_COM, errByte);
+    teensy.send(XIAO_REG_FLAG, 0);
 
-    // ── 12. Debug output ──────────────────────────────────────────────────────
     SPRINTF(SPRINT_RESULTS, "[RES]",
-        "mode=0 feat=%d com=%.1f err=%d epx=%.1f blk=%d frontBlk=%d sat=%d sil=%d sL=%d sR=%d red=%d gL=%d gR=%d gc=%d cmt=%d",
-        featureId, centerOfMass, errByte, s_lastErrPx, blackCount,
-        frontBlackCount, frontSaturated ? 1 : 0, silverCount, silverSideLeft, silverSideRight,
-        redCount, greenLeft, greenRight, greenCmd, commitActive ? 1 : 0);
-#ifndef OUTPUT_STREAM
-    int xIn  = (cls.inIndex >= 0 && cls.inIndex < lc.count) ? lc.crossings[cls.inIndex].pixelX : -1;
-    int xOut = (steerOut    >= 0 && steerOut    < lc.count) ? lc.crossings[steerOut].pixelX    : -1;
-    SPRINTF(SPRINT_RESULTS, "[LC]",
-        "n=%d in=%d steer=%d xi=%d xo=%d err=%d act=%d lock=%d prog=%d g=%d",
-        lc.count, cls.inIndex, steerOut, xIn, xOut, errByte, commitActive ? 1 : 0,
-        lc_commitLocked() ? 1 : 0, lc_commitProgress(), greenCmd);
-#endif
+        "mode=0 arc=1 feat=%d err=%d n=%d in=%d out=%d fresh=%d ang=%.1f pos=%.1f",
+        featureId, errByte, lc.count, cls.inIndex, steerOut, fresh ? 1 : 0,
+        s_lastAngle, s_lastPos);
 }
