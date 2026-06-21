@@ -126,7 +126,8 @@ void loop() {
     //  LED for black-saturation). The old modeLineFollowRun (green/commit/in-out)
     //  is kept in ModeLineFollow.cpp but no longer called.
     switch (mode) {
-        case MODE_LINEFOLLOW:  modeLineFollow2Run(fb, teensy); break;
+        // case MODE_LINEFOLLOW:  modeLineFollow2Run(fb, teensy); break;
+        case MODE_LINEFOLLOW:  modeLineFollowRun(fb, teensy); break;
         case MODE_SEARCH_LINE: modeSearchLineRun(fb, teensy);  break;
         case MODE_NOGI:        modeNoGIRun(fb, teensy);        break;
         case MODE_GAP:         modeGapRun(fb, teensy);         break;

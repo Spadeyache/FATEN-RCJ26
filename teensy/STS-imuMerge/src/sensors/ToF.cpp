@@ -2,24 +2,19 @@
 #include "../../pins_teensy.h"
 #include <Wire.h>
 
+int16_t tofFL[8][8];
+
 // =============================================================================
-//  Sensors::ToF - 4x VL53L7CX on TOF_WIRE.
+//  Sensors::ToF - VL53L7CX front-left sensor on TOF_WIRE.
 //
-//  All VL53L7CX power up at the same default I2C address (0x52). To run several
-//  on one bus we hold every sensor in reset via its XSHUT pin, then bring them
-//  up ONE AT A TIME and assign each a unique address before enabling the next.
-//  (Same idea as the classic VL53L0X multi-sensor XSHUT sequence.)
-//
-//  Sensor 0 has NO XSHUT wired (XSHUT pin = -1): it stays powered on. It is
-//  therefore configured first and moved off the default 0x52, so that when the
-//  XSHUT sensors are later woken (and boot at 0x52) there is no collision.
+//  Current bring-up wiring: one VL53L7CX connected directly on Wire1 at the
+//  default ST 8-bit address 0x52 (scanner shows 7-bit 0x29), no XSHUT/LPn pin.
 // =============================================================================
 
 namespace Sensors {
 namespace ToF {
 
 namespace {
-    // lpn=-1: we drive XSHUT ourselves, so the driver must not toggle it.
     yacheVL53L7CX _tof[TOF_COUNT] = {
         yacheVL53L7CX(TOF_WIRE, -1, -1),
         yacheVL53L7CX(TOF_WIRE, -1, -1),
@@ -27,58 +22,64 @@ namespace {
         yacheVL53L7CX(TOF_WIRE, -1, -1),
     };
 
-    // -1 = no XSHUT pin (sensor is always powered on).
-    const int8_t _xshut[TOF_COUNT] = {
-        TOF0_XSHUT_PIN, TOF1_XSHUT_PIN, TOF2_XSHUT_PIN, TOF3_XSHUT_PIN
-    };
-    const uint8_t _addr[TOF_COUNT] = {
-        TOF0_ADDR, TOF1_ADDR, TOF2_ADDR, TOF3_ADDR
-    };
-    const float _dx[TOF_COUNT] = {
-        TOF0_DX_MM, TOF1_DX_MM, TOF2_DX_MM, TOF3_DX_MM
-    };
-    const float _dy[TOF_COUNT] = {
-        TOF0_DY_MM, TOF1_DY_MM, TOF2_DY_MM, TOF3_DY_MM
-    };
-    const float _yaw_deg[TOF_COUNT] = {
-        TOF0_YAW_DEG, TOF1_YAW_DEG, TOF2_YAW_DEG, TOF3_YAW_DEG
-    };
-
     bool _initialised = false;
 
     inline float deg2rad(float d) { return d * (float)PI / 180.0f; }
+
+    void clearFL() {
+        for (uint8_t row = 0; row < 8; ++row) {
+            for (uint8_t col = 0; col < 8; ++col) {
+                tofFL[row][col] = -1;
+            }
+        }
+    }
 }
 
 void init() {
     if (_initialised) return;
     TOF_WIRE.begin();   // ToF has its own bus; see TOF_WIRE in pins_teensy.h.
+    TOF_WIRE.setClock(50000);
+    delay(100);
+    clearFL();
 
-    // 1. Hold every XSHUT sensor in reset (low = off). Sensors with no XSHUT
-    //    (pin == -1) stay powered on at the default 0x52.
-    for (uint8_t i = 0; i < TOF_COUNT; ++i) {
-        if (_xshut[i] < 0) continue;
-        pinMode(_xshut[i], OUTPUT);
-        digitalWrite(_xshut[i], LOW);
-    }
-    delay(10);
-
-    // 2. Configure one at a time. Index 0 (no XSHUT) is done first and moved off
-    //    0x52; each later XSHUT sensor is then woken alone at 0x52 and reassigned.
-    for (uint8_t i = 0; i < TOF_COUNT; ++i) {
-        if (_xshut[i] >= 0) {
-            digitalWrite(_xshut[i], HIGH);
-            delay(10);                   // let it boot before talking to it
-        }
-
-        _tof[i].setMountTransform(_dx[i], _dy[i], deg2rad(_yaw_deg[i]));
-        if (!_tof[i].begin(TOF_RES, TOF_FREQ_HZ, _addr[i])) {
-            Serial.printf("[ToF] sensor %u init FAILED\n", i);
-        } else {
-            Serial.printf("[ToF] sensor %u ready @0x%02X\n", i, _addr[i]);
-        }
+    _tof[0].setMountTransform(TOF0_DX_MM, TOF0_DY_MM, deg2rad(TOF0_YAW_DEG));
+    if (!_tof[0].begin(8, TOF_FREQ_HZ, 0x52)) {
+        Serial.println("[ToF] FL init FAILED @0x52");
+    } else {
+        Serial.println("[ToF] FL ready @0x52");
     }
 
     _initialised = true;
+}
+
+bool tick() {
+    if (!_initialised) return false;
+    if (!_tof[0].dataReady()) return false;
+
+    int16_t mm[64];
+    uint8_t status[64];
+    if (!_tof[0].getRanges(mm, status)) return false;
+
+    for (uint8_t row = 0; row < 8; ++row) {
+        for (uint8_t col = 0; col < 8; ++col) {
+            const uint8_t zone = row * 8 + col;
+            tofFL[row][col] = yacheVL53L7CX::isValid(status[zone], mm[zone])
+                ? mm[zone]
+                : -1;
+        }
+    }
+    return true;
+}
+
+void printFL() {
+    Serial.println("tofFL mm (-1 = invalid):");
+    for (uint8_t row = 0; row < 8; ++row) {
+        for (uint8_t col = 0; col < 8; ++col) {
+            Serial.print(tofFL[row][col]);
+            Serial.print(col < 7 ? "\t" : "\n");
+        }
+    }
+    Serial.println("---");
 }
 
 yacheVL53L7CX& sensor(uint8_t i) { return _tof[i]; }
