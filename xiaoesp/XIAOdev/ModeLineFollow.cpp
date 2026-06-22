@@ -25,10 +25,10 @@ constexpr uint8_t ARC_BOTTOM_RIGHT_X = 120;
 constexpr uint8_t ARC_SAMPLE_STEP = 1;
 
 // Error = 127 + signed angle * ANGLE_SCALE * side boost + bottom in-point offset * IN_PX_SCALE.
-constexpr float ARC_ANGLE_SCALE = 2.0f; 
+constexpr float ARC_ANGLE_SCALE = 2.0f; //2.0 
 constexpr float ARC_IN_PX_SCALE = 0.8f; // balance of front and back gain
 constexpr uint8_t ARC_SIDE_GAIN_Y = 45;  //boosts with gain in the side bellow Y : for tight turns
-constexpr float ARC_SIDE_GAIN_MULT = 1.65f;
+constexpr float ARC_SIDE_GAIN_MULT = 1.0f; //1.65
 
 // Silver rescue-zone tape scan: same side-column logic as the older line/search modes.
 constexpr uint8_t SILVER_COL_LEFT = 33;
@@ -38,7 +38,7 @@ constexpr uint8_t SILVER_ROW_MAX = 70;
 constexpr uint8_t SILVER_THRESHOLD = 6; //num of px
 
 // Row-25 color processing. Bounds follow the arc ROI side walls, not the full image.
-constexpr uint8_t COLOR_ROW = 25;
+constexpr uint8_t COLOR_ROW = 65;
 constexpr uint8_t COLOR_X_MIN = ARC_LEFT_X;
 constexpr uint8_t COLOR_X_MAX = ARC_RIGHT_X;
 constexpr uint8_t RED_THRESHOLD = 30;
@@ -55,7 +55,7 @@ constexpr uint8_t GREEN_BOTH_VOTES = 4;
 
 // During a black-saturated intersection row, ignore/reset green votes so green
 // after the intersection does not accidentally command a turn.
-constexpr uint8_t INTERSECTION_BLACK_SAT_THRESHOLD = 35;
+constexpr uint8_t INTERSECTION_BLACK_SAT_THRESHOLD = 60;
 
 // Green-left/right commit target. Ends after the branch has been seen and the
 // line settles back to exactly two crossings (in + one out) for this many frames.
@@ -63,6 +63,16 @@ constexpr uint8_t COMMIT_SETTLE_FRAMES = 3;
 // constexpr uint8_t COMMIT_SIDE_MARGIN = 10;
 // constexpr float COMMIT_TRACK_GATE = 50.0f;
 // COMMIT_SIDE_MARGIN and COMMIT_TRACK_GATE are defined in config.h
+
+// Curve commit (auto, no green): when a clean 1-in/1-out frame has the out
+// already in the side-boost (tight-turn) zone, lock that out as the steering
+// target and ride it through the turn — so the return-stub (はみだし) that shows
+// up on the far side mid-turn can't steal the target. Unlike the green commit it
+// raises NO Teensy flag and does NOT touch the green filter. It releases once the
+// in->out slope has calmed (line straightened) for a few frames.
+constexpr float   CURVE_CALM_ANGLE_DEG = 18.0f;  // |in->out angle| below this = straightened
+constexpr uint8_t CURVE_CALM_FRAMES    = 2;      // consecutive calm frames to release
+constexpr uint8_t CURVE_LOST_FRAMES    = 6;      // release if the committed out is unseen this long
 
 // Viewer-only width threshold: out points this wide are drawn magenta.
 constexpr uint8_t HAMIDASHI_OUT_WIDTH_MIN = 12;
@@ -86,6 +96,10 @@ bool    s_commitSeenBranch = false;
 bool    s_commitLocked = false;
 float   s_commitLockPos = 0.0f;
 uint8_t s_commitSettle = 0;
+bool    s_curveActive = false;
+float   s_curveLockPos = 0.0f;
+uint8_t s_curveCalm = 0;
+uint8_t s_curveLost = 0;
 uint8_t s_lastErr = LF_ERROR_CENTER;
 float   s_lastAngle = 0.0f;
 float   s_lastPos = 0.0f;
@@ -185,7 +199,8 @@ bool hasBottomLinePoint(const LineCounts& lc) {
     return false;
 }
 
-uint8_t rawGreenOnColorRow(camera_fb_t* fb, float lineCom, uint8_t& greenLeft, uint8_t& greenRight) {
+uint8_t rawGreenOnColorRow(camera_fb_t* fb, float lineCom, uint8_t& greenLeft, uint8_t& greenRight,
+                           uint8_t& blackLeft, uint8_t& blackRight) {
     cameraData rowPixels[160] = {};
     scanRow(fb, COLOR_ROW, COLOR_X_MIN, COLOR_X_MAX, rowPixels);
 
@@ -199,11 +214,15 @@ uint8_t rawGreenOnColorRow(camera_fb_t* fb, float lineCom, uint8_t& greenLeft, u
 
     greenLeft = 0;
     greenRight = 0;
+    blackLeft = 0;
+    blackRight = 0;
     for (uint8_t x = leftStart; x < leftEnd; x++) {
         if (isGreen(rowPixels[x])) greenLeft++;
+        else if (isBlack(rowPixels[x])) blackLeft++;
     }
     for (uint8_t x = rightStart; x < rightEnd; x++) {
         if (isGreen(rowPixels[x])) greenRight++;
+        else if (isBlack(rowPixels[x])) blackRight++;
     }
 
     const bool left = greenLeft > GREEN_PX_THRESHOLD;
@@ -321,12 +340,19 @@ void clearCommit() {
     s_commitSettle = 0;
 }
 
+void clearCurveCommit() {
+    s_curveActive = false;
+    s_curveCalm = 0;
+    s_curveLost = 0;
+}
+
 void startCommit(bool left) {
     s_commitActive = true;
     s_commitLeft = left;
     s_commitSeenBranch = false;
     s_commitLocked = false;
     s_commitSettle = 0;
+    clearCurveCommit();   // green takes over steering; drop any auto curve lock
 }
 
 int committedOut(const LineCounts& lc, int inIndex) {
@@ -386,6 +412,64 @@ void updateCommitSettle(const LineClass& cls, uint8_t crossingCount) {
     }
 }
 
+// The single out when there is exactly one in + one out.
+int singleOut(const LineCounts& lc, int inIndex) {
+    for (int i = 0; i < lc.count; i++) if (i != inIndex) return i;
+    return -1;
+}
+
+// Start an auto curve commit: exactly one in + one out, the out already deep in
+// the side-gain (tight-turn) zone. Pure steering lock — no flag, no green reset.
+void tryStartCurveCommit(const LineCounts& lc, const LineClass& cls) {
+    if (s_curveActive || s_commitActive) return;
+    if (cls.inIndex < 0 || cls.outCount != 1 || lc.count != 2) return;
+    const int outI = singleOut(lc, cls.inIndex);
+    if (outI < 0) return;
+    const Crossing& o = lc.crossings[outI];
+    const bool sideBoost = (o.edge == LC_EDGE_LEFT || o.edge == LC_EDGE_RIGHT) &&
+                           o.pixelY >= ARC_SIDE_GAIN_Y;
+    if (!sideBoost) return;
+    s_curveActive = true;
+    s_curveLockPos = o.pos;
+    s_curveCalm = 0;
+    s_curveLost = 0;
+}
+
+// Sticky tracking of the committed curve out by nearest perimeter-pos (same idea
+// as the green commit's locked branch), so a newly appearing crossing can't steal
+// the target. Returns the matched index, or -1 on a transient miss (caller holds).
+int curveCommittedOut(const LineCounts& lc, int inIndex) {
+    if (!s_curveActive || inIndex < 0) return -1;
+    int best = -1;
+    float bestDist = 1e9f;
+    for (int i = 0; i < lc.count; i++) {
+        if (i == inIndex) continue;
+        const float d = lc_loopDist(s_curveLockPos, lc.crossings[i].pos, lc.perimeter);
+        if (d < bestDist) { best = i; bestDist = d; }
+    }
+    if (best >= 0 && bestDist <= COMMIT_TRACK_GATE) {
+        s_curveLockPos = lc.crossings[best].pos;
+        return best;
+    }
+    return -1;
+}
+
+// Release the curve commit once the in->out slope has calmed (line straightened)
+// for CURVE_CALM_FRAMES, or after losing the committed out for CURVE_LOST_FRAMES.
+void updateCurveRelease(bool fresh, float angleDeg, int steerOut) {
+    if (!s_curveActive) return;
+    if (steerOut < 0) {                                   // committed out unseen
+        if (++s_curveLost >= CURVE_LOST_FRAMES) clearCurveCommit();
+        return;
+    }
+    s_curveLost = 0;
+    if (fresh && fabsf(angleDeg) < CURVE_CALM_ANGLE_DEG) {
+        if (++s_curveCalm >= CURVE_CALM_FRAMES) clearCurveCommit();
+    } else {
+        s_curveCalm = 0;
+    }
+}
+
 uint8_t arcAngleError(const LineCounts& lc, int inIndex, int outIndex, float& angleOut, float& posOut) {
     const Crossing& in = lc.crossings[inIndex];
     const Crossing& out = lc.crossings[outIndex];
@@ -418,6 +502,7 @@ uint8_t arcAngleError(const LineCounts& lc, int inIndex, int outIndex, float& an
 void modeLineFollowReset() {
     resetGreenFilter();
     clearCommit();
+    clearCurveCommit();
     lc_resetTracking();
     s_lastErr = LF_ERROR_CENTER;
     s_lastAngle = 0.0f;
@@ -443,15 +528,15 @@ void modeLineFollowRun(camera_fb_t* fb, YacheEncodedSerial& teensy) {
     const bool gapDetected = colorBlack <= GAP_BLACK_MAX && !bottomLinePoint;
     const bool intersectionSaturated = colorBlack > INTERSECTION_BLACK_SAT_THRESHOLD;
 
-    uint8_t greenLeft = 0, greenRight = 0;
-    uint8_t rawGreen = rawGreenOnColorRow(fb, colorCom, greenLeft, greenRight);
+    uint8_t greenLeft = 0, greenRight = 0, blackLeft = 0, blackRight = 0;
+    uint8_t rawGreen = rawGreenOnColorRow(fb, colorCom, greenLeft, greenRight, blackLeft, blackRight);
     uint8_t greenCmd = 0;
     if (intersectionSaturated || gapDetected) {
         resetGreenFilter();
         rawGreen = 0;
     } else if (!s_commitActive) {
         greenCmd = updateGreenFilter(rawGreen);
-        if (greenCmd != 0) resetGreenFilter();
+        if (greenCmd != 0) { resetGreenFilter(); clearCurveCommit(); }
         if (greenCmd == 1) clearCommit();
         if (greenCmd == 2) startCommit(true);
         if (greenCmd == 3) startCommit(false);
@@ -460,7 +545,17 @@ void modeLineFollowRun(camera_fb_t* fb, YacheEncodedSerial& teensy) {
     uint8_t featureId = FEAT_NONE;
     uint8_t errByte = s_lastErr;
     bool fresh = false;
-    int steerOut = s_commitActive ? committedOut(lc, cls.inIndex) : normalSteerOut;
+
+    // Auto curve commit: lock a tight-turn out so the mid-turn return-stub can't
+    // steal the target. Suppressed during a saturated (intersection) row and
+    // outranked by the green commit. Priority: green > curve > normal.
+    if (arcBlackSaturated) clearCurveCommit();
+    else                   tryStartCurveCommit(lc, cls);
+
+    int steerOut;
+    if (s_commitActive)     steerOut = committedOut(lc, cls.inIndex);
+    else if (s_curveActive) steerOut = curveCommittedOut(lc, cls.inIndex);
+    else                    steerOut = normalSteerOut;
 
     if (arcBlackSaturated) {
         errByte = LF_ERROR_CENTER;
@@ -484,6 +579,7 @@ void modeLineFollowRun(camera_fb_t* fb, YacheEncodedSerial& teensy) {
     if (redCount > RED_THRESHOLD) featureId = FEAT_RED;
     if (silverDetected) featureId = FEAT_SILVER;
     updateCommitSettle(cls, lc.count);
+    updateCurveRelease(fresh, s_lastAngle, steerOut);
 
     lc_storeDebug(lc, cls, steerOut, errByte, s_lastAngle);
     lc_storeStreamGuides(ARC_TOP_X, ARC_TOP_Y,
@@ -503,21 +599,31 @@ void modeLineFollowRun(camera_fb_t* fb, YacheEncodedSerial& teensy) {
     //                ARC_BOTTOM_RIGHT_X, ARC_BOTTOM_Y);
     lc_storeSteer(steerOut, s_commitActive, s_commitLocked, s_commitSettle, greenCmd,
                   arcBlackCount, arcBlackSaturated);
-    const uint8_t rowClass =
-        (featureId == FEAT_SILVER) ? ROW55_SILVER :
-        (featureId == FEAT_RED) ? ROW55_RED :
-        gapDetected ? ROW55_WHITE :
-        ((greenLeft > GREEN_PX_THRESHOLD || greenRight > GREEN_PX_THRESHOLD) ? ROW55_GREEN : ROW55_BLACK);
-    row55_storeDebug(rowClass, rowClass);
+    // Left/right are independent: silver/red/gap are whole-row, so both sides
+    // share them; green is per-window (greenLeft/greenRight from rawGreenOnColorRow).
+    // Each side is classified on its own: green if green pixels pass, else black
+    // only if black pixels are actually present, else white. So one side reading
+    // black never forces the other — a green side still shows green.
+    uint8_t leftClass, rightClass;
+    if (featureId == FEAT_SILVER)   { leftClass = rightClass = ROW55_SILVER; }
+    else if (featureId == FEAT_RED) { leftClass = rightClass = ROW55_RED; }
+    else if (gapDetected)           { leftClass = rightClass = ROW55_WHITE; }
+    else {
+        leftClass  = (greenLeft  > GREEN_PX_THRESHOLD) ? ROW55_GREEN
+                   : (blackLeft  > GREEN_PX_THRESHOLD) ? ROW55_BLACK : ROW55_WHITE;
+        rightClass = (greenRight > GREEN_PX_THRESHOLD) ? ROW55_GREEN
+                   : (blackRight > GREEN_PX_THRESHOLD) ? ROW55_BLACK : ROW55_WHITE;
+    }
+    row55_storeDebug(leftClass, rightClass);
 
     teensy.send(XIAO_REG_FEATURE, featureId);
     teensy.send(XIAO_REG_COM, errByte);
     teensy.send(XIAO_REG_FLAG, s_commitActive ? 1 : 0);
 
     SPRINTF(SPRINT_RESULTS, "[RES]",
-        "mode=0 arc=1 feat=%d err=%d n=%d in=%d out=%d fresh=%d ang=%.1f pos=%.1f ccom=%.1f sL=%d sR=%d red=%d blk25=%d ablk=%d bot=%d gap=%d sat=%d asat=%d gL=%d gR=%d rawG=%d gc=%d cmt=%d",
+        "mode=0 arc=1 feat=%d err=%d n=%d in=%d out=%d fresh=%d ang=%.1f pos=%.1f ccom=%.1f sL=%d sR=%d red=%d blk25=%d ablk=%d bot=%d gap=%d sat=%d asat=%d gL=%d gR=%d rawG=%d gc=%d cmt=%d cc=%d",
         featureId, errByte, lc.count, cls.inIndex, steerOut, fresh ? 1 : 0,
         s_lastAngle, s_lastPos, colorCom, silverLeft, silverRight, redCount, colorBlack, arcBlackCount, bottomLinePoint ? 1 : 0,
         gapDetected ? 1 : 0, intersectionSaturated ? 1 : 0, arcBlackSaturated ? 1 : 0, greenLeft, greenRight,
-        rawGreen, greenCmd, s_commitActive ? 1 : 0);
+        rawGreen, greenCmd, s_commitActive ? 1 : 0, s_curveActive ? 1 : 0);
 }
