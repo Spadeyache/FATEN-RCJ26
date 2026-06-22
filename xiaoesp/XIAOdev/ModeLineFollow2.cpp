@@ -128,7 +128,8 @@ void modeLineFollow2Run(camera_fb_t* fb, YacheEncodedSerial& teensy) {
     float   com5;   uint8_t black5;   scanBlackRow(fb, LF2_ROW_TOP, com5, black5);
 
     const bool saturated = (black40 > LF2_SATURATION_BLACK_MIN);
-    digitalWrite(LED_BUILTIN, saturated ? LOW : HIGH);   // ESP32 LED active-LOW
+    // LED debug disabled for normal running.
+    // digitalWrite(LED_BUILTIN, saturated ? LOW : HIGH);   // ESP32 LED active-LOW
 
     uint8_t feature = FEAT_NONE;
     uint8_t flag    = 0;

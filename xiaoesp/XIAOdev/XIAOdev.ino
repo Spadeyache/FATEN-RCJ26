@@ -50,6 +50,7 @@ static uint16_t fletcher16(const uint8_t* d, size_t n) {
 
 void streamTask(void* pvParameters);
 static void sendLineCountDebugOnly();
+void runCameraCalibration();   // blocking RGB calibration mode (see bottom of file)
 
 // logf — only emits in OUTPUT_LOG builds; silent in OUTPUT_STREAM
 static void logf(const char* fmt, ...) {
@@ -76,6 +77,13 @@ void setup() {
     else                logf("Camera ready\n");
 
     delay(500);
+
+    // ── CAMERA RGB CALIBRATION ──────────────────────────────────────────────
+    //  Uncomment to enter calibration mode (blocks forever). Streams frames to
+    //  esp32_camera_viewer.html and reads SPACE from the viewer: aim BLACK +
+    //  SPACE, then WHITE + SPACE → it prints a paste-ready vision.cpp block.
+    //  Paste the 6 constants into vision.cpp, then comment this back out.
+    // runCameraCalibration();
 
 #ifdef OUTPUT_STREAM
 #if STREAM_SEND_CAMERA_IMAGES
@@ -162,12 +170,15 @@ static void sendLineCountDebugOnly() {
     if ((uint32_t)(now - lastSent) < (1000UL / STREAM_FPS)) return;
     lastSent = now;
 
+    char cfgLine[128];
     char lcLine[384];
     char rowLine[48];
+    int cfgLen = lc_formatConfig(cfgLine, sizeof(cfgLine));
     int lcLen = lc_formatDebug(lcLine, sizeof(lcLine));
     int rowLen = row55_formatDebug(rowLine, sizeof(rowLine));
 
     if (serialMutex) xSemaphoreTake(serialMutex, portMAX_DELAY);
+    if (cfgLen > 0) Serial.write((const uint8_t*)cfgLine, cfgLen);
     if (lcLen > 0) Serial.write((const uint8_t*)lcLine, lcLen);
     if (rowLen > 0) Serial.write((const uint8_t*)rowLine, rowLen);
     if (serialMutex) xSemaphoreGive(serialMutex);
@@ -196,8 +207,10 @@ void streamTask(void* pvParameters) {
 
         // LineCount overlay line — ASCII, emitted under the mutex *before* the
         // frame so the viewer parses it as text (never inside the pixel bytes).
+        char cfgLine[128];
         char lcLine[384];
         char rowLine[48];
+        int  cfgLen = lc_formatConfig(cfgLine, sizeof(cfgLine));
         int  lcLen = lc_formatDebug(lcLine, sizeof(lcLine));
         int  rowLen = row55_formatDebug(rowLine, sizeof(rowLine));
 
@@ -207,6 +220,7 @@ void streamTask(void* pvParameters) {
         const uint16_t crc  = fletcher16(buf, plen);
 
         xSemaphoreTake(serialMutex, portMAX_DELAY);
+        if (cfgLen > 0) Serial.write((const uint8_t*)cfgLine, cfgLen);
         if (lcLen > 0) Serial.write((const uint8_t*)lcLine, lcLen);
         if (rowLen > 0) Serial.write((const uint8_t*)rowLine, rowLen);
         Serial.write(MAGIC_IMAGE,      4);
@@ -220,3 +234,118 @@ void streamTask(void* pvParameters) {
     }
 }
 #endif
+
+// ════════════════════════════════════════════════════════════════════════════════
+//  CAMERA RGB CALIBRATION (blocking)
+//  Streams frames over the normal protocol and reads RAW RGB averaged over a
+//  centre box, smoothed across CALIB_AVG_FRAMES frames. The viewer sends SPACE
+//  (no newline) on a key press: 1st SPACE locks BLACK, 2nd locks WHITE; 'r'
+//  resets. On both → prints a paste-ready vision.cpp block as [CAL] lines.
+//  Runs single-threaded from setup() before the stream task exists → no mutex.
+// ════════════════════════════════════════════════════════════════════════════════
+static void calSampleBox(camera_fb_t* fb, float& mr, float& mg, float& mb) {
+    const int w = fb->width, h = fb->height;
+    long sr = 0, sg = 0, sb = 0; int n = 0;
+    for (int y = CALIB_BOX_CY - CALIB_BOX_HALF; y <= CALIB_BOX_CY + CALIB_BOX_HALF; y++) {
+        if (y < 0 || y >= h) continue;
+        for (int x = CALIB_BOX_CX - CALIB_BOX_HALF; x <= CALIB_BOX_CX + CALIB_BOX_HALF; x++) {
+            if (x < 0 || x >= w) continue;
+            uint16_t px = unpackRGB565(fb->buf, y * w + x);
+            uint8_t r, g, b; rgb565To888(px, r, g, b);
+            sr += r; sg += g; sb += b; n++;
+        }
+    }
+    if (n == 0) { mr = mg = mb = 0; return; }
+    mr = (float)sr / n; mg = (float)sg / n; mb = (float)sb / n;
+}
+
+#if defined(OUTPUT_STREAM) && STREAM_SEND_CAMERA_IMAGES
+static void calStreamFrame(camera_fb_t* fb) {
+    const uint16_t w = fb->width, h = fb->height;
+    const uint32_t plen = (uint32_t)w * (uint32_t)h * 2UL;
+    const uint16_t crc  = fletcher16(fb->buf, plen);
+    Serial.write(MAGIC_IMAGE,     4);
+    Serial.write((uint8_t*)&w,    2);
+    Serial.write((uint8_t*)&h,    2);
+    Serial.write((uint8_t*)&plen, 4);
+    Serial.write(fb->buf,         plen);
+    Serial.write((uint8_t*)&crc,  2);
+}
+#endif
+
+void runCameraCalibration() {
+    const int N = CALIB_AVG_FRAMES;
+    float rBuf[N], gBuf[N], bBuf[N];
+    int   count = 0, head = 0;
+    float blkR = 0, blkG = 0, blkB = 0; bool haveBlk = false;
+    float whtR = 0, whtG = 0, whtB = 0; bool haveWht = false;
+    uint32_t lastLive = 0;
+
+    Serial.printf("[CAL] calibration mode. Aim BLACK + SPACE, then WHITE + SPACE. 'r' = reset.\n");
+
+    for (;;) {
+        camera_fb_t* fb = Camera_Grab();
+        if (!fb) { delay(5); continue; }
+
+        float mr, mg, mb;
+        calSampleBox(fb, mr, mg, mb);
+        rBuf[head] = mr; gBuf[head] = mg; bBuf[head] = mb;
+        head = (head + 1) % N;
+        if (count < N) count++;
+
+        float ar = 0, ag = 0, ab = 0;
+        for (int i = 0; i < count; i++) { ar += rBuf[i]; ag += gBuf[i]; ab += bBuf[i]; }
+        ar /= count; ag /= count; ab /= count;
+
+        // ── keypresses relayed from the viewer (single chars, no newline) ──
+        while (Serial.available()) {
+            char c = Serial.read();
+            if (c == 'r' || c == 'R') {
+                haveBlk = haveWht = false;
+                Serial.printf("[CAL] reset. Aim BLACK + SPACE.\n");
+            } else if (c == ' ' || c == 'b' || c == 'B' || c == 'w' || c == 'W') {
+                if (count < N) {
+                    Serial.printf("[CAL] not enough data (%d/%d)\n", count, N);
+                    continue;
+                }
+                bool asWhite = (c == 'w' || c == 'W') || (c == ' ' && haveBlk);
+                if (!asWhite) {
+                    blkR = ar; blkG = ag; blkB = ab; haveBlk = true;
+                    Serial.printf("[CAL] BLACK locked R=%.1f G=%.1f B=%.1f -> aim WHITE + SPACE\n", ar, ag, ab);
+                } else {
+                    whtR = ar; whtG = ag; whtB = ab; haveWht = true;
+                    Serial.printf("[CAL] WHITE locked R=%.1f G=%.1f B=%.1f\n", ar, ag, ab);
+                }
+                if (haveBlk && haveWht) {
+                    float gR = 255.0f / fmaxf(1.0f, whtR - blkR);
+                    float gG = 255.0f / fmaxf(1.0f, whtG - blkG);
+                    float gB = 255.0f / fmaxf(1.0f, whtB - blkB);
+                    Serial.printf("[CAL] ===== PASTE INTO vision.cpp =====\n");
+                    Serial.printf("[CAL] const float R_Gain = %.8f;   // 255/(%.1f-%.1f)\n", gR, whtR, blkR);
+                    Serial.printf("[CAL] const float G_Gain = %.8f;   // 255/(%.1f-%.1f)\n", gG, whtG, blkG);
+                    Serial.printf("[CAL] const float B_Gain = %.8f;   // 255/(%.1f-%.1f)\n", gB, whtB, blkB);
+                    Serial.printf("[CAL] const uint8_t R_D = %.1f * %.2f;   // (=%d)\n", blkR, (double)CALIB_MARGIN, (int)(blkR * CALIB_MARGIN));
+                    Serial.printf("[CAL] const uint8_t G_D = %.1f * %.2f;   // (=%d)\n", blkG, (double)CALIB_MARGIN, (int)(blkG * CALIB_MARGIN));
+                    Serial.printf("[CAL] const uint8_t B_D = %.1f * %.2f;   // (=%d)\n", blkB, (double)CALIB_MARGIN, (int)(blkB * CALIB_MARGIN));
+                    Serial.printf("[CAL] =================================\n");
+                    haveBlk = haveWht = false;
+                }
+            }
+        }
+
+        // ── throttled live readout + frame stream ──
+        if (millis() - lastLive >= 250) {
+            lastLive = millis();
+            if (count < N) {
+                Serial.printf("[CAL] live R=%.1f G=%.1f B=%.1f  (warming %d/%d)\n", ar, ag, ab, count, N);
+            } else {
+                Serial.printf("[CAL] live R=%.1f G=%.1f B=%.1f  n=%d  %s + SPACE\n",
+                              ar, ag, ab, count, haveBlk ? "aim WHITE" : "aim BLACK");
+            }
+#if defined(OUTPUT_STREAM) && STREAM_SEND_CAMERA_IMAGES
+            calStreamFrame(fb);
+#endif
+        }
+        Camera_Return(fb);
+    }
+}

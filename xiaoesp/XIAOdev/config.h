@@ -79,6 +79,17 @@
 #define RED_SAT_MIN        80
 #define RED_VAL_MIN        40
 
+// ── Camera RGB calibration routine (firmware) ────────────────────────────────
+// Used only by runCameraCalibration() (call is commented out in setup()).
+// Reads RAW RGB over a centre box, smoothed across CALIB_AVG_FRAMES frames.
+// Capture black then white (SPACE from the viewer) → prints vision.cpp constants:
+//   offset D = black * CALIB_MARGIN,   gain = 255 / (white - black).
+#define CALIB_BOX_CX      80    // sample-box centre column
+#define CALIB_BOX_CY      60    // sample-box centre row
+#define CALIB_BOX_HALF     8    // box is (2*HALF+1)^2, e.g. 17x17
+#define CALIB_AVG_FRAMES  10    // rolling frames averaged before a capture
+#define CALIB_MARGIN      0.8f  // black offset safety margin (matches vision.cpp)
+
 // ── Pixel sampling window used by updateRawGrayHSV() ─────────────────────────
 // Width/height must be odd. A 5x1 sample gives horizontal smoothing without
 // mixing neighboring rows.

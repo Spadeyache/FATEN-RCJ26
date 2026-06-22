@@ -680,13 +680,15 @@ canvas { display: block; image-rendering: pixelated; }
     <div class="filter-bar">
       <span>Filter:</span>
       <button class="filter-btn active" data-tag="ALL">ALL</button>
-      <button class="filter-btn" data-tag="RES">[RES]</button>
-      <button class="filter-btn" data-tag="LC">[LC]</button>
-      <button class="filter-btn" data-tag="ROW">[ROW]</button>
-      <button class="filter-btn" data-tag="CLS">[CLS]</button>
-      <button class="filter-btn" data-tag="PIX">[PIX]</button>
-      <button class="filter-btn" data-tag="SIN">[SIN]</button>
-      <button class="filter-btn" data-tag="SOUT">[SOUT]</button>
+      <button class="filter-btn" data-tag="[RES]">[RES]</button>
+      <button class="filter-btn" data-tag="[CFG]">[CFG]</button>
+      <button class="filter-btn" data-tag="[CAL]">[CAL]</button>
+      <button class="filter-btn" data-tag="[LC]">[LC]</button>
+      <button class="filter-btn" data-tag="[ROW]">[ROW]</button>
+      <button class="filter-btn" data-tag="[CLS]">[CLS]</button>
+      <button class="filter-btn" data-tag="[PIX]">[PIX]</button>
+      <button class="filter-btn" data-tag="[SIN]">[SIN]</button>
+      <button class="filter-btn" data-tag="[SOUT]">[SOUT]</button>
       <button class="filter-btn" data-tag="UNTAGGED">Other</button>
     </div>
 
@@ -1077,19 +1079,49 @@ const LC_IN_COLOR  = '#2ecc71';   // green  = the line the robot is on (in)
 const LC_OUT_COLOR = '#e8840a';   // orange = branches (out)
 const LC_FO_COLOR  = LC_OUT_COLOR; // orange ring = focused out used for normal steering
 const LC_COMMIT_COLOR = LC_IN_COLOR; // green outer ring = committed green-turn goal
+const LC_WIDE_OUT_COLOR = '#ff4fd8'; // magenta = out point at/over hamidashi width threshold
 
-// Hard-coded stream guide geometry for current deployed mode-0 vision.
-// IMPORTANT: if the arc points, silver vertical scan lines, or color detection
-// line move in ModeLineFollow.cpp, update these stream-monitor values too.
+// Fallback stream guide geometry for current deployed mode-0 vision.
+// Firmware sends a sparse [CFG] line with the live values, so these only matter
+// before the first config packet arrives.
 const STREAM_GUIDES = {
-  arc: [80,5, 25,35, 135,35, 40,65, 120,65],
+  arc: [80,5, 25,35, 135,35, 40,85, 120,85],
   silverCols: [
     { x: 33, y0: 0, y1: 70 },
     { x: 127, y0: 0, y1: 70 },
   ],
   colorLine: { x0: 25, x1: 135, y: 25 },
+  hamWidthMin: 12,
 };
 let colorComX = null;
+
+function parseCFG(text) {
+  const arc = text.match(/arc=(\d+),(\d+),(\d+),(\d+),(\d+),(\d+),(\d+),(\d+),(\d+),(\d+)/);
+  const silver = text.match(/silver=(\d+),(\d+),(\d+),(\d+)/);
+  const color = text.match(/color=(\d+),(\d+),(\d+)/);
+  const hmin = text.match(/\bhmin=(\d+)/);
+
+  if (arc) {
+    STREAM_GUIDES.arc = [
+      +arc[1], +arc[2], +arc[3], +arc[4], +arc[5],
+      +arc[6], +arc[7], +arc[8], +arc[9], +arc[10],
+    ];
+  }
+  if (silver) {
+    STREAM_GUIDES.silverCols = [
+      { x: +silver[1], y0: +silver[3], y1: +silver[4] },
+      { x: +silver[2], y0: +silver[3], y1: +silver[4] },
+    ];
+  }
+  if (color) {
+    STREAM_GUIDES.colorLine = { x0: +color[1], x1: +color[2], y: +color[3] };
+  }
+  if (hmin) {
+    STREAM_GUIDES.hamWidthMin = +hmin[1];
+  }
+  markDirty();
+  drawOverlay();
+}
 
 // [LC] arc=80,5,25,35,135,35,25,65,135,65 n=3 in=1 fo=2 steer=2 err=165 p=120,65,i 80,5,f 40,60,o
 function parseLC(text) {
@@ -1104,6 +1136,8 @@ function parseLC(text) {
   const cmtM = text.match(/\bcmt=(\d+)/);
   const cmsM = text.match(/\bcms=(\d+)/);
   const gM   = text.match(/\bg=(\d+)/);
+  const abM  = text.match(/\bab=(\d+)/);
+  const asM  = text.match(/\bas=(\d+)/);
   const errM = text.match(/\berr=(-?\d+)/);
   const held = text.match(/\bheld=(\d+)/);
   const out  = text.match(/\bout=(\d+)/);
@@ -1111,8 +1145,8 @@ function parseLC(text) {
   const pIdx = text.indexOf('p=');
   if (pIdx >= 0) {
     for (const p of text.slice(pIdx + 2).trim().split(/\s+/)) {
-      const m = p.match(/^(\d+),(\d+),([iofc])$/);
-      if (m) crossings.push({ x: +m[1], y: +m[2], role: m[3] });
+      const m = p.match(/^(\d+),(\d+),([iofch]),?(\d+)?$/);
+      if (m) crossings.push({ x: +m[1], y: +m[2], role: m[3], width: m[4] ? +m[4] : null });
     }
   }
   lcData = {
@@ -1126,6 +1160,8 @@ function parseLC(text) {
     commit:  lockM ? +lockM[1] : (cmtM ? +cmtM[1] : 0),
     cms:     progM ? +progM[1] : (cmsM ? +cmsM[1] : 0),
     green:   gM   ? +gM[1]   : 0,
+    arcBlack: abM ? +abM[1] : 0,
+    arcSat:   asM ? +asM[1] : 0,
     err:     errM ? +errM[1] : null,
     held:    held ? +held[1] : 0,
     out:     out  ? +out[1]  : 0,
@@ -1216,23 +1252,43 @@ function drawLcOverlay() {
   const steerColor = d.commit ? LC_COMMIT_COLOR : LC_FO_COLOR;
 
   d.crossings.forEach((c, idx) => {
+    const isIn = c.role === 'i';
+    const isWideOut = !isIn && c.width !== null && c.width >= STREAM_GUIDES.hamWidthMin;
+    const pointColor = isIn ? LC_IN_COLOR : (isWideOut ? LC_WIDE_OUT_COLOR : LC_OUT_COLOR);
+
     octx.beginPath();
     octx.arc(c.x + .5, c.y + .5, 2.6, 0, Math.PI * 2);
-    octx.fillStyle = (c.role === 'i') ? LC_IN_COLOR : LC_OUT_COLOR;
+    octx.fillStyle = pointColor;
     octx.fill();
     octx.lineWidth = 0.6; octx.strokeStyle = 'rgba(0,0,0,0.6)'; octx.stroke();
-    // Focused-out ring: orange, matching the older focused-point display.
-    if (idx === d.foIdx || c.role === 'f') {
-      octx.beginPath();
-      octx.arc(c.x + .5, c.y + .5, 4.6, 0, Math.PI * 2);
-      octx.lineWidth = 1; octx.strokeStyle = LC_FO_COLOR; octx.stroke();
-    }
     // Committed target ring: the point remains orange like any out point, with
     // a green outer circle so it is distinct from focused-out.
     if (d.commit && (idx === steerIdx || c.role === 'c')) {
       octx.beginPath();
       octx.arc(c.x + .5, c.y + .5, 5.8, 0, Math.PI * 2);
       octx.lineWidth = 1.2; octx.strokeStyle = LC_COMMIT_COLOR; octx.stroke();
+    }
+    if (isWideOut) {
+      octx.beginPath();
+      octx.arc(c.x + .5, c.y + .5, 7.2, 0, Math.PI * 2);
+      octx.lineWidth = 1.4; octx.strokeStyle = LC_WIDE_OUT_COLOR; octx.stroke();
+      octx.fillStyle = LC_WIDE_OUT_COLOR;
+      octx.font = '7px monospace';
+      octx.fillText('w' + c.width,
+        Math.min(c.x + 5, overlay.width - 42), Math.max(c.y - 5, 7));
+    }
+    // Focused-out ring: always orange and drawn after wide-out styling so it
+    // stays visible even when the point fill/ring is magenta.
+    if (idx === d.foIdx || c.role === 'f') {
+      octx.beginPath();
+      octx.arc(c.x + .5, c.y + .5, isWideOut ? 8.5 : 4.6, 0, Math.PI * 2);
+      octx.lineWidth = 1.2; octx.strokeStyle = LC_FO_COLOR; octx.stroke();
+    }
+    if ((idx === steerIdx || c.role === 'i') && c.width !== null) {
+      octx.fillStyle = '#d7dce8';
+      octx.font = '6px monospace';
+      octx.fillText('w' + c.width,
+        Math.min(c.x + 4, overlay.width - 18), Math.min(c.y + 9, overlay.height - 3));
     }
   });
   // Heading line: in → steering target (the displacement the error comes from).
@@ -1255,19 +1311,25 @@ function drawLcOverlay() {
     octx.font = '7px monospace';
     octx.fillText('err ' + d.err, 3, 9);   // 127 = straight
   }
+  if (d.arcSat) {
+    octx.fillStyle = '#5b9cf6';
+    octx.font = '7px monospace';
+    octx.fillText('ARC SAT ' + d.arcBlack, 3, 19);
+  }
+  const stateReadoutY = d.arcSat ? 29 : 19;
   // Commit / green state readout.
   if (d.commit) {
     octx.fillStyle = LC_COMMIT_COLOR;
     octx.font = '7px monospace';
-    octx.fillText('LOCK 1out ' + d.cms, 3, 19);
+    octx.fillText('LOCK 1out ' + d.cms, 3, stateReadoutY);
   } else if (d.active) {
     octx.fillStyle = LC_COMMIT_COLOR;
     octx.font = '7px monospace';
-    octx.fillText('COMMIT', 3, 19);
+    octx.fillText('COMMIT', 3, stateReadoutY);
   } else if (d.green) {
     octx.fillStyle = LC_IN_COLOR;
     octx.font = '7px monospace';
-    octx.fillText(d.green === 1 ? 'U-TURN' : (d.green === 2 ? 'green L' : 'green R'), 3, 19);
+    octx.fillText(d.green === 1 ? 'U-TURN' : (d.green === 2 ? 'green L' : 'green R'), 3, stateReadoutY);
   }
 }
 
@@ -1376,7 +1438,7 @@ function classify(t) {
 }
 // ── Serial filter ─────────────────────────────────────────────────────────────
 // Known tag prefixes produced by serial_print.h on Xiao.
-const KNOWN_TAGS = ['[RES]', '[LC]', '[ROW]', '[CLS]', '[PIX]', '[SIN]', '[SOUT]'];
+const KNOWN_TAGS = ['[RES]', '[CFG]', '[CAL]', '[LC]', '[ROW]', '[CLS]', '[PIX]', '[SIN]', '[SOUT]'];
 let activeFilter = 'ALL';   // 'ALL' | '[RES]' | '[CLS]' | ... | 'UNTAGGED'
 
 function lineTag(text) {
@@ -1481,6 +1543,8 @@ function appendLine(text) {
     updateMetrics(kv);
     updateColorComOverlay(kv);
   }
+  // Update stream guide positions from sparse firmware config lines
+  if (text.startsWith('[CFG]')) parseCFG(text);
   // Update the line-detection overlay from [LC] lines
   if (text.startsWith('[LC]')) parseLC(text);
   // Update the row-55 color strip from [ROW] lines
@@ -1523,6 +1587,23 @@ async function sendText(nl) {
 sendBtn.onclick   = () => sendText(false);
 sendNlBtn.onclick = () => sendText(true);
 sendInput.addEventListener('keydown', e => { if (e.key === 'Enter') sendText(true); });
+
+// Calibration keys → relay a single char (no newline) to the XIAO. SPACE locks
+// black/white in runCameraCalibration(); 'b'/'w' force a channel; 'r' resets.
+// Ignored while typing in an input so normal text entry is unaffected.
+document.addEventListener('keydown', e => {
+  if (!writer) return;
+  const tag = (e.target && e.target.tagName) || '';
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+  let ch = null;
+  if (e.code === 'Space' || e.key === ' ') ch = ' ';
+  else if (e.key === 'b' || e.key === 'w' || e.key === 'r') ch = e.key;
+  if (ch === null) return;
+  e.preventDefault();
+  writer.write(enc.encode(ch))
+    .then(() => appendLine('→ [cal key ' + (ch === ' ' ? 'SPACE' : ch) + ']'))
+    .catch(() => {});
+});
 
 // ═════════════════════════════════════════════════════════════════════════════
 //  CONNECT

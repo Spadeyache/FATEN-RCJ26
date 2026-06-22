@@ -116,6 +116,18 @@ float lc_inOutAngleDeg(const LineCounts& lc, int inIndex, int outIndex);
 // viewer can draw the ROI box + in/out crossing points over the camera image.
 void lc_storeDebug(const LineCounts& lc, const LineClass& cls, int focusedOut, int errByte, float errPx);
 
+// Stream guide config for the viewer. Sent as a sparse "[CFG] ..." line only
+// when the mode publishes new guide positions.
+void lc_storeStreamGuides(uint8_t topX, uint8_t topY,
+                          uint8_t leftX, uint8_t leftY,
+                          uint8_t rightX, uint8_t rightY,
+                          uint8_t bottomLeftX, uint8_t bottomLeftY,
+                          uint8_t bottomRightX, uint8_t bottomRightY,
+                          uint8_t silverLeftX, uint8_t silverRightX,
+                          uint8_t silverY0, uint8_t silverY1,
+                          uint8_t colorX0, uint8_t colorX1, uint8_t colorY,
+                          uint8_t hamidashiWidthMin);
+
 // Optional debug ROI shape. Modes with a non-rectangular ROI can publish the
 // arc outline as: top, left-arc-end, right-arc-end, bottom-left, bottom-right.
 void lc_storeArcRoi(uint8_t topX, uint8_t topY,
@@ -124,13 +136,16 @@ void lc_storeArcRoi(uint8_t topX, uint8_t topY,
                     uint8_t bottomLeftX, uint8_t bottomLeftY,
                     uint8_t bottomRightX, uint8_t bottomRightY);
 
-// Build a compact "[LC] arc=.. n=.. in=.. fo=.. steer=.. err=.. p=.." line
+// Build a compact "[LC] n=.. in=.. fo=.. steer=.. err=.. p=.." line
 // (newline-terminated, ASCII only) into buf. Returns bytes written, or 0.
 int  lc_formatDebug(char* buf, int bufLen);
+int  lc_formatConfig(char* buf, int bufLen);
 
 // Steering/commit debug bridge: extra fields appended to the "[LC]" line so the
 // viewer can show the active steering target, commit state and green state.
-void lc_storeSteer(int steerOut, bool commitActive, bool commitLocked, int commitProgress, uint8_t greenCmd);
+void lc_storeSteer(int steerOut, bool commitActive, bool commitLocked,
+                   int commitProgress, uint8_t greenCmd,
+                   uint16_t arcBlackCount, bool arcBlackSaturated);
 
 // Row-55 debug bridge: display-only left/right color classes for the viewer.
 void row55_storeDebug(uint8_t leftClass, uint8_t rightClass);

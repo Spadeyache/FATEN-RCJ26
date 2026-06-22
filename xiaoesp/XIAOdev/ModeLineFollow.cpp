@@ -64,6 +64,13 @@ constexpr uint8_t COMMIT_SETTLE_FRAMES = 3;
 // constexpr float COMMIT_TRACK_GATE = 50.0f;
 // COMMIT_SIDE_MARGIN and COMMIT_TRACK_GATE are defined in config.h
 
+// Viewer-only width threshold: out points this wide are drawn magenta.
+constexpr uint8_t HAMIDASHI_OUT_WIDTH_MIN = 12;
+
+// If the forward arc/side ROI contains about two lines worth of black,
+// treat it as saturated/intersection-like and drive straight instead of chasing an out point.
+constexpr uint16_t ARC_BLACK_CENTER_THRESHOLD = 50;
+
 uint8_t s_px[ARC_MAX_SAMPLES];
 uint8_t s_py[ARC_MAX_SAMPLES];
 uint8_t s_edge[ARC_MAX_SAMPLES];
@@ -139,6 +146,14 @@ void sampleArcLoop(camera_fb_t* fb) {
         cameraData d = updateRawGrayHSV(fb, s_px[i], s_py[i]);
         s_black[i] = isBlack(d) ? 1 : 0;
     }
+}
+
+uint16_t countArcBlackSamples() {
+    uint16_t count = 0;
+    for (int i = 0; i < s_sampleCount; i++) {
+        if (s_edge[i] != LC_EDGE_BOTTOM && s_black[i]) count++;
+    }
+    return count;
 }
 
 uint8_t countSilverOnColumn(camera_fb_t* fb, uint8_t col) {
@@ -415,6 +430,9 @@ void modeLineFollowRun(camera_fb_t* fb, YacheEncodedSerial& teensy) {
 
     LineClass cls = lc_updateIn(lc);
     const int normalSteerOut = selectSteeringOut(lc, cls.inIndex);
+    const uint16_t arcBlackCount = countArcBlackSamples();
+    const bool arcBlackSaturated = arcBlackCount >= ARC_BLACK_CENTER_THRESHOLD;
+    digitalWrite(LED_BUILTIN, arcBlackSaturated ? LOW : HIGH);  // ESP32 LED active-LOW
     const uint8_t silverLeft = countSilverOnColumn(fb, SILVER_COL_LEFT);
     const uint8_t silverRight = countSilverOnColumn(fb, SILVER_COL_RIGHT);
     const bool silverDetected = silverLeft > SILVER_THRESHOLD || silverRight > SILVER_THRESHOLD;
@@ -444,7 +462,12 @@ void modeLineFollowRun(camera_fb_t* fb, YacheEncodedSerial& teensy) {
     bool fresh = false;
     int steerOut = s_commitActive ? committedOut(lc, cls.inIndex) : normalSteerOut;
 
-    if (cls.inIndex >= 0 && steerOut >= 0) {
+    if (arcBlackSaturated) {
+        errByte = LF_ERROR_CENTER;
+        s_lastErr = errByte;
+        s_lastAngle = 0.0f;
+        s_lastPos = 0.0f;
+    } else if (cls.inIndex >= 0 && steerOut >= 0) {
         errByte = arcAngleError(lc, cls.inIndex, steerOut, s_lastAngle, s_lastPos);
         s_lastErr = errByte;
         fresh = true;
@@ -463,12 +486,23 @@ void modeLineFollowRun(camera_fb_t* fb, YacheEncodedSerial& teensy) {
     updateCommitSettle(cls, lc.count);
 
     lc_storeDebug(lc, cls, steerOut, errByte, s_lastAngle);
-    lc_storeArcRoi(ARC_TOP_X, ARC_TOP_Y,
-                   ARC_LEFT_X, ARC_SIDE_Y,
-                   ARC_RIGHT_X, ARC_SIDE_Y,
-                   ARC_BOTTOM_LEFT_X, ARC_BOTTOM_Y,
-                   ARC_BOTTOM_RIGHT_X, ARC_BOTTOM_Y);
-    lc_storeSteer(steerOut, s_commitActive, s_commitLocked, s_commitSettle, greenCmd);
+    lc_storeStreamGuides(ARC_TOP_X, ARC_TOP_Y,
+                         ARC_LEFT_X, ARC_SIDE_Y,
+                         ARC_RIGHT_X, ARC_SIDE_Y,
+                         ARC_BOTTOM_LEFT_X, ARC_BOTTOM_Y,
+                         ARC_BOTTOM_RIGHT_X, ARC_BOTTOM_Y,
+                         SILVER_COL_LEFT, SILVER_COL_RIGHT,
+                         SILVER_ROW_MIN, SILVER_ROW_MAX,
+                         COLOR_X_MIN, COLOR_X_MAX, COLOR_ROW,
+                         HAMIDASHI_OUT_WIDTH_MIN);
+    // Keep serial [LC] compact: do not emit arc/box geometry.
+    // lc_storeArcRoi(ARC_TOP_X, ARC_TOP_Y,
+    //                ARC_LEFT_X, ARC_SIDE_Y,
+    //                ARC_RIGHT_X, ARC_SIDE_Y,
+    //                ARC_BOTTOM_LEFT_X, ARC_BOTTOM_Y,
+    //                ARC_BOTTOM_RIGHT_X, ARC_BOTTOM_Y);
+    lc_storeSteer(steerOut, s_commitActive, s_commitLocked, s_commitSettle, greenCmd,
+                  arcBlackCount, arcBlackSaturated);
     const uint8_t rowClass =
         (featureId == FEAT_SILVER) ? ROW55_SILVER :
         (featureId == FEAT_RED) ? ROW55_RED :
@@ -481,9 +515,9 @@ void modeLineFollowRun(camera_fb_t* fb, YacheEncodedSerial& teensy) {
     teensy.send(XIAO_REG_FLAG, s_commitActive ? 1 : 0);
 
     SPRINTF(SPRINT_RESULTS, "[RES]",
-        "mode=0 arc=1 feat=%d err=%d n=%d in=%d out=%d fresh=%d ang=%.1f pos=%.1f ccom=%.1f sL=%d sR=%d red=%d blk25=%d bot=%d gap=%d sat=%d gL=%d gR=%d rawG=%d gc=%d cmt=%d",
+        "mode=0 arc=1 feat=%d err=%d n=%d in=%d out=%d fresh=%d ang=%.1f pos=%.1f ccom=%.1f sL=%d sR=%d red=%d blk25=%d ablk=%d bot=%d gap=%d sat=%d asat=%d gL=%d gR=%d rawG=%d gc=%d cmt=%d",
         featureId, errByte, lc.count, cls.inIndex, steerOut, fresh ? 1 : 0,
-        s_lastAngle, s_lastPos, colorCom, silverLeft, silverRight, redCount, colorBlack, bottomLinePoint ? 1 : 0,
-        gapDetected ? 1 : 0, intersectionSaturated ? 1 : 0, greenLeft, greenRight,
+        s_lastAngle, s_lastPos, colorCom, silverLeft, silverRight, redCount, colorBlack, arcBlackCount, bottomLinePoint ? 1 : 0,
+        gapDetected ? 1 : 0, intersectionSaturated ? 1 : 0, arcBlackSaturated ? 1 : 0, greenLeft, greenRight,
         rawGreen, greenCmd, s_commitActive ? 1 : 0);
 }
