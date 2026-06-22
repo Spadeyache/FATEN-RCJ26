@@ -1,0 +1,180 @@
+// serialCameraCropStream.ino - TEMPORARY DEBUG TOOL
+// Captures a raw frame on the XIAO ESP32-S3 Sense, crops the bottom-left 20%,
+// JPEG-encodes only that crop, then streams it over USB Serial as base64.
+//
+// Open log/serialCameraViewer.html in Chrome or Edge, click "Connect Serial",
+// and set the baud to 921600.
+
+#include "esp_camera.h"
+#include "esp_log.h"
+#include "img_converters.h"
+#include "mbedtls/base64.h"
+
+// Stream timing
+static const uint32_t FRAME_INTERVAL_MS = 350;    // crop-only payload is small
+static const uint32_t SERIAL_BAUD       = 921600; // USB-CDC label; match viewer
+static const float    CROP_PERCENT      = 20.0f;  // bottom-left crop size
+static const int      JPEG_QUALITY      = 10;     // lower = better quality
+
+// Full raw capture size. SVGA keeps enough detail while still fitting in PSRAM.
+static const framesize_t FULL_FRAME_SIZE = FRAMESIZE_SVGA;
+static const int FULL_W = 800;
+static const int FULL_H = 600;
+
+static const int CROP_W = (int)(FULL_W * CROP_PERCENT / 100.0f);
+static const int CROP_H = (int)(FULL_H * CROP_PERCENT / 100.0f);
+static const int CROP_X = 0;
+static const int CROP_Y = FULL_H - CROP_H;
+
+// XIAO ESP32-S3 Sense camera pins
+#define PWDN_GPIO_NUM  -1
+#define RESET_GPIO_NUM -1
+#define XCLK_GPIO_NUM  10
+#define SIOD_GPIO_NUM  40
+#define SIOC_GPIO_NUM  39
+#define Y9_GPIO_NUM    48
+#define Y8_GPIO_NUM    11
+#define Y7_GPIO_NUM    12
+#define Y6_GPIO_NUM    14
+#define Y5_GPIO_NUM    16
+#define Y4_GPIO_NUM    18
+#define Y3_GPIO_NUM    17
+#define Y2_GPIO_NUM    15
+#define VSYNC_GPIO_NUM 38
+#define HREF_GPIO_NUM  47
+#define PCLK_GPIO_NUM  13
+
+static uint8_t *g_cropBuf = nullptr;
+
+static void initCamera() {
+  camera_config_t config = {};
+  config.ledc_channel = LEDC_CHANNEL_0;
+  config.ledc_timer   = LEDC_TIMER_0;
+  config.pin_d0       = Y2_GPIO_NUM;
+  config.pin_d1       = Y3_GPIO_NUM;
+  config.pin_d2       = Y4_GPIO_NUM;
+  config.pin_d3       = Y5_GPIO_NUM;
+  config.pin_d4       = Y6_GPIO_NUM;
+  config.pin_d5       = Y7_GPIO_NUM;
+  config.pin_d6       = Y8_GPIO_NUM;
+  config.pin_d7       = Y9_GPIO_NUM;
+  config.pin_xclk     = XCLK_GPIO_NUM;
+  config.pin_pclk     = PCLK_GPIO_NUM;
+  config.pin_vsync    = VSYNC_GPIO_NUM;
+  config.pin_href     = HREF_GPIO_NUM;
+  config.pin_sccb_sda = SIOD_GPIO_NUM;
+  config.pin_sccb_scl = SIOC_GPIO_NUM;
+  config.pin_pwdn     = PWDN_GPIO_NUM;
+  config.pin_reset    = RESET_GPIO_NUM;
+  config.xclk_freq_hz = 20000000;
+
+  config.pixel_format = PIXFORMAT_RGB565;
+  config.frame_size   = FULL_FRAME_SIZE;
+  config.jpeg_quality = 12;
+  config.fb_count     = 1;
+  config.grab_mode    = CAMERA_GRAB_WHEN_EMPTY;
+  config.fb_location  = CAMERA_FB_IN_PSRAM;
+
+  esp_err_t err = esp_camera_init(&config);
+  if (err != ESP_OK) {
+    Serial.printf("ERR: camera init 0x%x\n", err);
+    while (true) delay(1000);
+  }
+
+  sensor_t *s = esp_camera_sensor_get();
+  if (s) {
+    s->set_brightness(s, 0);
+    s->set_contrast(s,   1);
+    s->set_saturation(s, 0);
+    s->set_sharpness(s,  1);
+    s->set_hmirror(s,    0);
+    s->set_vflip(s,      0);
+  }
+
+  for (int i = 0; i < 5; i++) {
+    camera_fb_t *warmup = esp_camera_fb_get();
+    if (warmup) esp_camera_fb_return(warmup);
+    delay(80);
+  }
+}
+
+static void extractCrop(const uint8_t *src) {
+  for (int row = 0; row < CROP_H; row++) {
+    const uint8_t *srcLine = src + ((CROP_Y + row) * FULL_W + CROP_X) * 2;
+    uint8_t *dstLine = g_cropBuf + row * CROP_W * 2;
+    memcpy(dstLine, srcLine, CROP_W * 2);
+  }
+}
+
+void setup() {
+  Serial.begin(SERIAL_BAUD);
+  delay(1500);
+
+  Serial.setDebugOutput(false);
+  esp_log_level_set("*", ESP_LOG_NONE);
+
+  if (!psramFound()) {
+    Serial.println("ERR: PSRAM not found");
+    while (true) delay(1000);
+  }
+
+  g_cropBuf = (uint8_t *)ps_malloc((size_t)CROP_W * CROP_H * 2);
+  if (!g_cropBuf) {
+    Serial.println("ERR: crop buffer alloc failed");
+    while (true) delay(1000);
+  }
+
+  initCamera();
+  Serial.printf("STREAM_READY crop=%dx%d from %dx%d at (%d,%d)\n",
+                CROP_W, CROP_H, FULL_W, FULL_H, CROP_X, CROP_Y);
+}
+
+void loop() {
+  static uint32_t lastFrame = 0;
+  uint32_t now = millis();
+  if (now - lastFrame < FRAME_INTERVAL_MS) return;
+  lastFrame = now;
+
+  camera_fb_t *fb = esp_camera_fb_get();
+  if (!fb || fb->format != PIXFORMAT_RGB565 ||
+      (int)fb->width != FULL_W || (int)fb->height != FULL_H) {
+    if (fb) esp_camera_fb_return(fb);
+    Serial.println("ERR:capture");
+    return;
+  }
+
+  extractCrop(fb->buf);
+  esp_camera_fb_return(fb);
+
+  uint8_t *jpgBuf = nullptr;
+  size_t jpgLen = 0;
+  bool ok = fmt2jpg(g_cropBuf, (size_t)CROP_W * CROP_H * 2,
+                    CROP_W, CROP_H, PIXFORMAT_RGB565, JPEG_QUALITY,
+                    &jpgBuf, &jpgLen);
+  if (!ok || !jpgBuf || jpgLen == 0) {
+    Serial.println("ERR:jpeg_encode");
+    return;
+  }
+
+  size_t b64Max = ((jpgLen + 2) / 3) * 4 + 1;
+  uint8_t *b64Buf = (uint8_t *)ps_malloc(b64Max);
+  if (!b64Buf) {
+    free(jpgBuf);
+    Serial.println("ERR:b64_alloc");
+    return;
+  }
+
+  size_t b64Len = 0;
+  int rc = mbedtls_base64_encode(b64Buf, b64Max, &b64Len, jpgBuf, jpgLen);
+  free(jpgBuf);
+  if (rc != 0 || b64Len == 0) {
+    free(b64Buf);
+    Serial.printf("ERR:b64_encode rc=%d\n", rc);
+    return;
+  }
+
+  Serial.printf("FRAME_START:%u\n", (unsigned)b64Len);
+  Serial.write(b64Buf, b64Len);
+  Serial.print("\nFRAME_END\n");
+  free(b64Buf);
+}

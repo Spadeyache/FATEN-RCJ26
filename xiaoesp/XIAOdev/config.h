@@ -94,10 +94,10 @@
 #define LF_GREEN_PixCOUNT_THRESHOLD    5    // pixels needed to confirm green
 
 // ── Mode 0b : Line Follow 2 (clean two-row CoM; no green/commit) ─────────────
-//  Row NEAR (60): black center-of-mass → line error (0..254, 127 = centre).
+//  Row NEAR (70): black center-of-mass → line error (0..254, 127 = centre).
 //                 < LF2_NOLINE_BLACK_MIN black px on this row → no line.
 //  Row FAR  (40): edge cases — red (FEAT_RED) and black saturation (→ LED on).
-#define LF2_ROW_NEAR             60   // lower row used for the steering error
+#define LF2_ROW_NEAR             70   // lower row used for the steering error
 #define LF2_ROW_FAR              40   // front/look-ahead row used for edge cases
 #define LF2_NOLINE_BLACK_MIN      5   // near-row black px below this → no line (error = centre)
 #define LF2_SATURATION_BLACK_MIN 30   // far-row black px above this → saturated bar ahead (LED)

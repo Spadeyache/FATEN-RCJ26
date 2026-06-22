@@ -11,4 +11,4 @@ profiles:
       bits: "8"
       parity: none
       stop_bits: "1"
-    port: COM3
+    port: COM10

@@ -26,8 +26,8 @@ constexpr uint8_t ARC_SAMPLE_STEP = 1;
 // Error = 127 + signed angle * ANGLE_SCALE * side boost + bottom in-point offset * IN_PX_SCALE.
 constexpr float ARC_ANGLE_SCALE = 2.0f;
 constexpr float ARC_IN_PX_SCALE = 0.8f;
-constexpr uint8_t ARC_SIDE_GAIN_Y = 35;
-constexpr float ARC_SIDE_GAIN_MULT = 1.35f;
+constexpr uint8_t ARC_SIDE_GAIN_Y = 30;  //boosts with gain in the side bellow Y
+constexpr float ARC_SIDE_GAIN_MULT = 1.65f;
 
 // Silver rescue-zone tape scan: same side-column logic as the older line/search modes.
 constexpr uint8_t SILVER_COL_LEFT = 25;
@@ -59,8 +59,9 @@ constexpr uint8_t INTERSECTION_BLACK_SAT_THRESHOLD = 35;
 // Green-left/right commit target. Ends after the branch has been seen and the
 // line settles back to exactly two crossings (in + one out) for this many frames.
 constexpr uint8_t COMMIT_SETTLE_FRAMES = 3;
-constexpr uint8_t COMMIT_SIDE_MARGIN = 10;
-constexpr float COMMIT_TRACK_GATE = 50.0f;
+// constexpr uint8_t COMMIT_SIDE_MARGIN = 10;
+// constexpr float COMMIT_TRACK_GATE = 50.0f;
+// COMMIT_SIDE_MARGIN and COMMIT_TRACK_GATE are defined in config.h
 
 uint8_t s_px[ARC_MAX_SAMPLES];
 uint8_t s_py[ARC_MAX_SAMPLES];

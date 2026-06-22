@@ -137,6 +137,11 @@ constexpr float PID_KP_SLOPE = 0.85f;   // validated slope tune
 constexpr float PID_KI_SLOPE = 0.0f;
 constexpr float PID_KD_SLOPE = 0.65f;
 
+// Binary steep-turn speed drop. When the PID correction is this large, the
+// robot slows its forward base so tight turns do not outrun the camera line.
+constexpr float STEEP_TURN_CORR_THRESHOLD = 120.0f;
+constexpr float STEEP_TURN_BASE_SPEED     = 30.0f;
+
 // Flat-surface PID tuning switch. When true, the line PID ignores IMU tilt for
 // gain scheduling, gravity compensation, pitch adjustment, and rear-wheel
 // rotation-axis scaling. The robot behaves as if pitch=roll=0 on every frame.
@@ -161,8 +166,8 @@ constexpr float ROTAXIS_DOWN_MIN  = 0.60f;  // gain: downhill-rear scale at full
 
 // --- frictionCircAdj tuning --------------------------------------------------
 constexpr float FRIC_TILT_DEG   = 8.0f;   // |pitch| or |roll| past this counts as "on a slope"
-constexpr float FRIC_SPEED_FLAT = 70.0f;  // base speed on flat ground
-constexpr float FRIC_SPEED_TILT = 55.0f;  // base speed once tilted
+constexpr float FRIC_SPEED_FLAT = 40.0f;  // 70 base speed on flat ground
+constexpr float FRIC_SPEED_TILT = 40.0f;  // 55 base speed once tilted
 
 inline float rollGainFactor(float aRoll) {       // 1.0 → GRAV_GAIN_MIN as |roll| grows
     return 1.0f - (1.0f - GRAV_GAIN_MIN) * (1.0f - expf(-aRoll / GRAV_ROLL_TAU));
@@ -279,16 +284,18 @@ void runLinePID() {
 
     // Base speed: frictionCircAdj picks 70 on flat / 55 once tilted past 8°.
     // With PID_DISABLE_IMU_GAIN_ADJUST=true, this always selects flat speed.
-    const float base = frictionCircAdj();
+    const float frictionBase = frictionCircAdj();
 
     // Gain scheduling tied to the base speed: the moment frictionCircAdj slows
     // the base (i.e. we're on a slope), swap to the *_SLOPE gains. Flat → *_FLAT.
-    const bool  slope = (base < FRIC_SPEED_FLAT);
+    const bool  slope = (frictionBase < FRIC_SPEED_FLAT);
     const float kp = slope ? PID_KP_SLOPE : PID_KP_FLAT;
     const float ki = slope ? PID_KI_SLOPE : PID_KI_FLAT;
     const float kd = slope ? PID_KD_SLOPE : PID_KD_FLAT;
 
     const float correction = kp * rawError + ki * integral + kd * derivative;
+    const bool  steepTurn = fabsf(correction) >= STEEP_TURN_CORR_THRESHOLD;
+    const float base = steepTurn ? STEEP_TURN_BASE_SPEED : frictionBase;
     const float pitchAdj   = linePidPitch() * IMU_PITCH_GAIN;   // + = nose up
 
 // Steering speeds come from gravAdj (roll-driven). Flat → symmetric smooth
@@ -314,8 +321,9 @@ void runLinePID() {
 
 
 #if PRINT_PID
-    Serial.printf("PID err:%.1f drv:%.1f corr:%.1f L:%.0f R:%.0f\n",
-                  rawError, derivative, correction, leftSpeed, rightSpeed);
+    Serial.printf("PID err:%.1f drv:%.1f corr:%.1f base:%.0f steep:%d L:%.0f R:%.0f\n",
+                  rawError, derivative, correction, base, steepTurn ? 1 : 0,
+                  leftSpeed, rightSpeed);
 #endif
 }
 

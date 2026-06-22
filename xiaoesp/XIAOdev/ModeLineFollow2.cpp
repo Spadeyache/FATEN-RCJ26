@@ -11,7 +11,7 @@
 //  through intersections (see ModeLineFollow2.h).
 //
 //  Per frame:
-//    base : row NEAR (60) black center-of-mass → error (0..254, 127 = centre);
+//    base : row NEAR (70) black center-of-mass → error (0..254, 127 = centre);
 //           too little black → no line (error = 127, FEAT_LINE_LOST).
 //    edge : row FAR (40) red → FEAT_RED; row FAR black-saturated → light the LED.
 //    on saturation (a bar ahead), decide how to cross:

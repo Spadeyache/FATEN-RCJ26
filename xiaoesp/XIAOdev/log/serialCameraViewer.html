@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>ESP32 Serial Camera Viewer</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #111;
+      color: #ddd;
+      font-family: 'Courier New', monospace;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 24px;
+      gap: 14px;
+      min-height: 100vh;
+    }
+    h1 { font-size: 18px; color: #9cf; letter-spacing: 1px; }
+    #info { font-size: 13px; color: #aaa; }
+    #status {
+      padding: 6px 16px;
+      border-radius: 4px;
+      font-size: 14px;
+      background: #222;
+      border: 1px solid #444;
+      min-width: 340px;
+      text-align: center;
+    }
+    #status.ok  { border-color: #4a4; color: #8f8; }
+    #status.err { border-color: #a44; color: #f88; }
+    #canvas-wrap {
+      border: 2px solid #444;
+      background: #000;
+      position: relative;
+    }
+    canvas { display: block; }
+    .controls { display: flex; gap: 10px; align-items: center; }
+    button {
+      padding: 8px 20px;
+      background: #2a2a2a;
+      color: #ccc;
+      border: 1px solid #555;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 13px;
+      font-family: inherit;
+    }
+    button:hover { background: #3a3a3a; }
+    button:disabled { opacity: 0.4; cursor: default; }
+    label { font-size: 13px; color: #aaa; }
+    select {
+      background: #2a2a2a;
+      color: #ccc;
+      border: 1px solid #555;
+      border-radius: 4px;
+      padding: 6px 10px;
+      font-family: inherit;
+      font-size: 13px;
+    }
+    #metrics { font-size: 12px; color: #888; }
+    #log {
+      width: 480px;
+      height: 80px;
+      background: #1a1a1a;
+      border: 1px solid #333;
+      border-radius: 4px;
+      overflow-y: auto;
+      padding: 6px 10px;
+      font-size: 11px;
+      color: #777;
+    }
+  </style>
+</head>
+<body>
+  <h1>OV2640 Serial Stream — bottom-left crop</h1>
+
+  <div id="status">Disconnected — click Connect Serial</div>
+
+  <div class="controls">
+    <button id="btn-connect"    onclick="connect()">Connect Serial</button>
+    <button id="btn-disconnect" onclick="disconnect()" disabled>Disconnect</button>
+    <label>Baud:
+      <select id="baud">
+        <option value="921600" selected>921600</option>
+        <option value="460800">460800</option>
+        <option value="115200">115200</option>
+      </select>
+    </label>
+  </div>
+
+  <div id="metrics">— fps &nbsp;|&nbsp; — × — px &nbsp;|&nbsp; frames: 0</div>
+
+  <div id="canvas-wrap">
+    <canvas id="canvas"></canvas>
+  </div>
+
+  <div id="log"></div>
+
+  <div id="info">
+    Requires Chrome / Edge with Web Serial API.<br>
+    Match baud rate to SERIAL_BAUD in serialCameraStream.ino.
+  </div>
+
+  <script>
+    const canvas   = document.getElementById('canvas');
+    const ctx      = canvas.getContext('2d');
+    const statusEl = document.getElementById('status');
+    const metricsEl = document.getElementById('metrics');
+    const logEl    = document.getElementById('log');
+    const btnConn  = document.getElementById('btn-connect');
+    const btnDisc  = document.getElementById('btn-disconnect');
+
+    let port       = null;
+    let reader     = null;
+    let running    = false;
+    let totalFrames = 0;
+    let fpsCount   = 0;
+    let fpsTimer   = Date.now();
+    let lastSize   = '—×—';
+
+    function log(msg) {
+      const line = document.createElement('div');
+      line.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+      logEl.appendChild(line);
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    function setStatus(msg, cls = '') {
+      statusEl.textContent = msg;
+      statusEl.className = cls;
+    }
+
+    async function connect() {
+      if (!navigator.serial) {
+        setStatus('Web Serial API not available — use Chrome/Edge', 'err');
+        return;
+      }
+      try {
+        const baud = parseInt(document.getElementById('baud').value, 10);
+        port = await navigator.serial.requestPort();
+        await port.open({ baudRate: baud });
+        running = true;
+        btnConn.disabled = true;
+        btnDisc.disabled = false;
+        setStatus('Connected — waiting for first frame…', 'ok');
+        log(`Port opened at ${baud} baud`);
+        readLoop();
+      } catch (e) {
+        setStatus('Connection failed: ' + e.message, 'err');
+        log('ERR: ' + e.message);
+      }
+    }
+
+    async function disconnect() {
+      running = false;
+      if (reader) {
+        try { await reader.cancel(); } catch (_) {}
+        reader = null;
+      }
+      if (port) {
+        try { await port.close(); } catch (_) {}
+        port = null;
+      }
+      btnConn.disabled = false;
+      btnDisc.disabled = true;
+      setStatus('Disconnected');
+      log('Disconnected');
+    }
+
+    async function readLoop() {
+      // Pipe port.readable through a TextDecoderStream for easy string handling
+      const decoder  = new TextDecoderStream();
+      port.readable.pipeTo(decoder.writable).catch(() => {});
+      reader = decoder.readable.getReader();
+
+      let buf = '';
+      // Frame format:  FRAME_START:<b64len>\n<base64>\nFRAME_END\n
+      const START_RE  = /FRAME_START:(\d+)\n/;
+      const END_MARKER = '\nFRAME_END\n';
+
+      try {
+        while (running) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buf += value;
+
+          // Emit any plain log lines that appear before the next frame header
+          let m;
+          while ((m = START_RE.exec(buf))) {
+            // Anything before the header is a log/status line — surface it
+            const pre = buf.slice(0, m.index).trim();
+            if (pre) pre.split('\n').forEach(l => l.trim() && log('ESP32: ' + l.trim()));
+
+            const declaredLen = parseInt(m[1], 10);
+            const eIdx = buf.indexOf(END_MARKER, m.index + m[0].length);
+            if (eIdx === -1) {
+              // End marker not arrived yet — drop the consumed log prefix, wait
+              buf = buf.slice(m.index);
+              break;
+            }
+
+            const b64 = buf.slice(m.index + m[0].length, eIdx);
+            buf = buf.slice(eIdx + END_MARKER.length);
+
+            if (b64.length !== declaredLen) {
+              log(`WARN: length mismatch (got ${b64.length}, want ${declaredLen}) — frame dropped`);
+              continue;
+            }
+            renderFrame(b64);
+          }
+
+          // Safety: prevent unbounded buffer growth if markers never arrive
+          if (buf.length > 1024 * 1024) {
+            log('WARN: buffer overflow — clearing');
+            buf = '';
+          }
+        }
+      } catch (e) {
+        if (running) {
+          setStatus('Read error: ' + e.message, 'err');
+          log('ERR: ' + e.message);
+        }
+      }
+    }
+
+    function renderFrame(b64) {
+      // Decode base64 → Uint8Array → Blob → object URL → Image
+      let binary;
+      try {
+        binary = atob(b64.trim());
+      } catch (_) {
+        log('WARN: bad base64 frame, skipping');
+        return;
+      }
+
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+
+      const blob = new Blob([bytes], { type: 'image/jpeg' });
+      const url  = URL.createObjectURL(blob);
+      const img  = new Image();
+
+      img.onload = () => {
+        // Firmware already sends the bottom-left crop, so show the whole JPEG.
+        const CROP_PERCENT = 100;
+        const CROP_W_PX = null;   // e.g. 160 to force width;  null = use percent
+        const CROP_H_PX = null;   // e.g. 120 to force height; null = use percent
+
+        const cw = CROP_W_PX || Math.round(img.width  * CROP_PERCENT / 100);
+        const ch = CROP_H_PX || Math.round(img.height * CROP_PERCENT / 100);
+        const sx = 0;                 // left edge
+        const sy = img.height - ch;   // bottom edge
+
+        const SCALE = 3;              // upscale the small crop so it's easy to see
+        canvas.width  = cw * SCALE;
+        canvas.height = ch * SCALE;
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(img, sx, sy, cw, ch, 0, 0, cw * SCALE, ch * SCALE);
+        URL.revokeObjectURL(url);
+
+        totalFrames++;
+        fpsCount++;
+        lastSize = `${cw}×${ch} of ${img.width}×${img.height}`;
+
+        const now = Date.now();
+        if (now - fpsTimer >= 1000) {
+          const fps = (fpsCount / ((now - fpsTimer) / 1000)).toFixed(1);
+          metricsEl.textContent =
+            `${fps} fps  |  ${lastSize} px  |  frames: ${totalFrames}`;
+          fpsCount = 0;
+          fpsTimer = now;
+        }
+
+        setStatus('Streaming…', 'ok');
+      };
+
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+        log('WARN: JPEG decode failed');
+      };
+
+      img.src = url;
+    }
+  </script>
+</body>
+</html>
