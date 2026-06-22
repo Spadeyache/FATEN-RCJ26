@@ -1,0 +1,26 @@
+# ============================================================================
+# TRAIN / EXPORT stage requirements  (stage: organize, train, export)
+# Pinned to the versions VERIFIED in the working `train` Docker container.
+# Use a DEDICATED Python 3.10 env for this stage — it conflicts with the
+# convert stage (numpy 1.24 vs 2.2, onnx 1.15 vs 1.21).
+#
+#   py -3 -m venv .venv-train
+#   .venv-train\Scripts\activate
+#   pip install -r requirements-train.txt
+# ============================================================================
+
+torch==2.1.0
+torchvision==0.16.0
+ultralytics==8.1.0
+
+onnx==1.15.0
+onnxsim==0.4.35
+onnxruntime==1.16.3
+
+opencv-python==4.8.1.78
+Pillow==10.1.0
+
+numpy==1.24.3
+pyyaml==6.0.1
+tqdm==4.66.1
+scipy==1.11.4

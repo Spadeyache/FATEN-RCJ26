@@ -1,0 +1,27 @@
+# venvs — this project runs in Docker, not venvs
+.venv*/
+*/.venv*/
+
+# generated artifacts
+datasets/
+runs/
+models/
+output/
+best_model/
+deploy/best.kmodel
+report.html
+
+# raw drop-folder contents (keep the README, ignore exports)
+raw_export/*
+!raw_export/README.txt
+
+# nncase / compile side-effects
+gmodel_dump_dir/
+**/tmp/
+*.kmodel
+
+# bootstrap sentinels + python caches
+.bootstrapped-*
+__pycache__/
+*.pyc
+_test_*.py

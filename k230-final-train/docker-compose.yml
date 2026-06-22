@@ -1,0 +1,75 @@
+# ============================================================================
+# k230-final-train — Docker orchestration (NO venvs; reuse the VERIFIED images)
+#
+# Two prebuilt images do the work (already on this machine):
+#   k230d-train:latest   GPU PyTorch + ultralytics 8.1.0   -> train, export
+#   k230-nncase:latest   nncase 2.9.0 + nncase-kpu + lab   -> convert/sim/deploy
+#
+# This whole folder is mounted at /workspace in BOTH, so paths are identical.
+#
+#   # 1) TRAIN + EXPORT  (GPU container)
+#   docker compose run --rm train python k230_pipeline.py train \
+#       --data datasets/victim_20260621/data.yaml --name victim
+#   docker compose run --rm train python k230_pipeline.py export \
+#       runs/victim/weights/best.pt --output models
+#
+#   # 2) CONVERT / SIMULATE / COMPARE / DEPLOY  (JupyterLab)
+#   docker compose up lab        # -> http://localhost:8888/lab
+#   #   open k230_pipeline.ipynb  and run the cells
+#
+#   # ...or headless, no notebook:
+#   docker compose run --rm convert python3 k230_pipeline.py convert-all \
+#       models/best_640x480.onnx \
+#       --calib-data datasets/victim_20260621/val/images \
+#       --eval-data  datasets/victim_20260621/val/images \
+#       --num-classes 3 --data data.yaml --deploy-which searched
+# ============================================================================
+
+services:
+  # ---- GPU training / ONNX export -----------------------------------------
+  train:
+    image: k230d-train:latest
+    container_name: k230f-train
+    shm_size: '8gb'
+    volumes:
+      - .:/workspace
+    working_dir: /workspace
+    environment:
+      - PYTHONUNBUFFERED=1
+      - CUDA_VISIBLE_DEVICES=0
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    stdin_open: true
+    tty: true
+
+  # ---- nncase convert / simulate (headless CLI) ---------------------------
+  convert:
+    image: k230-nncase:latest
+    container_name: k230f-convert
+    volumes:
+      - .:/workspace
+    working_dir: /workspace
+    # k230-nncase has no opencv; the notebook/CLI install cell adds it. For
+    # headless runs we add it here once at start.
+    entrypoint: ["/bin/bash", "-lc", "pip install -q opencv-python-headless==4.10.0.84 >/dev/null 2>&1; exec \"$@\"", "--"]
+    stdin_open: true
+    tty: true
+
+  # ---- JupyterLab for the readable end-to-end notebook --------------------
+  lab:
+    image: k230-nncase:latest
+    container_name: k230f-lab
+    ports:
+      - "8888:8888"
+    volumes:
+      - .:/workspace
+    working_dir: /workspace
+    command: >
+      /bin/bash -lc "pip install -q opencv-python-headless==4.10.0.84 >/dev/null 2>&1;
+      jupyter lab --ip=0.0.0.0 --port=8888 --no-browser --allow-root
+      --ServerApp.token= --ServerApp.password= --ServerApp.root_dir=/workspace"

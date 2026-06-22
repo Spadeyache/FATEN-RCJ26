@@ -1,0 +1,27 @@
+# ============================================================================
+# CONVERT / SIMULATE stage requirements  (stage: convert-search, convert-preset,
+#                                          compare, deploy)
+# Pinned to the versions VERIFIED working on the local PC (nncase 2.9.0) plus
+# nncase-kpu 2.9.0 which is required to compile/simulate the k230 target.
+# Use a DEDICATED Python 3.10 env for this stage.
+#
+#   py -3 -m venv .venv-convert
+#   .venv-convert\Scripts\activate
+#   pip install -r requirements-convert.txt
+#
+# NOTE: nncase-kpu provides the KPU plugin needed by the simulator. On bare
+# Windows it may be unavailable for some nncase builds; if `pip install
+# nncase-kpu==2.9.0` fails, run this stage inside the verified Docker
+# `k230-nncase` / `convert` container which already has it.
+# ============================================================================
+
+nncase==2.9.0
+nncase-kpu==2.9.0
+
+onnx==1.21.0
+onnxruntime==1.23.2
+onnxsim==0.6.3
+
+opencv-python==4.13.0.92
+numpy==2.2.6
+pyyaml==6.0.3
