@@ -13,28 +13,29 @@ constexpr int ARC_MAX_SAMPLES = 340;
 
 // Mode 0 black-line ROI:
 //   top arc passes through (80,5), (25,35), (135,35)
-//   side walls are x=25 and x=135, y=35..65
-//   bottom line is y=65, x=25..135
+//   bottom line is y=65, x=(25+inset)..(135-inset)
 constexpr uint8_t ARC_TOP_X = 80;
 constexpr uint8_t ARC_TOP_Y = 5;
 constexpr uint8_t ARC_LEFT_X = 25;
 constexpr uint8_t ARC_RIGHT_X = 135;
 constexpr uint8_t ARC_SIDE_Y = 35;
-constexpr uint8_t ARC_BOTTOM_Y = 65;
+constexpr uint8_t ARC_BOTTOM_Y = 85; //65 i might need to change the IN_PX gain
+constexpr uint8_t ARC_BOTTOM_LEFT_X = 40;
+constexpr uint8_t ARC_BOTTOM_RIGHT_X = 120;
 constexpr uint8_t ARC_SAMPLE_STEP = 1;
 
 // Error = 127 + signed angle * ANGLE_SCALE * side boost + bottom in-point offset * IN_PX_SCALE.
-constexpr float ARC_ANGLE_SCALE = 2.0f;
-constexpr float ARC_IN_PX_SCALE = 0.8f;
-constexpr uint8_t ARC_SIDE_GAIN_Y = 30;  //boosts with gain in the side bellow Y
+constexpr float ARC_ANGLE_SCALE = 2.0f; 
+constexpr float ARC_IN_PX_SCALE = 0.8f; // balance of front and back gain
+constexpr uint8_t ARC_SIDE_GAIN_Y = 45;  //boosts with gain in the side bellow Y : for tight turns
 constexpr float ARC_SIDE_GAIN_MULT = 1.65f;
 
 // Silver rescue-zone tape scan: same side-column logic as the older line/search modes.
-constexpr uint8_t SILVER_COL_LEFT = 25;
-constexpr uint8_t SILVER_COL_RIGHT = 135;
+constexpr uint8_t SILVER_COL_LEFT = 33;
+constexpr uint8_t SILVER_COL_RIGHT = 127;
 constexpr uint8_t SILVER_ROW_MIN = 0;
 constexpr uint8_t SILVER_ROW_MAX = 70;
-constexpr uint8_t SILVER_THRESHOLD = 12;
+constexpr uint8_t SILVER_THRESHOLD = 6; //num of px
 
 // Row-25 color processing. Bounds follow the arc ROI side walls, not the full image.
 constexpr uint8_t COLOR_ROW = 25;
@@ -108,11 +109,14 @@ void buildArcGeometry() {
     const float r = cy - topY;
 
     // Closed loop order mirrors LineCount: bottom -> right side -> top arc -> left side.
-    for (int x = ARC_LEFT_X; x <= ARC_RIGHT_X; x += ARC_SAMPLE_STEP) {
+    for (int x = ARC_BOTTOM_LEFT_X; x <= ARC_BOTTOM_RIGHT_X; x += ARC_SAMPLE_STEP) {
         addSample(x, ARC_BOTTOM_Y, LC_EDGE_BOTTOM);
     }
     for (int y = ARC_BOTTOM_Y - ARC_SAMPLE_STEP; y >= ARC_SIDE_Y; y -= ARC_SAMPLE_STEP) {
-        addSample(ARC_RIGHT_X, y, LC_EDGE_RIGHT);
+        const int dy = ARC_BOTTOM_Y - y;
+        const int span = ARC_BOTTOM_Y - ARC_SIDE_Y;
+        const int x = ARC_BOTTOM_RIGHT_X + ((ARC_RIGHT_X - ARC_BOTTOM_RIGHT_X) * dy + span / 2) / span;
+        addSample(x, y, LC_EDGE_RIGHT);
     }
     for (int x = ARC_RIGHT_X - ARC_SAMPLE_STEP; x >= ARC_LEFT_X; x -= ARC_SAMPLE_STEP) {
         const float xdx = (float)x - cx;
@@ -121,7 +125,10 @@ void buildArcGeometry() {
         addSample(x, y, LC_EDGE_TOP);
     }
     for (int y = ARC_SIDE_Y + ARC_SAMPLE_STEP; y <= ARC_BOTTOM_Y - ARC_SAMPLE_STEP; y += ARC_SAMPLE_STEP) {
-        addSample(ARC_LEFT_X, y, LC_EDGE_LEFT);
+        const int dy = y - ARC_SIDE_Y;
+        const int span = ARC_BOTTOM_Y - ARC_SIDE_Y;
+        const int x = ARC_LEFT_X + ((ARC_BOTTOM_LEFT_X - ARC_LEFT_X) * dy + span / 2) / span;
+        addSample(x, y, LC_EDGE_LEFT);
     }
 
     s_geometryReady = true;
@@ -154,6 +161,13 @@ void scanColorRow(camera_fb_t* fb, float& blackCom, uint8_t& blackCount, uint8_t
         if (isRed(rowPixels[x])) redCount++;
     }
     blackCom = blackCount ? (float)weighted / blackCount : (COLOR_X_MIN + COLOR_X_MAX) * 0.5f;
+}
+
+bool hasBottomLinePoint(const LineCounts& lc) {
+    for (uint8_t i = 0; i < lc.count; i++) {
+        if (lc.crossings[i].edge == LC_EDGE_BOTTOM || lc.crossings[i].pixelY >= ARC_BOTTOM_Y) return true;
+    }
+    return false;
 }
 
 uint8_t rawGreenOnColorRow(camera_fb_t* fb, float lineCom, uint8_t& greenLeft, uint8_t& greenRight) {
@@ -407,7 +421,8 @@ void modeLineFollowRun(camera_fb_t* fb, YacheEncodedSerial& teensy) {
     float colorCom;
     uint8_t colorBlack, redCount;
     scanColorRow(fb, colorCom, colorBlack, redCount);
-    const bool gapDetected = colorBlack <= GAP_BLACK_MAX;
+    const bool bottomLinePoint = hasBottomLinePoint(lc);
+    const bool gapDetected = colorBlack <= GAP_BLACK_MAX && !bottomLinePoint;
     const bool intersectionSaturated = colorBlack > INTERSECTION_BLACK_SAT_THRESHOLD;
 
     uint8_t greenLeft = 0, greenRight = 0;
@@ -435,12 +450,12 @@ void modeLineFollowRun(camera_fb_t* fb, YacheEncodedSerial& teensy) {
         fresh = true;
     } else if (lc.count == 0 || !cls.inHeld) {
         errByte = LF_ERROR_CENTER;
-        featureId = FEAT_LINE_LOST;
         s_lastErr = errByte;
         s_lastAngle = 0.0f;
         s_lastPos = 0.0f;
     }
 
+    // Priority: silver > red > white-white gap > green.
     if (greenCmd == 1) featureId = FEAT_UTURN;
     if (gapDetected) featureId = FEAT_LINE_LOST;
     if (redCount > RED_THRESHOLD) featureId = FEAT_RED;
@@ -451,14 +466,14 @@ void modeLineFollowRun(camera_fb_t* fb, YacheEncodedSerial& teensy) {
     lc_storeArcRoi(ARC_TOP_X, ARC_TOP_Y,
                    ARC_LEFT_X, ARC_SIDE_Y,
                    ARC_RIGHT_X, ARC_SIDE_Y,
-                   ARC_LEFT_X, ARC_BOTTOM_Y,
-                   ARC_RIGHT_X, ARC_BOTTOM_Y);
+                   ARC_BOTTOM_LEFT_X, ARC_BOTTOM_Y,
+                   ARC_BOTTOM_RIGHT_X, ARC_BOTTOM_Y);
     lc_storeSteer(steerOut, s_commitActive, s_commitLocked, s_commitSettle, greenCmd);
     const uint8_t rowClass =
-        (featureId == FEAT_RED) ? ROW55_RED :
         (featureId == FEAT_SILVER) ? ROW55_SILVER :
-        ((greenLeft > GREEN_PX_THRESHOLD || greenRight > GREEN_PX_THRESHOLD) ? ROW55_GREEN :
-        (featureId == FEAT_LINE_LOST ? ROW55_WHITE : ROW55_BLACK));
+        (featureId == FEAT_RED) ? ROW55_RED :
+        gapDetected ? ROW55_WHITE :
+        ((greenLeft > GREEN_PX_THRESHOLD || greenRight > GREEN_PX_THRESHOLD) ? ROW55_GREEN : ROW55_BLACK);
     row55_storeDebug(rowClass, rowClass);
 
     teensy.send(XIAO_REG_FEATURE, featureId);
@@ -466,9 +481,9 @@ void modeLineFollowRun(camera_fb_t* fb, YacheEncodedSerial& teensy) {
     teensy.send(XIAO_REG_FLAG, s_commitActive ? 1 : 0);
 
     SPRINTF(SPRINT_RESULTS, "[RES]",
-        "mode=0 arc=1 feat=%d err=%d n=%d in=%d out=%d fresh=%d ang=%.1f pos=%.1f sL=%d sR=%d red=%d blk25=%d gap=%d sat=%d gL=%d gR=%d rawG=%d gc=%d cmt=%d",
+        "mode=0 arc=1 feat=%d err=%d n=%d in=%d out=%d fresh=%d ang=%.1f pos=%.1f ccom=%.1f sL=%d sR=%d red=%d blk25=%d bot=%d gap=%d sat=%d gL=%d gR=%d rawG=%d gc=%d cmt=%d",
         featureId, errByte, lc.count, cls.inIndex, steerOut, fresh ? 1 : 0,
-        s_lastAngle, s_lastPos, silverLeft, silverRight, redCount, colorBlack,
+        s_lastAngle, s_lastPos, colorCom, silverLeft, silverRight, redCount, colorBlack, bottomLinePoint ? 1 : 0,
         gapDetected ? 1 : 0, intersectionSaturated ? 1 : 0, greenLeft, greenRight,
         rawGreen, greenCmd, s_commitActive ? 1 : 0);
 }

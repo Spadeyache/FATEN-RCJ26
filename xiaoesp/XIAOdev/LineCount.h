@@ -124,7 +124,7 @@ void lc_storeArcRoi(uint8_t topX, uint8_t topY,
                     uint8_t bottomLeftX, uint8_t bottomLeftY,
                     uint8_t bottomRightX, uint8_t bottomRightY);
 
-// Build a "[LC] box=.. n=.. in=.. fo=.. xi=.. xo=.. epx=.. err=.. ..." line
+// Build a compact "[LC] arc=.. n=.. in=.. fo=.. steer=.. err=.. p=.." line
 // (newline-terminated, ASCII only) into buf. Returns bytes written, or 0.
 int  lc_formatDebug(char* buf, int bufLen);
 

@@ -527,6 +527,37 @@ canvas { display: block; image-rendering: pixelated; }
   color: var(--accent);
   border: 1px solid rgba(232,132,10,0.25);
 }
+
+/* ── RGB calibration capture panel ──────────────────────────── */
+.cal-panel {
+  margin-top: 10px; width: 100%;
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: 8px; padding: 10px;
+}
+.cal-panel-header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.cal-panel-title  { font-size: 12px; font-weight: 600; color: var(--text); flex: 1; }
+.cal-body  { display: flex; flex-direction: column; gap: 8px; }
+.cal-box-fields { display: flex; gap: 8px; }
+.cal-live {
+  font-family: 'DM Mono', monospace; font-size: 13px; color: var(--text);
+  background: var(--bg3); border: 1px solid var(--border);
+  border-radius: 6px; padding: 7px 9px;
+}
+.cal-live b { color: var(--accent); }
+.cal-spread { font-size: 10px; color: var(--text-dim); margin-left: 10px; }
+.cal-spread.warn { color: #e05252; }
+.cal-capture-row { display: flex; align-items: center; gap: 8px; }
+.cal-capture-row .sm { min-width: 118px; }
+.cal-cap { font-family: 'DM Mono', monospace; font-size: 12px; color: var(--text-dim); }
+.cal-margin-row { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--text-dim); }
+.cal-margin-row .cal-input { width: 64px; height: 24px; }
+.cal-hint { font-size: 10px; color: var(--text-dim); }
+.cal-snippet {
+  font-family: 'DM Mono', monospace; font-size: 11px; line-height: 1.5;
+  white-space: pre; background: var(--bg); border: 1px solid var(--border);
+  border-radius: 6px; padding: 9px; margin: 0; color: #cfd3da; overflow-x: auto;
+}
+.cal-panel .placing { border-color: var(--accent); color: var(--accent); }
 </style>
 </head>
 <body>
@@ -549,12 +580,12 @@ canvas { display: block; image-rendering: pixelated; }
 
   <div class="toolbar-group">
     <label>CAL</label>
-    <input id="gainR" class="cal-input" type="number" step="0.01" value="1.98598130841" min="0" title="Red gain" readonly>
-    <input id="gainG" class="cal-input" type="number" step="0.01" value="2.25265017668" min="0" title="Green gain" readonly>
-    <input id="gainB" class="cal-input" type="number" step="0.01" value="3.10" min="0" title="Blue gain" readonly>
-    <input id="dR"    class="cal-input" type="number" step="1"    value="9"    title="R_D (subtract from R)" readonly>
-    <input id="dG"    class="cal-input" type="number" step="1"    value="20"   title="G_D (subtract from G)" readonly>
-    <input id="dB"    class="cal-input" type="number" step="1"    value="13"   title="B_D (subtract from B)" readonly>
+    <input id="gainR" class="cal-input" type="number" step="0.01" value="1.98598130841" min="0" title="Red gain">
+    <input id="gainG" class="cal-input" type="number" step="0.01" value="2.25265017668" min="0" title="Green gain">
+    <input id="gainB" class="cal-input" type="number" step="0.01" value="3.10" min="0" title="Blue gain">
+    <input id="dR"    class="cal-input" type="number" step="1"    value="9"    title="R_D (subtract from R)">
+    <input id="dG"    class="cal-input" type="number" step="1"    value="20"   title="G_D (subtract from G)">
+    <input id="dB"    class="cal-input" type="number" step="1"    value="13"   title="B_D (subtract from B)">
     <span class="cal-badge" id="calBadge" title="Offset view uses these values">offset: on</span>
   </div>
 
@@ -603,6 +634,38 @@ canvas { display: block; image-rendering: pixelated; }
       </div>
       <div class="marker-list" id="markerList"></div>
       <div class="marker-hint" id="markerHint">No zones added yet.</div>
+    </div>
+
+    <div class="cal-panel" id="calPanel">
+      <div class="cal-panel-header">
+        <span class="cal-panel-title">RGB Calibration</span>
+        <button id="calPlaceBtn" class="sm">&#xFF0B; Place box</button>
+        <button id="calResetBtn" class="sm">Reset</button>
+      </div>
+      <div class="cal-body">
+        <div class="cal-box-fields">
+          <div class="marker-field"><label>X</label><input type="number" id="calX" value="72" min="0" max="159"></div>
+          <div class="marker-field"><label>Y</label><input type="number" id="calY" value="52" min="0" max="119"></div>
+          <div class="marker-field"><label>W</label><input type="number" id="calW" value="16" min="1" max="160"></div>
+          <div class="marker-field"><label>H</label><input type="number" id="calH" value="16" min="1" max="120"></div>
+        </div>
+        <div class="cal-live" id="calLiveReadout">raw &mdash;</div>
+        <div class="cal-capture-row">
+          <button id="capBlackBtn" class="sm">Capture BLACK</button>
+          <span class="cal-cap" id="calBlackVal">&mdash;</span>
+        </div>
+        <div class="cal-capture-row">
+          <button id="capWhiteBtn" class="sm">Capture WHITE</button>
+          <span class="cal-cap" id="calWhiteVal">&mdash;</span>
+        </div>
+        <div class="cal-margin-row">
+          <label>Offset margin</label>
+          <input type="number" id="calMargin" class="cal-input" step="0.05" value="0.8" min="0.1" max="1">
+          <span class="cal-hint">D = black &times; margin</span>
+        </div>
+        <pre class="cal-snippet" id="calSnippet">Aim the box at black tape &rarr; Capture BLACK, then white &rarr; Capture WHITE.</pre>
+        <button id="calCopyBtn" class="sm">Copy vision.cpp block</button>
+      </div>
     </div>
   </div>
 
@@ -735,6 +798,148 @@ function updateCalBadge() {
 }
 updateCalBadge();
 
+// ═════════════════════════════════════════════════════════════════════════════
+//  RGB CALIBRATION CAPTURE
+//  Sample raw RGB over a box, capture a BLACK and a WHITE reference, then compute
+//  the 6 vision.cpp constants:  D = black * margin   Gain = 255 / (white - black).
+//  The box is decoded EXACTLY like vision.cpp rgb565To888() (with LSB
+//  replication) so the constants are valid for the firmware, not just the screen.
+// ═════════════════════════════════════════════════════════════════════════════
+const calSample = { x: 72, y: 52, w: 16, h: 16 };
+let   calPlaceMode = false;
+let   calLive = null;              // EMA of the box mean {r,g,b}
+let   calSpread = 0;               // worst-channel (max-min) over the box this frame
+let   calBlackRef = null, calWhiteRef = null;
+let   calMargin = 0.8;
+const CAL_EMA = 0.35;
+
+const calXEl = document.getElementById('calX'),  calYEl = document.getElementById('calY');
+const calWEl = document.getElementById('calW'),  calHEl = document.getElementById('calH');
+const calLiveEl   = document.getElementById('calLiveReadout');
+const calBlackEl  = document.getElementById('calBlackVal'), calWhiteEl = document.getElementById('calWhiteVal');
+const calMarginEl = document.getElementById('calMargin');
+const calSnippetEl= document.getElementById('calSnippet');
+const calPlaceBtn = document.getElementById('calPlaceBtn'), calResetBtn = document.getElementById('calResetBtn');
+const calCopyBtn  = document.getElementById('calCopyBtn');
+const capBlackBtn = document.getElementById('capBlackBtn'),  capWhiteBtn = document.getElementById('capWhiteBtn');
+
+// RGB565 → RGB888 with low-bit replication, matching vision.cpp rgb565To888().
+function decode565rep(hi, lo) {
+  const px = (hi << 8) | lo;
+  const r5 = (px >> 11) & 0x1F, g6 = (px >> 5) & 0x3F, b5 = px & 0x1F;
+  return [ (r5 << 3) | (r5 >> 2), (g6 << 2) | (g6 >> 4), (b5 << 3) | (b5 >> 2) ];
+}
+
+function sampleCalBox(w, h) {
+  const x0 = Math.max(0, calSample.x | 0), y0 = Math.max(0, calSample.y | 0);
+  const x1 = Math.min(w, x0 + (calSample.w | 0)), y1 = Math.min(h, y0 + (calSample.h | 0));
+  if (x1 <= x0 || y1 <= y0) { calLive = null; updateCalLiveReadout(); return; }
+  let sr = 0, sg = 0, sb = 0, n = 0;
+  let rmn = 255, rmx = 0, gmn = 255, gmx = 0, bmn = 255, bmx = 0;
+  for (let y = y0; y < y1; y++) {
+    let p = (y * w + x0) * 2;
+    for (let x = x0; x < x1; x++, p += 2) {
+      const c = decode565rep(pixBuf[p], pixBuf[p + 1]);
+      sr += c[0]; sg += c[1]; sb += c[2]; n++;
+      if (c[0] < rmn) rmn = c[0]; if (c[0] > rmx) rmx = c[0];
+      if (c[1] < gmn) gmn = c[1]; if (c[1] > gmx) gmx = c[1];
+      if (c[2] < bmn) bmn = c[2]; if (c[2] > bmx) bmx = c[2];
+    }
+  }
+  if (!n) { calLive = null; updateCalLiveReadout(); return; }
+  const m = { r: sr / n, g: sg / n, b: sb / n };
+  calSpread = Math.max(rmx - rmn, gmx - gmn, bmx - bmn);
+  if (!calLive) calLive = m;
+  else {
+    calLive.r += CAL_EMA * (m.r - calLive.r);
+    calLive.g += CAL_EMA * (m.g - calLive.g);
+    calLive.b += CAL_EMA * (m.b - calLive.b);
+  }
+  updateCalLiveReadout();
+}
+
+function updateCalLiveReadout() {
+  if (!calLive) { calLiveEl.innerHTML = 'raw &mdash;'; return; }
+  calLiveEl.innerHTML =
+    `raw &nbsp;R <b>${calLive.r.toFixed(1)}</b>&nbsp; G <b>${calLive.g.toFixed(1)}</b>&nbsp; B <b>${calLive.b.toFixed(1)}</b>` +
+    `<span class="cal-spread${calSpread > 18 ? ' warn' : ''}">spread ${calSpread | 0}</span>`;
+}
+
+const calTrip = o => o ? `R ${o.r.toFixed(1)}  G ${o.g.toFixed(1)}  B ${o.b.toFixed(1)}` : '—';
+
+function calComputeChan(blk, wht) {
+  const D = Math.trunc(blk * calMargin);          // uint8_t truncation, matches C
+  const denom = wht - blk;
+  const gain = denom > 1 ? 255 / denom : 0;        // 255 / (white - black)
+  return { D, gain };
+}
+
+function recomputeCal() {
+  if (!calBlackRef || !calWhiteRef) {
+    calSnippetEl.textContent = 'Capture BLACK + WHITE to compute constants.';
+    return;
+  }
+  const R = calComputeChan(calBlackRef.r, calWhiteRef.r);
+  const G = calComputeChan(calBlackRef.g, calWhiteRef.g);
+  const B = calComputeChan(calBlackRef.b, calWhiteRef.b);
+  cal.rD = R.D; cal.gD = G.D; cal.bD = B.D;
+  if (R.gain) cal.rGain = R.gain;
+  if (G.gain) cal.gGain = G.gain;
+  if (B.gain) cal.bGain = B.gain;
+  dREl.value = R.D; dGEl.value = G.D; dBEl.value = B.D;
+  gainREl.value = R.gain.toFixed(8); gainGEl.value = G.gain.toFixed(8); gainBEl.value = B.gain.toFixed(8);
+  updateCalBadge();
+  const blk = calBlackRef, wht = calWhiteRef, m = calMargin;
+  calSnippetEl.textContent =
+`// Calibrated from viewer  (black/white box means)
+const float R_Gain = ${R.gain.toFixed(8)};   // 255 / (${wht.r.toFixed(1)} - ${blk.r.toFixed(1)})
+const float G_Gain = ${G.gain.toFixed(8)};   // 255 / (${wht.g.toFixed(1)} - ${blk.g.toFixed(1)})
+const float B_Gain = ${B.gain.toFixed(8)};   // 255 / (${wht.b.toFixed(1)} - ${blk.b.toFixed(1)})
+
+const uint8_t R_D = ${blk.r.toFixed(1)} * ${m};   // black avg * margin  (= ${R.D})
+const uint8_t G_D = ${blk.g.toFixed(1)} * ${m};   // (= ${G.D})
+const uint8_t B_D = ${blk.b.toFixed(1)} * ${m};   // (= ${B.D})`;
+  markDirty();
+}
+
+capBlackBtn.onclick = () => { if (calLive) { calBlackRef = { ...calLive }; calBlackEl.textContent = calTrip(calBlackRef); recomputeCal(); } };
+capWhiteBtn.onclick = () => { if (calLive) { calWhiteRef = { ...calLive }; calWhiteEl.textContent = calTrip(calWhiteRef); recomputeCal(); } };
+calMarginEl.oninput = e => { const v = parseFloat(e.target.value); if (v > 0 && v <= 1) { calMargin = v; recomputeCal(); } };
+calResetBtn.onclick = () => { calBlackRef = calWhiteRef = null; calBlackEl.textContent = '—'; calWhiteEl.textContent = '—'; recomputeCal(); };
+calCopyBtn.onclick  = () => {
+  if (!navigator.clipboard) return;
+  navigator.clipboard.writeText(calSnippetEl.textContent).then(() => {
+    const o = calCopyBtn.textContent; calCopyBtn.textContent = 'Copied!';
+    setTimeout(() => calCopyBtn.textContent = o, 1200);
+  });
+};
+
+for (const [el, key] of [[calXEl, 'x'], [calYEl, 'y'], [calWEl, 'w'], [calHEl, 'h']]) {
+  el.oninput = e => { const v = e.target.value | 0; if (v >= 0) { calSample[key] = v; markDirty(); } };
+}
+
+function setCalPlaceMode(on) {
+  calPlaceMode = on;
+  if (on && placeMode) setPlaceMode(false);
+  calPlaceBtn.textContent = on ? '✕ Cancel' : '＋ Place box';
+  calPlaceBtn.className    = on ? 'sm placing' : 'sm';
+  overlay.style.cursor        = on ? 'crosshair' : 'default';
+  overlay.style.pointerEvents = (on || placeMode) ? 'auto' : 'none';
+}
+calPlaceBtn.onclick = () => setCalPlaceMode(!calPlaceMode);
+
+// Make the 6 toolbar calibration inputs live-editable → instant offset-view update.
+function wireCalInput(el, key, isGain) {
+  el.oninput = e => {
+    const v = parseFloat(e.target.value);
+    if (!Number.isFinite(v)) return;
+    cal[key] = isGain ? v : (v | 0);
+    updateCalBadge(); markDirty();
+  };
+}
+wireCalInput(gainREl, 'rGain', true); wireCalInput(gainGEl, 'gGain', true); wireCalInput(gainBEl, 'bGain', true);
+wireCalInput(dREl, 'rD', false); wireCalInput(dGEl, 'gD', false); wireCalInput(dBEl, 'bD', false);
+
 // ── Log ───────────────────────────────────────────────────────────────────────
 let autoScroll   = true;
 let logLineCount = 0;
@@ -788,10 +993,11 @@ let nextId = 3, placeMode = false, placingWhich = null;
 
 function setPlaceMode(on) {
   placeMode = on;
+  if (on && calPlaceMode) setCalPlaceMode(false);
   placeModeBtn.textContent       = on ? '\u2715 Cancel' : '\uff0b Place';
   placeModeBtn.className         = on ? 'placing' : '';
   overlay.style.cursor           = on ? 'crosshair' : 'default';
-  overlay.style.pointerEvents    = on ? 'auto' : 'none';
+  overlay.style.pointerEvents    = (on || calPlaceMode) ? 'auto' : 'none';
 }
 
 placeModeBtn.onclick = () => {
@@ -802,10 +1008,17 @@ placeModeBtn.onclick = () => {
 };
 
 overlay.addEventListener('click', e => {
-  if (!placeMode) return;
+  if (!placeMode && !calPlaceMode) return;
   const r  = overlay.getBoundingClientRect();
   const cx = Math.round((e.clientX - r.left) * (canvas.width  / r.width));
   const cy = Math.round((e.clientY - r.top)  * (canvas.height / r.height));
+  if (calPlaceMode) {
+    calSample.x = Math.max(0, Math.min(canvas.width  - calSample.w, cx - (calSample.w >> 1)));
+    calSample.y = Math.max(0, Math.min(canvas.height - calSample.h, cy - (calSample.h >> 1)));
+    calXEl.value = calSample.x; calYEl.value = calSample.y;
+    setCalPlaceMode(false); markDirty();
+    return;
+  }
   const m  = markers.find(m2 => m2.id === placingWhich);
   if (m) { m.x = Math.max(0, cx - (m.w >> 1)); m.y = Math.max(0, cy - (m.h >> 1)); renderMarkerList(); markDirty(); }
   setPlaceMode(false);
@@ -865,7 +1078,20 @@ const LC_OUT_COLOR = '#e8840a';   // orange = branches (out)
 const LC_FO_COLOR  = LC_OUT_COLOR; // orange ring = focused out used for normal steering
 const LC_COMMIT_COLOR = LC_IN_COLOR; // green outer ring = committed green-turn goal
 
-// [LC] box=20,15,139,110 n=3 in=1 fo=2 xi=120 xo=80 epx=12.0 err=165 held=0 out=2 p=120,110,i 80,15,f 40,60,o
+// Hard-coded stream guide geometry for current deployed mode-0 vision.
+// IMPORTANT: if the arc points, silver vertical scan lines, or color detection
+// line move in ModeLineFollow.cpp, update these stream-monitor values too.
+const STREAM_GUIDES = {
+  arc: [80,5, 25,35, 135,35, 40,65, 120,65],
+  silverCols: [
+    { x: 33, y0: 0, y1: 70 },
+    { x: 127, y0: 0, y1: 70 },
+  ],
+  colorLine: { x0: 25, x1: 135, y: 25 },
+};
+let colorComX = null;
+
+// [LC] arc=80,5,25,35,135,35,25,65,135,65 n=3 in=1 fo=2 steer=2 err=165 p=120,65,i 80,5,f 40,60,o
 function parseLC(text) {
   const arc  = text.match(/arc=(\d+),(\d+),(\d+),(\d+),(\d+),(\d+),(\d+),(\d+),(\d+),(\d+)/);
   const box  = text.match(/box=(\d+),(\d+),(\d+),(\d+)/);
@@ -929,6 +1155,49 @@ function drawArcRoi(a, held) {
   octx.arc(topX + .5, cy + .5, r, rightA, leftA, true);
   octx.lineTo(bottomLeftX + .5, bottomY + .5);
   octx.stroke();
+}
+
+function drawStreamGuides() {
+  if (!lcOverlayOn) return;
+
+  drawArcRoi(STREAM_GUIDES.arc, false);
+
+  octx.save();
+  octx.setLineDash([3, 2]);
+  octx.lineWidth = 1;
+
+  octx.strokeStyle = 'rgba(192,192,192,0.95)';
+  for (const col of STREAM_GUIDES.silverCols) {
+    octx.beginPath();
+    octx.moveTo(col.x + .5, col.y0 + .5);
+    octx.lineTo(col.x + .5, col.y1 + .5);
+    octx.stroke();
+  }
+
+  octx.strokeStyle = 'rgba(46,204,113,0.95)';
+  const row = STREAM_GUIDES.colorLine;
+  octx.beginPath();
+  octx.moveTo(row.x0 + .5, row.y + .5);
+  octx.lineTo(row.x1 + .5, row.y + .5);
+  octx.stroke();
+
+  if (colorComX !== null && Number.isFinite(colorComX)) {
+    const x = Math.max(row.x0, Math.min(row.x1, colorComX));
+    octx.setLineDash([]);
+    octx.strokeStyle = '#ffffff';
+    octx.fillStyle = 'rgba(46,204,113,0.95)';
+    octx.beginPath();
+    octx.moveTo(x + .5, row.y - 4 + .5);
+    octx.lineTo(x + .5, row.y + 4 + .5);
+    octx.stroke();
+    octx.beginPath();
+    octx.arc(x + .5, row.y + .5, 2.2, 0, Math.PI * 2);
+    octx.fill();
+    octx.strokeStyle = 'rgba(0,0,0,0.65)';
+    octx.stroke();
+  }
+
+  octx.restore();
 }
 
 function drawLcOverlay() {
@@ -1041,6 +1310,7 @@ function drawOverlay() {
   if (!overlayDirty) return;
   overlayDirty = false;
   octx.clearRect(0, 0, overlay.width, overlay.height);
+  drawStreamGuides();
   drawLcOverlay();
   for (const { visible, x, y, w, h, color } of markers) {
     if (!visible) continue;
@@ -1055,6 +1325,23 @@ function drawOverlay() {
     octx.moveTo(x+.5,     y+h-t-.5);octx.lineTo(x+.5,   y+h-.5); octx.lineTo(x+t+.5,   y+h-.5);
     octx.moveTo(x+w-t-.5, y+h-.5);  octx.lineTo(x+w-.5, y+h-.5); octx.lineTo(x+w-.5,   y+h-t-.5);
     octx.stroke();
+  }
+  // Calibration sample box (yellow dashed) + centre cross.
+  {
+    const s = calSample;
+    octx.save();
+    octx.setLineDash([2, 2]);
+    octx.strokeStyle = calPlaceMode ? '#ffffff' : '#ffd166';
+    octx.lineWidth = 1;
+    octx.strokeRect(s.x + .5, s.y + .5, s.w, s.h);
+    octx.setLineDash([]);
+    const ccx = s.x + s.w / 2, ccy = s.y + s.h / 2;
+    octx.strokeStyle = 'rgba(255,209,102,0.95)';
+    octx.beginPath();
+    octx.moveTo(ccx - 3, ccy); octx.lineTo(ccx + 3, ccy);
+    octx.moveTo(ccx, ccy - 3); octx.lineTo(ccx, ccy + 3);
+    octx.stroke();
+    octx.restore();
   }
 }
 
@@ -1145,6 +1432,7 @@ function updateMetrics(kv) {
   if (has('mode')) setMetric('mode', (MODE_NAMES[kv.mode] || kv.mode) + ' (' + kv.mode + ')', true);
   if (has('feat')) setMetric('feat', kv.feat, true);
   if (has('com'))  setMetric('com',  parseFloat(kv.com).toFixed(1), true);
+  if (has('ccom')) setMetric('com',  parseFloat(kv.ccom).toFixed(1), true);
   if (has('blk'))  setMetric('blk',  kv.blk, true);
   if (has('sil'))  setMetric('sil',  kv.sil, true);
   if (has('red'))  setMetric('red',  kv.red, true);
@@ -1155,8 +1443,15 @@ function updateMetrics(kv) {
   // Hide chips not present in this mode's output
   const present = new Set(Object.keys(kv));
   for (const k of ['com','blk','sil','red','gL','gR','ang','samples']) {
+    if (k === 'com' && present.has('ccom')) continue;
     if (!present.has(k)) document.getElementById('mc-' + k).style.display = 'none';
   }
+}
+
+function updateColorComOverlay(kv) {
+  if (!('ccom' in kv)) return;
+  colorComX = parseFloat(kv.ccom);
+  markDirty();
 }
 
 function appendLine(text) {
@@ -1181,7 +1476,11 @@ function appendLine(text) {
   if (autoScroll) monLog.scrollTop = monLog.scrollHeight;
 
   // Update metrics panel from [RES] lines
-  if (text.startsWith('[RES]')) updateMetrics(parseResLine(text));
+  if (text.startsWith('[RES]')) {
+    const kv = parseResLine(text);
+    updateMetrics(kv);
+    updateColorComOverlay(kv);
+  }
   // Update the line-detection overlay from [LC] lines
   if (text.startsWith('[LC]')) parseLC(text);
   // Update the row-55 color strip from [ROW] lines
@@ -1420,6 +1719,7 @@ function renderFrame() {
   }
   ctx.putImageData(imageData, 0, 0);
   offsetCtx.putImageData(offsetImageData, 0, 0);
+  sampleCalBox(w, h);  // update live raw-RGB readout for the calibration box
   drawOverlay(); // skips if not dirty
 
   frameCountEl.textContent  = ++totalFrames;
