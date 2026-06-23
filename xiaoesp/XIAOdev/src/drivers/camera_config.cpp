@@ -96,6 +96,10 @@ bool Camera_Init() {
         s->set_special_effect(s, 0);
         s->set_colorbar(s, 0);
 
+        // --- 180° rotation (hardware, zero per-frame cost) ---
+        s->set_vflip(s, 1);   // vertical flip
+        s->set_hflip(s, 1);   // horizontal flip
+
 
     }
     

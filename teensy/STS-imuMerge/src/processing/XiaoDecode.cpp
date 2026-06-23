@@ -38,6 +38,8 @@ uint8_t gapLineCount()     { return (uint8_t)(_lineError + 0.5f); }  // COM carr
 bool    commitFlag()       { return _commitFlag; }
 bool    tightSlowFlag()    { return _tightSlowFlag; }
 bool    gapBothRowsFlag()  { return _commitFlag; }  // XIAO_FLAG_COMMIT bit reused for both-rows flag
+bool    obstacleSeeLine()  { return _commitFlag; }  // XIAO_FLAG_COMMIT bit reused for see-line flag
+float   obstacleAngle()    { return _gapAngle; }    // ANGLE register reused for line tilt
 
 void setMode(XiaoMode m) {
     Sensors::XIAO_link::send(XIAO_REG_MODE, (uint8_t)m);

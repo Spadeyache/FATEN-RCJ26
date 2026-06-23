@@ -9,6 +9,7 @@
 #include "src/modes/ModeSearchLine.h"
 #include "src/modes/ModeNoGI.h"
 #include "src/modes/ModeLineAngle.h"
+#include "src/modes/ModeObstacle.h"
 #include "src/stream/XiaoStream.h"
 // #include "src/drivers/wifi_config.h"
 
@@ -141,6 +142,7 @@ void loop() {
         case MODE_SEARCH_LINE: modeSearchLineRun(fb, teensy);  break;
         case MODE_NOGI:        modeNoGIRun(fb, teensy);        break;
         case MODE_LINE_ANGLE:  modeLineAngleRun(fb, teensy);   break;
+        case MODE_OBSTACLE:    modeObstacleRun(fb, teensy);    break;
         default:               modeLineFollowRun(fb, teensy);  break;
     }
 

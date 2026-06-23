@@ -29,6 +29,8 @@ uint8_t gapLineCount();      // LINE_ANGLE mode: arc crossing count (from XIAO_R
 bool    commitFlag();        // XIAO green-turn commit in progress → freeze transitions
 bool    tightSlowFlag();     // XIAO tight-turn target is low in frame → drive slowly
 bool    gapBothRowsFlag();   // LINE_ANGLE mode: both scan rows see a qualifying black chunk
+bool    obstacleSeeLine();   // OBSTACLE mode: arc sees a black line (FLAG bit0)
+float   obstacleAngle();     // OBSTACLE mode: line tilt 0..254 (127 = 0°)
 
 void    setMode(XiaoMode m);
 void    clearFilter();    // forget votes after a mode change / state transition

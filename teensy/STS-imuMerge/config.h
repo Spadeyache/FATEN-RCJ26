@@ -58,6 +58,7 @@ enum XiaoMode : uint8_t {
     XIAO_MODE_SEARCH_LINE = 1,
     XIAO_MODE_NOGI        = 2,
     XIAO_MODE_LINE_ANGLE  = 3,   // line slope + crossing count during gap traversal
+    XIAO_MODE_OBSTACLE    = 4,   // obstacle re-acquire: arc see-line flag + line tilt angle
 };
 
 #define KRS_BAUD            115200UL

@@ -58,6 +58,7 @@
 #define MODE_SEARCH_LINE   1
 #define MODE_NOGI          2
 #define MODE_LINE_ANGLE    3   // line slope + crossing count during gap traversal
+#define MODE_OBSTACLE      4   // obstacle re-acquire: arc see-line flag + line tilt angle
 
 //  Camera Vision range
 #define SCAN_COL_MIN       50   // First column (inclusive)
