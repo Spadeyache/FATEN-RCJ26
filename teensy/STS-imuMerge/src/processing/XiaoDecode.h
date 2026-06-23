@@ -24,10 +24,11 @@ void tick(bool instantRun = false);  // re-runs filter every 20 ms (or instantly
 
 uint8_t command();        // confirmed FEAT_* event (FEAT_NONE if none)
 float   lineError();      // 0..254
-float   gapAngle();       // 0..254
-bool    commitFlag();     // XIAO green-turn commit in progress → freeze transitions
-bool    tightSlowFlag();  // XIAO tight-turn target is low in frame → drive slowly
-bool    gapFrontFlag();   // GAP mode: front row sees the black line
+float   gapAngle();          // 0..254 — LINE_ANGLE mode slope (127 = 0°)
+uint8_t gapLineCount();      // LINE_ANGLE mode: arc crossing count (from XIAO_REG_COM)
+bool    commitFlag();        // XIAO green-turn commit in progress → freeze transitions
+bool    tightSlowFlag();     // XIAO tight-turn target is low in frame → drive slowly
+bool    gapBothRowsFlag();   // LINE_ANGLE mode: both scan rows see a qualifying black chunk
 
 void    setMode(XiaoMode m);
 void    clearFilter();    // forget votes after a mode change / state transition

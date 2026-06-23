@@ -54,10 +54,10 @@
 #define FEAT_SEARCH_LINE_BLACK  6   // SEARCH_LINE mode: black return line (LINE_Obstacle waits on this)
 
 enum XiaoMode : uint8_t {
-    XIAO_MODE_LINE = 0,
+    XIAO_MODE_LINE        = 0,
     XIAO_MODE_SEARCH_LINE = 1,
-    XIAO_MODE_NOGI = 2,
-    XIAO_MODE_GAP  = 3,
+    XIAO_MODE_NOGI        = 2,
+    XIAO_MODE_LINE_ANGLE  = 3,   // line slope + crossing count during gap traversal
 };
 
 #define KRS_BAUD            115200UL
@@ -139,7 +139,7 @@ enum XiaoMode : uint8_t {
 #define FILTER_THRESHOLD_RED      5   // red line
 #define FILTER_THRESHOLD_SILVER   4   // silver (evac entry)
 #define FILTER_THRESHOLD_UTURN    3   // U-turn — confirmed when seen > 2 times
-#define FILTER_THRESHOLD_LINELOST 10   // sustained line loss → gap
+#define FILTER_THRESHOLD_LINELOST  3   // sustained line loss → gap
 
 // =============================================================================
 //  K230D AI processor

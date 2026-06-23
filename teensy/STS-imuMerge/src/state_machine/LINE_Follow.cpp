@@ -1,4 +1,4 @@
-#include "LINE_Follow.h"
+﻿#include "LINE_Follow.h"
 #include "StateMachine.h"
 #include "../../config.h"
 #include "../../pins_teensy.h"
@@ -87,9 +87,9 @@ void update() {
             StateMachine::transitionTo(StateMachine::EVAC_ENTRY);
             return;
 
-        // case FEAT_LINE_LOST:
-        //     StateMachine::transitionTo(StateMachine::LINE_GAP);
-        //     return;
+        case FEAT_LINE_LOST:
+            StateMachine::transitionTo(StateMachine::LINE_GAP);
+            return;
 
         default:
             Actions::Drive::runLinePID();

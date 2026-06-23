@@ -735,7 +735,7 @@ void modeLineFollowRun(camera_fb_t* fb, YacheEncodedSerial& teensy) {
     if (steerOut >= 0 && lc.crossings[steerOut].pixelY >= TIGHT_SLOW_OUT_Y) {
         xiaoFlags |= XIAO_FLAG_TIGHT_SLOW;
     }
-    digitalWrite(LED_BUILTIN, (xiaoFlags & XIAO_FLAG_TIGHT_SLOW) ? LOW : HIGH);  // ESP32 LED active-LOW
+    digitalWrite(LED_BUILTIN, (featureId == FEAT_LINE_LOST) ? LOW : HIGH);  // ESP32 LED active-LOW
     teensy.send(XIAO_REG_FLAG, xiaoFlags);
 
     SPRINTF(SPRINT_RESULTS, "[RES]",

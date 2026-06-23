@@ -31,12 +31,13 @@ void tick(bool instantRun) {
     }
 }
 
-uint8_t command()    { return _command; }
-float   lineError()  { return _lineError; }
-float   gapAngle()   { return _gapAngle; }
-bool    commitFlag() { return _commitFlag; }
-bool    tightSlowFlag() { return _tightSlowFlag; }
-bool    gapFrontFlag() { return _commitFlag; }
+uint8_t command()          { return _command; }
+float   lineError()        { return _lineError; }
+float   gapAngle()         { return _gapAngle; }
+uint8_t gapLineCount()     { return (uint8_t)(_lineError + 0.5f); }  // COM carries count in LINE_ANGLE mode
+bool    commitFlag()       { return _commitFlag; }
+bool    tightSlowFlag()    { return _tightSlowFlag; }
+bool    gapBothRowsFlag()  { return _commitFlag; }  // XIAO_FLAG_COMMIT bit reused for both-rows flag
 
 void setMode(XiaoMode m) {
     Sensors::XIAO_link::send(XIAO_REG_MODE, (uint8_t)m);

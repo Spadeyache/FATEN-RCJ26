@@ -57,7 +57,7 @@
 #define MODE_LINEFOLLOW    0
 #define MODE_SEARCH_LINE   1
 #define MODE_NOGI          2
-#define MODE_GAP           3
+#define MODE_LINE_ANGLE    3   // line slope + crossing count during gap traversal
 
 //  Camera Vision range
 #define SCAN_COL_MIN       50   // First column (inclusive)
