@@ -1079,7 +1079,7 @@ const LC_FO_COLOR  = LC_OUT_COLOR; // orange line = focused out used for normal 
 const LC_COMMIT_COLOR = LC_IN_COLOR; // green outer ring = committed green-turn goal
 
 const FALLBACK_STREAM_GUIDES = {
-  arc: [80,5, 25,35, 35,35, 125,35, 135,35, 40,85, 120,85],
+  arc: [80,5, 25,35, 135,35, 40,85, 120,85],
   silverCols: [
     { x: 33, y0: 0, y1: 70 },
     { x: 127, y0: 0, y1: 70 },
@@ -1100,8 +1100,7 @@ function readCppConst(src, name) {
 function guidesFromModeSource(src) {
   const c = name => readCppConst(src, name);
   const required = [
-    'ARC_TOP_X','ARC_TOP_Y','ARC_LEFT_X','ARC_RIGHT_X',
-    'ARC_INNER_LEFT_X','ARC_INNER_RIGHT_X','ARC_SIDE_Y',
+    'ARC_TOP_X','ARC_TOP_Y','ARC_LEFT_X','ARC_RIGHT_X','ARC_SIDE_Y',
     'ARC_BOTTOM_LEFT_X','ARC_BOTTOM_Y','ARC_BOTTOM_RIGHT_X',
     'SILVER_COL_LEFT','SILVER_COL_RIGHT','SILVER_ROW_MIN','SILVER_ROW_MAX',
     'COLOR_X_MIN','COLOR_X_MAX','COLOR_ROW'
@@ -1112,8 +1111,6 @@ function guidesFromModeSource(src) {
     arc: [
       v.ARC_TOP_X, v.ARC_TOP_Y,
       v.ARC_LEFT_X, v.ARC_SIDE_Y,
-      v.ARC_INNER_LEFT_X, v.ARC_SIDE_Y,
-      v.ARC_INNER_RIGHT_X, v.ARC_SIDE_Y,
       v.ARC_RIGHT_X, v.ARC_SIDE_Y,
       v.ARC_BOTTOM_LEFT_X, v.ARC_BOTTOM_Y,
       v.ARC_BOTTOM_RIGHT_X, v.ARC_BOTTOM_Y,
@@ -1190,16 +1187,10 @@ function parseLC(text) {
 
 function drawArcRoi(a, held) {
   const topX = a[0], topY = a[1];
-  const shelf = a.length >= 14;
-  const leftArcX = a[2], sideY = a[3];
-  const leftArcY = a[3];
-  const leftInnerX = shelf ? a[4] : a[2];
-  const rightInnerX = shelf ? a[6] : a[4];
-  const rightArcX = shelf ? a[8] : a[4];
-  const rightArcY = shelf ? a[9] : a[5];
-  const bottomLeftX = shelf ? a[10] : a[6];
-  const bottomY = shelf ? a[11] : a[7];
-  const bottomRightX = shelf ? a[12] : a[8];
+  const leftArcX = a[2], leftArcY = a[3];
+  const rightArcX = a[4], rightArcY = a[5];
+  const bottomLeftX = a[6], bottomY = a[7];
+  const bottomRightX = a[8];
   const dx = rightArcX - topX;
   const cy = (rightArcY * rightArcY - topY * topY + dx * dx) / (2 * (rightArcY - topY));
   const r = cy - topY;
@@ -1211,10 +1202,8 @@ function drawArcRoi(a, held) {
   octx.beginPath();
   octx.moveTo(bottomLeftX + .5, bottomY + .5);
   octx.lineTo(bottomRightX + .5, bottomY + .5);
-  octx.lineTo(rightInnerX + .5, sideY + .5);
-  if (shelf) octx.lineTo(rightArcX + .5, rightArcY + .5);
+  octx.lineTo(rightArcX + .5, rightArcY + .5);
   octx.arc(topX + .5, cy + .5, r, rightA, leftA, true);
-  if (shelf) octx.lineTo(leftInnerX + .5, sideY + .5);
   octx.lineTo(bottomLeftX + .5, bottomY + .5);
   octx.stroke();
 }

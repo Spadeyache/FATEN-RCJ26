@@ -129,7 +129,7 @@ inline float robotRoll()  { return -Sensors::IMU::getPitch(); }   // + = left si
 //   Two gain sets, switched together with the base speed: the moment
 //   frictionCircAdj drops the base below FRIC_SPEED_FLAT (i.e. on a slope), the
 //   controller also swaps to the *_SLOPE gains. Flat ground uses the *_FLAT set.
-constexpr float PID_KP_FLAT  = 1.25f;   // TODO: tune for fast flat-line racing
+constexpr float PID_KP_FLAT  = 1.5f;   // TODO: tune for fast flat-line racing
 constexpr float PID_KI_FLAT  = 0.0f;
 constexpr float PID_KD_FLAT  = 0.0f;
 
@@ -141,6 +141,7 @@ constexpr float PID_KD_SLOPE = 0.65f;
 // robot slows its forward base so tight turns do not outrun the camera line.
 constexpr float STEEP_TURN_CORR_THRESHOLD = 120.0f;
 constexpr float STEEP_TURN_BASE_SPEED     = 30.0f;
+constexpr float TIGHT_SLOW_BASE_SPEED     = 10.0f;
 
 // Flat-surface PID tuning switch. When true, the line PID ignores IMU tilt for
 // gain scheduling, gravity compensation, pitch adjustment, and rear-wheel
@@ -295,7 +296,9 @@ void runLinePID() {
 
     const float correction = kp * rawError + ki * integral + kd * derivative;
     const bool  steepTurn = fabsf(correction) >= STEEP_TURN_CORR_THRESHOLD;
-    const float base = steepTurn ? STEEP_TURN_BASE_SPEED : frictionBase;
+    const float base = Processing::XiaoDecode::tightSlowFlag()
+        ? TIGHT_SLOW_BASE_SPEED
+        : (steepTurn ? STEEP_TURN_BASE_SPEED : frictionBase);
     const float pitchAdj   = linePidPitch() * IMU_PITCH_GAIN;   // + = nose up
 
 // Steering speeds come from gravAdj (roll-driven). Flat → symmetric smooth

@@ -32,12 +32,15 @@
 //   reg 0x02 COM      X→T  line error 0..254 (127 = centred)
 //   reg 0x03 MODE     T→X  active XIAO mode
 //   reg 0x04 ANGLE    X→T  gap line angle (gap mode)
-//   reg 0x05 FLAG     X→T  1 while a green-turn commit is in progress, else 0
+//   reg 0x05 FLAG     X→T  bit0 commit, bit1 tight-turn slow drive
 #define XIAO_REG_FEATURE    0x01
 #define XIAO_REG_COM        0x02
 #define XIAO_REG_MODE       0x03
 #define XIAO_REG_ANGLE      0x04
 #define XIAO_REG_FLAG       0x05
+
+#define XIAO_FLAG_COMMIT      0x01
+#define XIAO_FLAG_TIGHT_SLOW  0x02
 
 // FEATURE byte — LINE-follow events (the clean contract; keep in sync with XIAO):
 #define FEAT_NONE           0

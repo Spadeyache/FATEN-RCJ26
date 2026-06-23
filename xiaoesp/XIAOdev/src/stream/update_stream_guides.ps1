@@ -20,8 +20,6 @@ $values = @{
     ARC_TOP_Y = Get-Const 'ARC_TOP_Y'
     ARC_LEFT_X = Get-Const 'ARC_LEFT_X'
     ARC_RIGHT_X = Get-Const 'ARC_RIGHT_X'
-    ARC_INNER_LEFT_X = Get-Const 'ARC_INNER_LEFT_X'
-    ARC_INNER_RIGHT_X = Get-Const 'ARC_INNER_RIGHT_X'
     ARC_SIDE_Y = Get-Const 'ARC_SIDE_Y'
     ARC_BOTTOM_LEFT_X = Get-Const 'ARC_BOTTOM_LEFT_X'
     ARC_BOTTOM_Y = Get-Const 'ARC_BOTTOM_Y'
@@ -40,7 +38,7 @@ $js = @"
 // Keep this file next to esp32_camera_viewer.html so the viewer can load it
 // without asking the XIAO to spend serial bandwidth on static geometry.
 window.XIAO_STREAM_GUIDES = {
-  arc: [$($values.ARC_TOP_X), $($values.ARC_TOP_Y), $($values.ARC_LEFT_X), $($values.ARC_SIDE_Y), $($values.ARC_INNER_LEFT_X), $($values.ARC_SIDE_Y), $($values.ARC_INNER_RIGHT_X), $($values.ARC_SIDE_Y), $($values.ARC_RIGHT_X), $($values.ARC_SIDE_Y), $($values.ARC_BOTTOM_LEFT_X), $($values.ARC_BOTTOM_Y), $($values.ARC_BOTTOM_RIGHT_X), $($values.ARC_BOTTOM_Y)],
+  arc: [$($values.ARC_TOP_X), $($values.ARC_TOP_Y), $($values.ARC_LEFT_X), $($values.ARC_SIDE_Y), $($values.ARC_RIGHT_X), $($values.ARC_SIDE_Y), $($values.ARC_BOTTOM_LEFT_X), $($values.ARC_BOTTOM_Y), $($values.ARC_BOTTOM_RIGHT_X), $($values.ARC_BOTTOM_Y)],
   silverCols: [
     { x: $($values.SILVER_COL_LEFT), y0: $($values.SILVER_ROW_MIN), y1: $($values.SILVER_ROW_MAX) },
     { x: $($values.SILVER_COL_RIGHT), y0: $($values.SILVER_ROW_MIN), y1: $($values.SILVER_ROW_MAX) },

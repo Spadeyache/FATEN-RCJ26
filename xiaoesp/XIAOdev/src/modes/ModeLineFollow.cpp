@@ -12,17 +12,18 @@ namespace {
 
 constexpr int ARC_MAX_SAMPLES = 340;
 
+
+//run this to update serial
+//powershell -ExecutionPolicy Bypass -File xiaoesp\XIAOdev\src\stream\update_stream_guides.ps1
+
 // Mode 0 black-line ROI:
-//   top arc passes through (80,5), (25,35), (135,35).
-//   Tilted sides start from inner shelf points to avoid the LED glare edge.
+//   top arc passes through (80,5), (25,35), (135,35)
 constexpr uint8_t ARC_TOP_X = 80;
-constexpr uint8_t ARC_TOP_Y = 5;
+constexpr uint8_t ARC_TOP_Y = 3;
 constexpr uint8_t ARC_LEFT_X = 25;
 constexpr uint8_t ARC_RIGHT_X = 135;
-constexpr uint8_t ARC_INNER_LEFT_X = 35;
-constexpr uint8_t ARC_INNER_RIGHT_X = 125;
-constexpr uint8_t ARC_SIDE_Y = 35;
-constexpr uint8_t ARC_BOTTOM_Y = 85; //65 i might need to change the IN_PX gain
+constexpr uint8_t ARC_SIDE_Y = 33;
+constexpr uint8_t ARC_BOTTOM_Y = 85; //85 i might need to change the IN_PX gain
 constexpr uint8_t ARC_BOTTOM_LEFT_X = 40;
 constexpr uint8_t ARC_BOTTOM_RIGHT_X = 120;
 constexpr uint8_t ARC_SAMPLE_STEP = 1;
@@ -34,7 +35,11 @@ constexpr uint8_t BOUNDARY_GAP_FILL_Y_MAX = 60;
 constexpr float ARC_ANGLE_SCALE = 2.0f; //2.0 
 constexpr float ARC_IN_PX_SCALE = 0.8f; // balance of front and back gain
 constexpr uint8_t ARC_SIDE_GAIN_Y = 45;  //boosts with gain in the side bellow Y : for tight turns
-constexpr float ARC_SIDE_GAIN_MULT = 1.0f; //1.65
+constexpr float ARC_SIDE_GAIN_MULT = 1.00f; //1.8
+constexpr uint8_t TIGHT_SLOW_OUT_Y = 65;
+constexpr uint8_t SINGLE_FRONT_ROW_DY = 12;
+constexpr uint8_t SINGLE_FRONT_ROW_HALF_W = 30;
+constexpr uint8_t SINGLE_FRONT_ROW_MIN_BLACK = 3;
 
 // Silver rescue-zone tape scan: same side-column logic as the older line/search modes.
 constexpr uint8_t SILVER_COL_LEFT = 33;
@@ -200,19 +205,15 @@ void buildArcGeometry() {
     const float cy = (sideY * sideY - topY * topY + dx * dx) / (2.0f * (sideY - topY));
     const float r = cy - topY;
 
-    // Closed loop order: bottom -> right tilted side -> right outward shelf ->
-    // top arc -> left inward shelf -> left tilted side.
+    // Closed loop order mirrors LineCount: bottom -> right side -> top arc -> left side.
     for (int x = ARC_BOTTOM_LEFT_X; x <= ARC_BOTTOM_RIGHT_X; x += ARC_SAMPLE_STEP) {
         addSample(x, ARC_BOTTOM_Y, LC_EDGE_BOTTOM);
     }
     for (int y = ARC_BOTTOM_Y - ARC_SAMPLE_STEP; y >= ARC_SIDE_Y; y -= ARC_SAMPLE_STEP) {
         const int dy = ARC_BOTTOM_Y - y;
         const int span = ARC_BOTTOM_Y - ARC_SIDE_Y;
-        const int x = ARC_BOTTOM_RIGHT_X + ((ARC_INNER_RIGHT_X - ARC_BOTTOM_RIGHT_X) * dy + span / 2) / span;
+        const int x = ARC_BOTTOM_RIGHT_X + ((ARC_RIGHT_X - ARC_BOTTOM_RIGHT_X) * dy + span / 2) / span;
         addSample(x, y, LC_EDGE_RIGHT);
-    }
-    for (int x = ARC_INNER_RIGHT_X + ARC_SAMPLE_STEP; x <= ARC_RIGHT_X; x += ARC_SAMPLE_STEP) {
-        addSample(x, ARC_SIDE_Y, LC_EDGE_TOP);
     }
     for (int x = ARC_RIGHT_X - ARC_SAMPLE_STEP; x >= ARC_LEFT_X; x -= ARC_SAMPLE_STEP) {
         const float xdx = (float)x - cx;
@@ -220,13 +221,10 @@ void buildArcGeometry() {
         const int y = (inside > 0.0f) ? (int)(cy - sqrtf(inside) + 0.5f) : ARC_SIDE_Y;
         addSample(x, y, LC_EDGE_TOP);
     }
-    for (int x = ARC_LEFT_X + ARC_SAMPLE_STEP; x <= ARC_INNER_LEFT_X; x += ARC_SAMPLE_STEP) {
-        addSample(x, ARC_SIDE_Y, LC_EDGE_TOP);
-    }
     for (int y = ARC_SIDE_Y + ARC_SAMPLE_STEP; y <= ARC_BOTTOM_Y - ARC_SAMPLE_STEP; y += ARC_SAMPLE_STEP) {
         const int dy = y - ARC_SIDE_Y;
         const int span = ARC_BOTTOM_Y - ARC_SIDE_Y;
-        const int x = ARC_INNER_LEFT_X + ((ARC_BOTTOM_LEFT_X - ARC_INNER_LEFT_X) * dy + span / 2) / span;
+        const int x = ARC_LEFT_X + ((ARC_BOTTOM_LEFT_X - ARC_LEFT_X) * dy + span / 2) / span;
         addSample(x, y, LC_EDGE_LEFT);
     }
 
@@ -550,20 +548,13 @@ void updateCurveRelease(bool fresh, float angleDeg, int steerOut) {
     }
 }
 
-uint8_t arcAngleError(const LineCounts& lc, int inIndex, int outIndex, float& angleOut, float& posOut) {
-    const Crossing& in = lc.crossings[inIndex];
-    const Crossing& out = lc.crossings[outIndex];
-
+uint8_t vectorError(const Crossing& in, const Crossing& out, float sideMult,
+                    float& angleOut, float& posOut) {
     const float dx = (float)out.pixelX - (float)in.pixelX;
     float dy = (float)in.pixelY - (float)out.pixelY;
     if (dy < 1.0f) dy = 1.0f;
 
     float angleDeg = atan2f(dx, dy) * 57.2957795f;
-    float sideMult = 1.0f;
-    if ((out.edge == LC_EDGE_LEFT || out.edge == LC_EDGE_RIGHT) && out.pixelY >= ARC_SIDE_GAIN_Y) {
-        sideMult = ARC_SIDE_GAIN_MULT;
-    }
-
     const float inOffset = (float)in.pixelX - LF_CENTER_X;
     float err = (float)LF_ERROR_CENTER +
         angleDeg * ARC_ANGLE_SCALE * sideMult +
@@ -575,6 +566,48 @@ uint8_t arcAngleError(const LineCounts& lc, int inIndex, int outIndex, float& an
     angleOut = angleDeg;
     posOut = inOffset;
     return (uint8_t)(err + 0.5f);
+}
+
+uint8_t arcAngleError(const LineCounts& lc, int inIndex, int outIndex, float& angleOut, float& posOut) {
+    const Crossing& out = lc.crossings[outIndex];
+    float sideMult = 1.0f;
+    if ((out.edge == LC_EDGE_LEFT || out.edge == LC_EDGE_RIGHT) && out.pixelY >= ARC_SIDE_GAIN_Y) {
+        sideMult = ARC_SIDE_GAIN_MULT;
+    }
+    return vectorError(lc.crossings[inIndex], out, sideMult, angleOut, posOut);
+}
+
+bool singleFrontRowDirection(camera_fb_t* fb, const Crossing& p, Crossing& out) {
+    const int y = (int)p.pixelY + SINGLE_FRONT_ROW_DY;
+    if (!fb || y < 0 || y >= fb->height) return false;
+
+    const int x0 = max((int)COLOR_X_MIN, (int)p.pixelX - SINGLE_FRONT_ROW_HALF_W);
+    const int x1 = min((int)COLOR_X_MAX, (int)p.pixelX + SINGLE_FRONT_ROW_HALF_W);
+    int weighted = 0, hits = 0;
+    for (int x = x0; x <= x1; x++) {
+        if (!neighborhoodBlack(fb, (uint8_t)x, (uint8_t)y)) continue;
+        weighted += x;
+        hits++;
+    }
+
+    if (hits < SINGLE_FRONT_ROW_MIN_BLACK) return false;
+    out = p;
+    out.pixelX = (uint8_t)(weighted / hits);
+    out.pixelY = (uint8_t)y;
+    out.edge = LC_EDGE_BOTTOM;
+    out.width = (uint8_t)(hits > 255 ? 255 : hits);
+    return out.pixelY > p.pixelY;
+}
+
+uint8_t singlePointError(camera_fb_t* fb, const Crossing& p, float& angleOut, float& posOut) {
+    Crossing q;
+    if (p.pixelY < COLOR_ROW && singleFrontRowDirection(fb, p, q)) {
+        return vectorError(q, p, 1.0f, angleOut, posOut);
+    }
+
+    angleOut = 0.0f;
+    posOut = 0.0f;
+    return LF_ERROR_CENTER;
 }
 
 }  // namespace
@@ -648,6 +681,10 @@ void modeLineFollowRun(camera_fb_t* fb, YacheEncodedSerial& teensy) {
         errByte = arcAngleError(lc, cls.inIndex, steerOut, s_lastAngle, s_lastPos);
         s_lastErr = errByte;
         fresh = true;
+    } else if (cls.inIndex >= 0) {
+        errByte = singlePointError(fb, lc.crossings[cls.inIndex], s_lastAngle, s_lastPos);
+        s_lastErr = errByte;
+        fresh = true;
     } else if (lc.count == 0 || !cls.inHeld) {
         errByte = LF_ERROR_CENTER;
         s_lastErr = errByte;
@@ -693,7 +730,12 @@ void modeLineFollowRun(camera_fb_t* fb, YacheEncodedSerial& teensy) {
 
     teensy.send(XIAO_REG_FEATURE, featureId);
     teensy.send(XIAO_REG_COM, errByte);
-    teensy.send(XIAO_REG_FLAG, s_commitActive ? 1 : 0);
+    uint8_t xiaoFlags = 0;
+    if (s_commitActive) xiaoFlags |= XIAO_FLAG_COMMIT;
+    if (steerOut >= 0 && lc.crossings[steerOut].pixelY >= TIGHT_SLOW_OUT_Y) {
+        xiaoFlags |= XIAO_FLAG_TIGHT_SLOW;
+    }
+    teensy.send(XIAO_REG_FLAG, xiaoFlags);
 
     SPRINTF(SPRINT_RESULTS, "[RES]",
         "mode=0 arc=1 feat=%d err=%d n=%d in=%d out=%d fresh=%d ang=%.1f pos=%.1f ccom=%.1f sL=%d sR=%d red=%d blk25=%d ablk=%d bot=%d gap=%d sat=%d asat=%d gL=%d gR=%d rawG=%d gc=%d cmt=%d cc=%d",
