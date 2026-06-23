@@ -34,9 +34,8 @@
     "resize": "direct (no letterbox)"
   },
   "_meta": {
-    "source_mode": "searched",
+    "source_mode": "preset",
     "ptq": {
-      "name": "v0_noclip_uint8_uint8",
       "ptq_option": 0,
       "calibrate_method": "NoClip",
       "quant_type": "uint8",

@@ -25,3 +25,6 @@ gmodel_dump_dir/
 __pycache__/
 *.pyc
 _test_*.py
+
+# ultralytics pretrained cache
+yolov8n.pt

@@ -1,7 +1,7 @@
-# Dataset config for YOLOv8n training.
-# `path` is filled in (absolute) by `k230_pipeline.py organize`, which also
-# rewrites nc/names from the source classes.txt. Edit by hand if needed.
-path: ./datasets/victim_20260621
+# Template / fallback only. The REAL data.yaml is generated per dataset by
+# `add_data.ps1` (organize) at datasets/<Name>/data.yaml — the scripts always
+# pass that one explicitly. Edit here only if you call the CLI without --data.
+path: /workspace/datasets/victim
 train: train/images
 val: val/images
 

@@ -1,0 +1,72 @@
+<!doctype html><html lang="ja"><head><meta charset="utf-8">
+<title>Competition Playbook — K230D YOLOv8n</title>
+<style>
+ body{font-family:'Segoe UI',Meiryo,system-ui,sans-serif;margin:0;background:#0f172a;color:#e2e8f0;line-height:1.6}
+ .wrap{max-width:760px;margin:0 auto;padding:32px}
+ h1{font-size:23px;margin:0 0 2px} .sub{color:#94a3b8;font-size:13px;margin-bottom:22px}
+ h2{font-size:13px;letter-spacing:.04em;text-transform:uppercase;color:#7dd3fc;margin:24px 0 8px}
+ .step{display:flex;gap:12px;align-items:flex-start;margin:10px 0}
+ .n{flex:none;width:24px;height:24px;line-height:24px;text-align:center;background:#0ea5e9;color:#001;border-radius:50%;font-size:13px;font-weight:700}
+ .t{font-size:14px;color:#cbd5e1}
+ .cmd{position:relative;background:#0b1220;border:1px solid #1e293b;border-radius:8px;margin:6px 0}
+ pre{margin:0;padding:11px 13px;overflow-x:auto;font-family:Consolas,monospace;font-size:13px;color:#a7f3d0;white-space:pre-wrap;word-break:break-word}
+ .copy{position:absolute;top:7px;right:7px;background:#1e293b;color:#94a3b8;border:1px solid #334155;border-radius:6px;font-size:11px;padding:3px 9px;cursor:pointer}
+ .copy:hover{background:#334155;color:#e2e8f0} .copy.ok{color:#86efac;border-color:#16a34a}
+ .hero pre{color:#fde68a;font-size:14px} .hero .cmd{border-color:#0ea5e9;background:#082f49}
+ table{width:100%;border-collapse:collapse;font-size:13px;margin:6px 0}
+ td{border-top:1px solid #1e293b;padding:7px 6px;vertical-align:top} td:first-child{white-space:nowrap;color:#fde68a;font-family:Consolas,monospace}
+ .out{background:#1e293b;border-radius:8px;padding:12px 14px;font-size:13px;color:#cbd5e1;margin:6px 0}
+ code{background:#0b1220;padding:1px 6px;border-radius:4px;color:#fde68a;font-size:12.5px}
+ .warn{background:#3b2207;border-left:3px solid #f59e0b;border-radius:6px;padding:9px 13px;font-size:13px;color:#fde68a;margin:14px 0}
+ footer{color:#64748b;font-size:12px;margin-top:28px;border-top:1px solid #1e293b;padding-top:12px}
+</style></head><body><div class="wrap">
+
+<h1>Competition Playbook 🏁</h1>
+<div class="sub">K230D YOLOv8n ・ k230-final-train フォルダ内で実行 ・ venv 不要(Docker)</div>
+
+<h2>準備</h2>
+<div class="step"><div class="n">1</div><div class="t">Docker Desktop を起動（1〜3分）</div></div>
+<div class="step"><div class="n">2</div><div class="t">アノテーション済みエクスポート（<code>images/ labels/ classes.txt</code>）を <code>raw_export/</code> に入れる。<b>新しい写真を追加する時もここに置くだけ</b>（古いのと自動で結合）。</div></div>
+<div class="step"><div class="n">3</div><div class="t"><b>PTQ校正画像</b>（推奨）：当日 K230D カメラで撮った写真を <code>datasets/&lt;Name&gt;/calibration/</code> に入れる。<b>16〜30枚</b>、各クラス(Dead/Live/Point)・距離・明るさをばらけさせる。<b>ラベル不要</b>。自動で校正に使われ、<b>学習には影響しない</b>。無ければ val 画像で代用。</div></div>
+
+<h2>実行（これ1行）</h2>
+<div class="hero">
+<div class="cmd"><button class="copy">copy</button><pre>.\competition_run.ps1 -Name victim_v2 -Epochs 100</pre></div>
+</div>
+<div class="t" style="font-size:13px;color:#94a3b8">データ整理 → 学習 → ONNX → kmodel(ベスト設定) → レポート → 配布バンドル、まで全自動（約20分）。</div>
+
+<h2>分けて回すなら</h2>
+<table>
+<tr><td>.\add_data.ps1 -Name victim_v2</td><td>raw_export/ をまとめて train/val に分割（クラス一致を確認）</td></tr>
+<tr><td>.\train_model.ps1 -Name victim_v2</td><td>YOLOv8n 学習 + ONNX 書き出し</td></tr>
+<tr><td>.\convert_model.ps1 -Name victim_v2</td><td>ONNX → kmodel（ベスト）+ レポート + deploy</td></tr>
+</table>
+
+<h2>よく使うオプション</h2>
+<table>
+<tr><td>-Epochs 150</td><td>学習エポックを増やす（精度↑、時間↑）</td></tr>
+<tr><td>-SkipTrain</td><td>学習し直さず、既存モデルで変換だけ</td></tr>
+<tr><td>-Search</td><td>量子化5設定を総当りして最良を選ぶ（約60分）</td></tr>
+</table>
+
+<h2>できるもの</h2>
+<div class="out">
+<b>deploy/best.kmodel</b> ＝ 配布する最良モデル<br>
+<b>report.html</b> ＝ 学習 mAP・量子化結果のレポート<br>
+<b>deploy/</b> ＝ best.kmodel + labels.txt + deploy_config.json + deploy_canmv_yolov8.py
+</div>
+
+<h2>実機へ</h2>
+<div class="step"><div class="n">1</div><div class="t"><code>deploy/</code> の4ファイルを K230D の SD カード <code>/data/k230-final-train/</code> にコピー（+ <code>test.jpg</code> も）</div></div>
+<div class="step"><div class="n">2</div><div class="t">CanMV REPL で：<code>import deploy_canmv_yolov8; deploy_canmv_yolov8.detection()</code></div></div>
+
+<div class="warn">⚠ kmodel は nncase 2.11 製。実機の CanMV ランタイムが 2.11 互換か確認してから本番投入すること。</div>
+
+<footer>詳細版（中身の説明・シミュレーション評価）→ <code>playbook_full.html</code> ／ README.md</footer>
+
+<script>
+document.querySelectorAll('.copy').forEach(function(b){b.addEventListener('click',function(){
+ navigator.clipboard.writeText(b.parentElement.querySelector('pre').textContent).then(function(){
+  b.textContent='copied';b.classList.add('ok');setTimeout(function(){b.textContent='copy';b.classList.remove('ok')},1500)})})});
+</script>
+</body></html>

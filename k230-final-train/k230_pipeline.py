@@ -75,8 +75,10 @@ PTQ_OPTIONS = {
     5: ("Kld",    "int16", "uint8"),
 }
 
-# The sweep tried by convert-search (3-4 models): the sensible YOLOv8n set.
-DEFAULT_SEARCH_OPTIONS = [0, 3, 1, 4]
+# The sweep tried by convert-search: the 5 best-performing configs (the 4 uint8
+# -activation options + Kld int16-weight). int16-ACTIVATION option 2 is dropped
+# (heaviest, no benefit over these). Override with --options.
+DEFAULT_SEARCH_OPTIONS = [0, 3, 1, 4, 5]
 
 IMAGE_EXTS = (".jpg", ".jpeg", ".png", ".bmp", ".webp")
 
@@ -154,14 +156,35 @@ def cmd_organize(args):
     if not (0.0 < args.train_ratio < 1.0):
         raise SystemExit("--train-ratio must be between 0 and 1 (exclusive).")
 
+    # CLASS-MATCH CHECK: every export's classes.txt must list the same classes
+    # in the same order. Class IDs in YOLO labels are positional, so combining
+    # exports with different orderings would silently mislabel everything.
+    def _read_classes(p):
+        f = p / "classes.txt"
+        if not f.is_file():
+            return None
+        return [ln.strip() for ln in f.read_text(encoding="utf-8").splitlines() if ln.strip()]
+
+    class_lists = {src.name: _read_classes(src) for src in exports}
+    present = {name: cl for name, cl in class_lists.items() if cl is not None}
+    if len(exports) > 1 and len(present) > 1:
+        uniq = {tuple(cl) for cl in present.values()}
+        if len(uniq) > 1:
+            msg = "\n".join(f"    {name}: {cl}" for name, cl in present.items())
+            raise SystemExit(
+                "CLASS MISMATCH across exports — refusing to combine "
+                "(class IDs are positional; mixing would mislabel):\n" + msg +
+                "\n  Re-export with a consistent class list, or organize them "
+                "into separate datasets with different --out names.")
+        print(f"[organize] class-match OK across {len(present)} export(s): {next(iter(present.values()))}")
+
     # pair images with labels across ALL export folders; dedup by filename stem
     # (a later export re-supplying the same image/label overrides the earlier).
     pairs_by_stem = {}
-    classes_src = None
+    classes_src = next((src / "classes.txt" for src in exports
+                        if (src / "classes.txt").is_file()), None)
     for src in exports:
         img_dir, lbl_dir = src / "images", src / "labels"
-        if classes_src is None and (src / "classes.txt").is_file():
-            classes_src = src / "classes.txt"
         for img_path in sorted(img_dir.iterdir()):
             if not img_path.is_file() or img_path.suffix.lower() not in IMAGE_EXTS:
                 continue
@@ -175,8 +198,13 @@ def cmd_organize(args):
         raise SystemExit("No image+label pairs found; aborting.")
     print(f"[organize] {len(pairs)} unique image+label pairs total")
 
-    if args.force and out.exists():
-        shutil.rmtree(out)
+    # --force regenerates train/ and val/ only. Anything else under the dataset
+    # dir (notably a hand-made calibration/ folder of competition-day photos) is
+    # PRESERVED so re-running add_data never wipes your calibration set.
+    if args.force:
+        for sub in ("train", "val"):
+            if (out / sub).exists():
+                shutil.rmtree(out / sub)
 
     rng = random.Random(args.seed)
     rng.shuffle(pairs)
@@ -373,7 +401,22 @@ def cmd_export(args):
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
     print(f"\nNext: convert-all  \"{onnx_out}\"  --calib-data <val/images>")
+
+    # torch 2.1 + onnx/onnxruntime can segfault ("double free in tcache") during
+    # interpreter teardown AFTER the ONNX is already saved. The file is complete
+    # at this point, so exit hard with code 0 to skip the buggy C++ destructors
+    # and keep the one-command flow's exit status clean.
+    if getattr(_export_clean_exit, "enabled", True):
+        sys.stdout.flush(); sys.stderr.flush()
+        os._exit(0)
     return onnx_out
+
+
+def _export_clean_exit():
+    pass
+
+
+_export_clean_exit.enabled = True
 
 
 # ============================================================================
@@ -1161,7 +1204,7 @@ def api_organize(out, src=None, train_ratio=0.85, seed=42, force=True):
                             train_ratio=train_ratio, seed=seed, force=force))
 
 
-def api_convert_search(onnx, calib_data, eval_data=None, num_classes=3,
+def api_convert_search(onnx, calib_data, eval_data=None, num_classes=None,
                        img_width=640, img_height=480, num_samples=8,
                        eval_limit=20, conf=0.05, options=None, target="k230"):
     return cmd_convert_search(_ns(
@@ -1171,7 +1214,7 @@ def api_convert_search(onnx, calib_data, eval_data=None, num_classes=3,
         options=options, target=target, no_bootstrap=True))
 
 
-def api_convert_preset(onnx, calib_data, eval_data=None, num_classes=3,
+def api_convert_preset(onnx, calib_data, eval_data=None, num_classes=None,
                        img_width=640, img_height=480, num_samples=8,
                        eval_limit=20, conf=0.05, target="k230"):
     return cmd_convert_preset(_ns(

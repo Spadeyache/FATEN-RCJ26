@@ -1,0 +1,137 @@
+<!doctype html><html lang="ja"><head><meta charset="utf-8">
+<title>Competition Playbook 詳細版 (with simulation) — K230D YOLOv8n</title>
+<style>
+ body{font-family:'Segoe UI',Meiryo,system-ui,sans-serif;margin:0;background:#0f172a;color:#e2e8f0;line-height:1.6}
+ .wrap{max-width:920px;margin:0 auto;padding:32px}
+ h1{font-size:24px;margin:0 0 4px} h2{font-size:17px;margin:26px 0 6px;color:#7dd3fc}
+ .sub{color:#94a3b8;font-size:13px;margin-bottom:18px}
+ .step{background:#1e293b;border:1px solid #334155;border-radius:12px;padding:16px 18px;margin:14px 0}
+ .step h3{margin:0 0 4px;font-size:15px;color:#e2e8f0}
+ .step .what{color:#cbd5e1;font-size:13px;margin:6px 0}
+ .step .cd{color:#fca5a5;font-size:12px;margin:6px 0;border-left:3px solid #475569;padding-left:8px}
+ .step .cd b{color:#fcd34d}
+ .num{display:inline-block;width:22px;height:22px;line-height:22px;text-align:center;background:#0ea5e9;color:#001;border-radius:50%;font-size:12px;font-weight:700;margin-right:8px}
+ .cmd{position:relative;background:#0b1220;border:1px solid #1e293b;border-radius:8px;margin:8px 0 0}
+ pre{margin:0;padding:12px 14px;overflow-x:auto;font-family:Consolas,monospace;font-size:12.5px;color:#a7f3d0;white-space:pre-wrap;word-break:break-word}
+ .copy{position:absolute;top:8px;right:8px;background:#1e293b;color:#94a3b8;border:1px solid #334155;border-radius:6px;font-size:11px;padding:3px 9px;cursor:pointer}
+ .copy:hover{background:#334155;color:#e2e8f0} .copy.ok{color:#86efac;border-color:#16a34a}
+ .hero{background:#082f49;border:1px solid #0ea5e9}
+ .pill{display:inline-block;background:#0ea5e9;color:#001;border-radius:999px;padding:2px 10px;font-size:11px;font-weight:600;margin-left:6px}
+ .sim{border-color:#7dd3fc}
+ .warn{background:#3b2207;border-left:3px solid #f59e0b;border-radius:6px;padding:10px 14px;font-size:13px;color:#fde68a;margin:10px 0}
+ code{background:#0b1220;padding:1px 6px;border-radius:4px;color:#fde68a;font-size:12.5px}
+ footer{color:#64748b;font-size:12px;margin-top:30px}
+</style></head><body><div class="wrap">
+
+<h1>Competition Playbook — 詳細版 (with simulation) 🔬</h1>
+<div class="sub">各ステップの中身・コンテナ(CD)とのやり取り・量子化シミュレーションでの評価まで。<br>
+ふだんはシンプル版 <code>playbook_competition.html</code> で十分。すべて <code>k230-final-train\</code> 内で実行。</div>
+
+<div class="step hero">
+ <h3><span class="num">★</span>ワンコマンド<span class="pill">ふだんはこれ</span></h3>
+ <div class="what">raw_export\ にエクスポートを入れてから1行。整理→学習→export→kmodel(ベスト)→report→deploy。</div>
+ <div class="cd"><b>CD:</b> ホストで organize → <b>k230d-train</b>(GPU)で学習/export → <b>k230-nncase</b>(2.11)で変換。</div>
+ <div class="cmd"><button class="copy">copy</button><pre>.\competition_run.ps1 -Name victim_v2 -Epochs 100</pre></div>
+</div>
+
+<div class="warn">⚠ kmodel は <b>nncase 2.11</b> 製（uint8でほぼ無劣化）。実機 K230D の CanMV ランタイム SDK が 2.11 互換か確認してから本番採用すること。</div>
+
+<div class="step" style="border-color:#7dd3fc">
+ <h3>📸 PTQ 校正画像の準備（当日データ推奨）</h3>
+ <div class="what">
+ PTQ は校正画像から量子化レンジを決めるので、<b>実機が見る分布に近いほど精度が出る</b>。当日の写真で校正するのが理想。<br><br>
+ <b>何枚:</b> <b>16〜30枚</b>（既定8は最小限。多さより代表性。50枚超は効果薄）<br>
+ <b>どんな:</b> 当日のカメラ・照明・フィールドで撮影／各クラス(Dead/Live/Point)を含める／距離・角度・明るさをばらけさせる（近遠・明暗・正面斜め）／複数物体や背景だけの画像も少し／<b>ラベル不要</b><br>
+ <b>避ける:</b> 全部同じ構図、実機と全然違う画像<br>
+ <b>どこに置く:</b> <code>datasets/&lt;Name&gt;/calibration/</code> に入れるだけ → 自動で使われる（学習に影響なし・add_dataでも消えない）。優先順位は <code>-CalibDir</code> &gt; <code>calibration/</code> &gt; <code>val/images</code>。
+ </div>
+ <div class="cmd"><button class="copy">copy</button><pre># 明示指定したい場合:
+.\convert_model.ps1 -Name victim_v2 -CalibDir datasets/victim_v2/calibration -CalibSamples 24</pre></div>
+</div>
+
+<h2>個別ステップ（中身を理解したい時）</h2>
+
+<div class="step">
+ <h3><span class="num">0</span>Docker Desktop を起動</h3>
+ <div class="what"><code>docker info</code> が通ればOK（1〜3分）。</div>
+</div>
+
+<div class="step">
+ <h3><span class="num">1</span>add_data — 写真追加 + train/val 分割（クラス一致確認）</h3>
+ <div class="what">raw_export\ 内の<b>全エクスポートを結合</b>（旧+新、重複除外）。各 classes.txt が一致するか検証してから分割。</div>
+ <div class="cd"><b>CD:</b> ホストの <code>py -3</code> のみ（数秒）。中身は <code>k230_pipeline.py organize</code>。</div>
+ <div class="cmd"><button class="copy">copy</button><pre>.\add_data.ps1 -Name victim_v2</pre></div>
+</div>
+
+<div class="step">
+ <h3><span class="num">2</span>train_model — 学習 + ONNX export <span class="pill">GPU</span></h3>
+ <div class="what">datasets/victim_v2 で YOLOv8n 学習（100ep ≈ 18分, RTX3050）→ <code>runs/victim_v2/weights/best.pt</code> → <code>models/best_640x480.onnx</code>。<code>-SkipTrain</code> で学習を飛ばし export だけ。</div>
+ <div class="cd"><b>CD:</b> <b>k230d-train</b>(PyTorch+ultralytics, --gpus all)。フォルダを /workspace にマウント、終了で破棄。</div>
+ <div class="cmd"><button class="copy">copy</button><pre>.\train_model.ps1 -Name victim_v2 -Epochs 100</pre></div>
+</div>
+
+<div class="step">
+ <h3><span class="num">3</span>convert_model — ONNX → kmodel(ベスト) + report + deploy <span class="pill">nncase 2.11</span></h3>
+ <div class="what">検証済みベスト = NoClip uint8/uint8。コンパイル約15秒 + シミュレーション検証。出力 <code>deploy/best.kmodel</code> + <code>report.html</code>。</div>
+ <div class="cd"><b>CD:</b> <b>k230-nncase</b>。opencv を起動時に入れ、シミュレータが float ONNX と比較して cosine/conf_delta を表示。</div>
+ <div class="cmd"><button class="copy">copy</button><pre>.\convert_model.ps1 -Name victim_v2</pre></div>
+</div>
+
+<h2>シミュレーションで評価する 🔬 (with simulation)</h2>
+<div class="sub" style="margin:0 0 6px">kmodel をシミュレータで float ONNX と突き合わせ、量子化劣化(cosine/conf_delta)を測る。実機なしで精度を確認できる。</div>
+
+<div class="step sim">
+ <h3><span class="num">A</span>量子化5設定を総当り（30枚で評価）</h3>
+ <div class="what">5設定（0=NoClip u8/u8, 3=Kld u8/u8, 1=NoClip u8/i16, 4=Kld u8/i16, 5=Kld i16/u8）を作り、各<b>30枚</b>で cosine・conf_delta・サイズを比較。基準「cosine≥0.999 → 最小サイズ → conf_delta」で最良を <code>best_model/searched/</code> に保存。約60〜75分。</div>
+ <div class="cd"><b>CD:</b> <b>k230-nncase</b>。5回コンパイル＋シミュレーション。各結果は <code>output/search/*/sim.json</code>。</div>
+ <div class="cmd"><button class="copy">copy</button><pre>.\convert_model.ps1 -Name victim_v2 -Search -EvalLimit 30</pre></div>
+</div>
+
+<div class="step sim">
+ <h3><span class="num">B</span>ランキング基準を変えて再選定（再コンパイル不要・数秒）</h3>
+ <div class="what">既存の sweep 結果(sim.json)から winner を選び直すだけ。基準を変えた時に高速。</div>
+ <div class="cd"><b>CD:</b> ホストの <code>py -3</code> のみ（JSON を読むだけ・nncase 不要）。</div>
+ <div class="cmd"><button class="copy">copy</button><pre>py -3 k230_pipeline.py rerank --onnx models/best_640x480.onnx --img-width 640 --img-height 480</pre></div>
+</div>
+
+<div class="step sim">
+ <h3><span class="num">C</span>1枚だけ手早く検証（プリセット, 少枚数）</h3>
+ <div class="what">ベスト設定を少ない枚数で素早くシミュレーション確認したい時。<code>-EvalLimit</code> を下げる。</div>
+ <div class="cd"><b>CD:</b> <b>k230-nncase</b>。コンパイル15秒 + 数枚のシミュレーション。</div>
+ <div class="cmd"><button class="copy">copy</button><pre>.\convert_model.ps1 -Name victim_v2 -EvalLimit 3</pre></div>
+</div>
+
+<div class="step sim">
+ <h3><span class="num">D</span>複数の学習済みモデルを比較</h3>
+ <div class="what"><code>-Name</code> を変えて回し、各 <code>report.html</code> を別名保存して mAP・kmodel cosine・サイズで比較。</div>
+ <div class="cd"><b>CD:</b> 各回でワンコマンド。report.html は上書きされるので退避する。</div>
+ <div class="cmd"><button class="copy">copy</button><pre>.\competition_run.ps1 -Name victim_a -Epochs 80
+Copy-Item report.html report_victim_a.html
+.\competition_run.ps1 -Name victim_b -Epochs 120
+Copy-Item report.html report_victim_b.html</pre></div>
+</div>
+
+<h2>指標の読み方</h2>
+<div class="step">
+ <div class="what">
+ <b>cosine</b>（vs float ONNX, 1.0で一致）— 1に近いほど量子化劣化が小さい。2.11では全設定 ≥0.999 で飽和。<br>
+ <b>conf_delta</b>（kmodel − float の検出信頼度差）— 0に近いほど良い。Kld はやや下がる傾向。<br>
+ <b>size</b> — 実機128MBなので小さいほど良い。int16重みは約2倍。<br>
+ <b>sim ms</b> — CPUシミュレータ速度であり<b>実機KPU速度ではない</b>（速度比較は size と compile を見る）。
+ </div>
+</div>
+
+<h2>実機へデプロイ</h2>
+<div class="step">
+ <div class="what"><code>deploy/</code> の4ファイル（best.kmodel, labels.txt, deploy_config.json, deploy_canmv_yolov8.py）+ test.jpg を K230D の SD カード <code>/data/k230-final-train/</code> へ。CanMV REPL で：</div>
+ <div class="cmd"><button class="copy">copy</button><pre>import deploy_canmv_yolov8; deploy_canmv_yolov8.detection()</pre></div>
+</div>
+
+<footer>シンプル版 → playbook_competition.html ／ 設定の中身 → k230_pipeline.py の PRESET・PTQ_OPTIONS</footer>
+
+<script>
+document.querySelectorAll('.copy').forEach(function(b){b.addEventListener('click',function(){
+ navigator.clipboard.writeText(b.parentElement.querySelector('pre').textContent).then(function(){
+  b.textContent='copied';b.classList.add('ok');setTimeout(function(){b.textContent='copy';b.classList.remove('ok')},1500)})})});
+</script>
+</body></html>

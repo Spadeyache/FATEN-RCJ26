@@ -3,6 +3,35 @@
 One self-contained folder to reproduce the **verified** K230D YOLOv8n pipeline:
 dataset → train → ONNX → kmodel (two ways) → simulate → compare → deploy.
 
+## 🏁 Competition: the four commands
+
+Each step is its own one-command script (or run them all at once). Start by
+dropping your annotated export folder(s) (each: `images/ labels/ classes.txt`)
+into `raw_export/`.
+
+```powershell
+# everything at once:
+.\competition_run.ps1  -Name victim_v2 -Epochs 100
+
+# ...or step by step (same scripts the all-in-one composes):
+.\add_data.ps1      -Name victim_v2          # raw_export/ -> datasets/  (+class-match check)
+.\train_model.ps1   -Name victim_v2 -Epochs 100   # train YOLOv8n + export ONNX   [GPU]
+.\convert_model.ps1 -Name victim_v2          # ONNX -> kmodel (best) + report + deploy
+```
+
+| Script | Does | Talks to |
+|---|---|---|
+| `add_data.ps1` | combine every export in `raw_export/` (old+new, deduped), split train/val, **verify classes match** | host (py) |
+| `train_model.ps1` | train YOLOv8n on `datasets/<Name>` + export ONNX (`-SkipTrain` to reuse) | `k230d-train` (GPU) |
+| `convert_model.ps1` | ONNX → kmodel (best config) + report + deploy (`-Search` to sweep 5 PTQ configs) | `k230-nncase` (2.11) |
+| `competition_run.ps1` | runs the three above in order | both |
+
+`playbook_competition.html` = simple competition runbook (copy-paste commands).
+`playbook_full.html` = detailed version with the simulation/evaluation workflow.
+Open either in a browser.
+
+**Best exported model lands at `deploy/best.kmodel`** (+ the full bundle in `deploy/`).
+
 Everything lives in **`k230_pipeline.py`** (no imports from sibling projects).
 Versions are pinned to what was verified working. Preprocessing is standardized
 on **RGB direct-resize** (resize to WxH, no letterbox, uint8 [0,255], with /255
