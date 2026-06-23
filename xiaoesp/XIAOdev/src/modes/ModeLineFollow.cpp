@@ -34,8 +34,8 @@ constexpr uint8_t BOUNDARY_GAP_FILL_Y_MAX = 60;
 // Error = 127 + signed angle * ANGLE_SCALE * side boost + bottom in-point offset * IN_PX_SCALE.
 constexpr float ARC_ANGLE_SCALE = 2.0f; //2.0 
 constexpr float ARC_IN_PX_SCALE = 0.8f; // balance of front and back gain
-constexpr uint8_t ARC_SIDE_GAIN_Y = 45;  //boosts with gain in the side bellow Y : for tight turns
-constexpr float ARC_SIDE_GAIN_MULT = 1.00f; //1.8
+constexpr uint8_t ARC_SIDE_GAIN_Y = 40;  //boosts with gain in the side bellow Y : for tight turns
+constexpr float ARC_SIDE_GAIN_MULT = 1.60f; //1.8
 constexpr uint8_t TIGHT_SLOW_OUT_Y = 65;
 constexpr uint8_t SINGLE_FRONT_ROW_DY = 12;
 constexpr uint8_t SINGLE_FRONT_ROW_HALF_W = 30;
@@ -632,7 +632,7 @@ void modeLineFollowRun(camera_fb_t* fb, YacheEncodedSerial& teensy) {
     const int normalSteerOut = selectSteeringOut(lc, cls.inIndex);
     const uint16_t arcBlackCount = countArcBlackSamples();
     const bool arcBlackSaturated = arcBlackCount >= ARC_BLACK_CENTER_THRESHOLD;
-    digitalWrite(LED_BUILTIN, arcBlackSaturated ? LOW : HIGH);  // ESP32 LED active-LOW
+    // digitalWrite(LED_BUILTIN, arcBlackSaturated ? LOW : HIGH);  // ESP32 LED active-LOW
     const uint8_t silverLeft = countSilverOnColumn(fb, SILVER_COL_LEFT);
     const uint8_t silverRight = countSilverOnColumn(fb, SILVER_COL_RIGHT);
     const bool silverDetected = silverLeft > SILVER_THRESHOLD || silverRight > SILVER_THRESHOLD;
@@ -735,6 +735,7 @@ void modeLineFollowRun(camera_fb_t* fb, YacheEncodedSerial& teensy) {
     if (steerOut >= 0 && lc.crossings[steerOut].pixelY >= TIGHT_SLOW_OUT_Y) {
         xiaoFlags |= XIAO_FLAG_TIGHT_SLOW;
     }
+    digitalWrite(LED_BUILTIN, (xiaoFlags & XIAO_FLAG_TIGHT_SLOW) ? LOW : HIGH);  // ESP32 LED active-LOW
     teensy.send(XIAO_REG_FLAG, xiaoFlags);
 
     SPRINTF(SPRINT_RESULTS, "[RES]",

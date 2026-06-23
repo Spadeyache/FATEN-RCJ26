@@ -140,8 +140,9 @@ constexpr float PID_KD_SLOPE = 0.65f;
 // Binary steep-turn speed drop. When the PID correction is this large, the
 // robot slows its forward base so tight turns do not outrun the camera line.
 constexpr float STEEP_TURN_CORR_THRESHOLD = 120.0f;
-constexpr float STEEP_TURN_BASE_SPEED     = 30.0f;
+constexpr float STEEP_TURN_BASE_SPEED     = 30.0f;  
 constexpr float TIGHT_SLOW_BASE_SPEED     = 10.0f;
+constexpr float TIGHT_SLOW_REVERSE_GAIN   = 1.35f;
 
 // Flat-surface PID tuning switch. When true, the line PID ignores IMU tilt for
 // gain scheduling, gravity compensation, pitch adjustment, and rear-wheel
@@ -167,7 +168,7 @@ constexpr float ROTAXIS_DOWN_MIN  = 0.60f;  // gain: downhill-rear scale at full
 
 // --- frictionCircAdj tuning --------------------------------------------------
 constexpr float FRIC_TILT_DEG   = 8.0f;   // |pitch| or |roll| past this counts as "on a slope"
-constexpr float FRIC_SPEED_FLAT = 40.0f;  // 70 base speed on flat ground
+constexpr float FRIC_SPEED_FLAT = 60.0f;  // 70 base speed on flat ground
 constexpr float FRIC_SPEED_TILT = 40.0f;  // 55 base speed once tilted
 
 inline float rollGainFactor(float aRoll) {       // 1.0 → GRAV_GAIN_MIN as |roll| grows
@@ -294,9 +295,10 @@ void runLinePID() {
     const float ki = slope ? PID_KI_SLOPE : PID_KI_FLAT;
     const float kd = slope ? PID_KD_SLOPE : PID_KD_FLAT;
 
+    const bool tightSlow = Processing::XiaoDecode::tightSlowFlag();
     const float correction = kp * rawError + ki * integral + kd * derivative;
     const bool  steepTurn = fabsf(correction) >= STEEP_TURN_CORR_THRESHOLD;
-    const float base = Processing::XiaoDecode::tightSlowFlag()
+    const float base = tightSlow
         ? TIGHT_SLOW_BASE_SPEED
         : (steepTurn ? STEEP_TURN_BASE_SPEED : frictionBase);
     const float pitchAdj   = linePidPitch() * IMU_PITCH_GAIN;   // + = nose up
@@ -319,6 +321,13 @@ void runLinePID() {
     fr *= rotAxisAdj(WHEEL_FR);
     bl *= rotAxisAdj(WHEEL_BL);
     br *= rotAxisAdj(WHEEL_BR);
+
+    if (tightSlow) {
+        if (fl < 0.0f) fl *= TIGHT_SLOW_REVERSE_GAIN;
+        if (fr < 0.0f) fr *= TIGHT_SLOW_REVERSE_GAIN;
+        if (bl < 0.0f) bl *= TIGHT_SLOW_REVERSE_GAIN;
+        if (br < 0.0f) br *= TIGHT_SLOW_REVERSE_GAIN;
+    }
 
     motorRaw(fl, fr, bl, br);
 
