@@ -19,6 +19,9 @@ class VictimDetector:
         self.num_classes = cfg["num_classes"]
         self.img_size = cfg["img_size"]
         self._kmodel_path = cfg["kmodel_path"]
+        self.conf_threshold = cfg.get("confidence_threshold", profile.CONF_THRESHOLD)
+        self.nms_threshold = cfg.get("nms_threshold", profile.NMS_THRESHOLD)
+        self.preprocess = cfg.get("_preprocess_mode", "letterbox")
 
         self.sensor_w = sensor.width()
         self.sensor_h = sensor.height()
@@ -33,19 +36,28 @@ class VictimDetector:
         self._ai2d = nn.ai2d()
         self._ai2d.set_dtype(nn.ai2d_format.NCHW_FMT, nn.ai2d_format.NCHW_FMT,
                              np.uint8, np.uint8)
-        self.ratio = min(self.model_w / self.sensor_w,
-                         self.model_h / self.sensor_h)
-        new_w = int(self.ratio * self.sensor_w)
-        new_h = int(self.ratio * self.sensor_h)
-        dw = (self.model_w - new_w) / 2
-        dh = (self.model_h - new_h) / 2
-        self.top = int(round(dh - 0.1))
-        bottom = int(round(dh + 0.1))
-        self.left = int(round(dw - 0.1))
-        right = int(round(dw + 0.1))
-        self._ai2d.set_pad_param(True,
-                                 [0, 0, 0, 0, self.top, bottom, self.left, right],
-                                 0, [114, 114, 114])
+        if self.preprocess == "direct":
+            self.ratio_x = self.model_w / self.sensor_w
+            self.ratio_y = self.model_h / self.sensor_h
+            self.ratio = self.ratio_x
+            self.left = 0
+            self.top = 0
+        else:
+            self.ratio = min(self.model_w / self.sensor_w,
+                             self.model_h / self.sensor_h)
+            self.ratio_x = self.ratio
+            self.ratio_y = self.ratio
+            new_w = int(self.ratio * self.sensor_w)
+            new_h = int(self.ratio * self.sensor_h)
+            dw = (self.model_w - new_w) / 2
+            dh = (self.model_h - new_h) / 2
+            self.top = int(round(dh - 0.1))
+            bottom = int(round(dh + 0.1))
+            self.left = int(round(dw - 0.1))
+            right = int(round(dw + 0.1))
+            self._ai2d.set_pad_param(True,
+                                     [0, 0, 0, 0, self.top, bottom, self.left, right],
+                                     0, [114, 114, 114])
         self._ai2d.set_resize_param(True, nn.interp_method.tf_bilinear,
                                     nn.interp_mode.half_pixel)
         self._ai2d_builder = self._ai2d.build(
@@ -77,14 +89,17 @@ class VictimDetector:
             return []
 
         boxes = yd.decode_anchorfree(
-            results[0], self.num_classes, profile.CONF_THRESHOLD,
+            results[0], self.num_classes, self.conf_threshold,
             num_anchors=profile.NUM_ANCHORS_640x480)
-        boxes = yd.nms_class_wise(boxes, profile.NMS_THRESHOLD)
+        boxes = yd.nms_class_wise(boxes, self.nms_threshold)
 
         det = []
         for b in boxes:
-            xyxy = yd.unletterbox_box(b[2:6], self.ratio, self.left, self.top,
-                                      self.sensor_w, self.sensor_h)
+            if self.preprocess == "direct":
+                xyxy = self._unresize_box(b[2:6])
+            else:
+                xyxy = yd.unletterbox_box(b[2:6], self.ratio, self.left, self.top,
+                                          self.sensor_w, self.sensor_h)
             det.append([b[0], b[1], xyxy[0], xyxy[1], xyxy[2], xyxy[3]])
         return det
 
@@ -112,12 +127,42 @@ class VictimDetector:
                 "model_type": profile.DEFAULT_MODEL_TYPE,
             }
         cfg["kmodel_path"] = VictimDetector._resolve_kmodel_path(cfg["kmodel_path"])
+        cfg["categories"] = VictimDetector._load_labels(cfg)
+        cfg["num_classes"] = len(cfg["categories"])
+        cfg["_preprocess_mode"] = VictimDetector._preprocess_mode(cfg)
         print("detector: kmodel    :", cfg["kmodel_path"])
         print("detector: img_size  :", cfg["img_size"])
         print("detector: categories:", cfg["categories"])
+        print("detector: preprocess:", cfg["_preprocess_mode"])
+        print("detector: conf/nms  :", cfg.get("confidence_threshold", profile.CONF_THRESHOLD),
+              "/", cfg.get("nms_threshold", profile.NMS_THRESHOLD))
         if cfg.get("model_type") != "AnchorFreeDet":
             raise ValueError("detector requires model_type=AnchorFreeDet")
         return cfg
+
+    @staticmethod
+    def _load_labels(cfg):
+        try:
+            with open(paths.LABELS_PATH, "r") as f:
+                labels = []
+                for line in f:
+                    label = line.strip()
+                    if label:
+                        labels.append(label)
+            if labels:
+                return labels
+        except Exception:
+            pass
+        return cfg.get("categories", [])
+
+    @staticmethod
+    def _preprocess_mode(cfg):
+        preprocess = cfg.get("preprocess", {})
+        resize = str(preprocess.get("resize", "")).lower()
+        meta = cfg.get("_meta", {})
+        if "direct" in resize or meta.get("use_letterbox") is False:
+            return "direct"
+        return "letterbox"
 
     @staticmethod
     def _exists(path):
@@ -129,7 +174,7 @@ class VictimDetector:
 
     @staticmethod
     def _resolve_kmodel_path(configured_path):
-        candidates = [configured_path, paths.KMODEL_PATH]
+        candidates = [configured_path, paths.KMODEL_PATH, paths.MODELS_DIR + "/best.kmodel"]
         for p in paths.KMODEL_FALLBACK_PATHS:
             candidates.append(p)
 
@@ -151,6 +196,17 @@ class VictimDetector:
         VictimDetector._print_dir_hint("/sdcard")
         VictimDetector._print_dir_hint("/sdcard/data/models")
         return configured_path
+
+    def _unresize_box(self, box_xyxy):
+        x1 = box_xyxy[0] / self.ratio_x
+        y1 = box_xyxy[1] / self.ratio_y
+        x2 = box_xyxy[2] / self.ratio_x
+        y2 = box_xyxy[3] / self.ratio_y
+        if x1 < 0: x1 = 0.0
+        if y1 < 0: y1 = 0.0
+        if x2 > self.sensor_w: x2 = float(self.sensor_w)
+        if y2 > self.sensor_h: y2 = float(self.sensor_h)
+        return [x1, y1, x2, y2]
 
     @staticmethod
     def _print_dir_hint(path):

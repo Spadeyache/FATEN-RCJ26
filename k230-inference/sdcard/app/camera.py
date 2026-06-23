@@ -69,6 +69,13 @@ def _load_calibration():
         return {}
 
 
+def _camera_pixformat():
+    pixformat = str(getattr(config, "CAMERA_PIXFORMAT", "GRAYSCALE")).upper()
+    if pixformat == "RGB888":
+        return Sensor.RGB888, "RGB888"
+    return Sensor.GRAYSCALE, "GRAYSCALE"
+
+
 def _readback(sensor):
     """Print actually-applied sensor state so we see what stuck."""
     print("--- sensor readback ---")
@@ -110,7 +117,8 @@ def apply_config(sensor):
     vflip       = cal.get("vflip",       config.VFLIP)
 
     sensor.set_framesize(width=config.WIDTH, height=config.HEIGHT, chn=CAM_CHN_ID_0)
-    sensor.set_pixformat(Sensor.GRAYSCALE, chn=CAM_CHN_ID_0)
+    pixformat, pixformat_name = _camera_pixformat()
+    sensor.set_pixformat(pixformat, chn=CAM_CHN_ID_0)
 
     _try(sensor, "set_hmirror", hmirror)
     _try(sensor, "set_vflip",   vflip)
@@ -123,8 +131,8 @@ def apply_config(sensor):
 
     _readback(sensor)
 
-    print("camera: requested expo={}us gain={}dB hmirror={} vflip={}".format(
-          exposure_us, gain_db, hmirror, vflip))
+    print("camera: requested expo={}us gain={}dB hmirror={} vflip={} pixformat={}".format(
+          exposure_us, gain_db, hmirror, vflip, pixformat_name))
     return sensor
 
 

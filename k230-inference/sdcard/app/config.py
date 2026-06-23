@@ -7,8 +7,9 @@
 #   /sdcard/app/{camera,detector,robot_io,config}.py
 #   /sdcard/customLib/yolov8_decode.py
 #
-#   /data/models/victim.kmodel
-#   /data/models/deploy_config.json     (kmodel_path = "victim.kmodel")
+#   /data/models/<model>.kmodel
+#   /data/models/deploy_config.json     (kmodel_path = "<model>.kmodel")
+#   /data/models/labels.txt             (optional; one label per line)
 #   /data/calibration/camera.json       (optional camera overrides)
 #   /data/images/                       (button-press captures)
 #   /data/logs/                         (reserved)
@@ -18,6 +19,7 @@
 # ============================================================================
 MODELS_DIR         = "/data/models"
 DEPLOY_CONFIG_PATH = MODELS_DIR + "/deploy_config.json"
+LABELS_PATH        = MODELS_DIR + "/labels.txt"
 KMODEL_DEFAULT     = MODELS_DIR + "/victim.kmodel"   # used only if deploy_config absent
 
 CAPTURE_DIR        = "/data/captures"
@@ -30,6 +32,7 @@ CAMERA_CALIB_PATH  = "/data/calibration/camera.json"
 # ============================================================================
 WIDTH              = 640
 HEIGHT             = 480
+CAMERA_PIXFORMAT   = "GRAYSCALE"  # GRAYSCALE is much faster than RGB888 here.
 HMIRROR            = False
 VFLIP              = False
 
@@ -80,6 +83,7 @@ STATUS_COLOR_FOUND = (0, 255, 0)     # green: at least one victim
 # ============================================================================
 SHOW_DISPLAY       = True
 DEBUG_EVERY        = 30
+PROFILE_TIMING     = False
 SETTLE_MS          = 200
 COLOR_PALETTE      = [(220, 20, 60), (119, 11, 32),
                       (0,   0, 142), (0,   0, 230)]

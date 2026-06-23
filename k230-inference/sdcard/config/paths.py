@@ -13,12 +13,16 @@ CUSTOM_LIB_DIR = SDCARD_ROOT + "/customLib"
 MODELS_DIR = DATA_ROOT + "/models"
 KMODEL_PATH = MODELS_DIR + "/victim.kmodel"
 DEPLOY_CONFIG_PATH = MODELS_DIR + "/deploy_config.json"
+LABELS_PATH = MODELS_DIR + "/labels.txt"
 
 # Some CanMV file browsers expose "data" under the SD card root even when the
 # intended on-chip layout is /data. The detector probes these as fallbacks.
 KMODEL_FALLBACK_PATHS = [
+    MODELS_DIR + "/best.kmodel",
     "/sdcard/data/models/victim.kmodel",
+    "/sdcard/data/models/best.kmodel",
     "/sdcard/models/victim.kmodel",
+    "/sdcard/models/best.kmodel",
 ]
 
 LOG_DIR = DATA_ROOT + "/logs"
