@@ -13,17 +13,22 @@ namespace {
 constexpr int ARC_MAX_SAMPLES = 340;
 
 // Mode 0 black-line ROI:
-//   top arc passes through (80,5), (25,35), (135,35)
-//   bottom line is y=65, x=(25+inset)..(135-inset)
+//   top arc passes through (80,5), (25,35), (135,35).
+//   Tilted sides start from inner shelf points to avoid the LED glare edge.
 constexpr uint8_t ARC_TOP_X = 80;
 constexpr uint8_t ARC_TOP_Y = 5;
 constexpr uint8_t ARC_LEFT_X = 25;
 constexpr uint8_t ARC_RIGHT_X = 135;
+constexpr uint8_t ARC_INNER_LEFT_X = 35;
+constexpr uint8_t ARC_INNER_RIGHT_X = 125;
 constexpr uint8_t ARC_SIDE_Y = 35;
 constexpr uint8_t ARC_BOTTOM_Y = 85; //65 i might need to change the IN_PX gain
 constexpr uint8_t ARC_BOTTOM_LEFT_X = 40;
 constexpr uint8_t ARC_BOTTOM_RIGHT_X = 120;
 constexpr uint8_t ARC_SAMPLE_STEP = 1;
+constexpr uint8_t BOUNDARY_BLACK_NEIGHBOR_RADIUS = 2;
+constexpr uint8_t BOUNDARY_BLACK_GAP_FILL = 5;
+constexpr uint8_t BOUNDARY_GAP_FILL_Y_MAX = 60;
 
 // Error = 127 + signed angle * ANGLE_SCALE * side boost + bottom in-point offset * IN_PX_SCALE.
 constexpr float ARC_ANGLE_SCALE = 2.0f; //2.0 
@@ -118,6 +123,71 @@ void addSample(int x, int y, uint8_t edge) {
     s_sampleCount++;
 }
 
+bool isBlackPixelAt(camera_fb_t* fb, int x, int y) {
+    if (!fb || !fb->buf) return false;
+    if (x < 0 || x >= fb->width || y < 0 || y >= fb->height) return false;
+
+    uint8_t r, g, b;
+    rgb565To888(unpackRGB565(fb->buf, y * fb->width + x), r, g, b);
+    rgb888Calibration(r, g, b);
+    return rgbToGray(r, g, b) <= BLACK_GRAY_MAX;
+}
+
+bool neighborhoodBlack(camera_fb_t* fb, uint8_t x, uint8_t y) {
+    const int r = BOUNDARY_BLACK_NEIGHBOR_RADIUS;
+    return isBlackPixelAt(fb, x, y) ||
+           isBlackPixelAt(fb, (int)x - r, y) ||
+           isBlackPixelAt(fb, (int)x + r, y) ||
+           isBlackPixelAt(fb, x, (int)y - r) ||
+           isBlackPixelAt(fb, x, (int)y + r) ||
+           isBlackPixelAt(fb, (int)x - r, (int)y - r) ||
+           isBlackPixelAt(fb, (int)x + r, (int)y - r) ||
+           isBlackPixelAt(fb, (int)x - r, (int)y + r) ||
+           isBlackPixelAt(fb, (int)x + r, (int)y + r);
+}
+
+bool boundarySampleBlack(camera_fb_t* fb, uint8_t x, uint8_t y) {
+    return neighborhoodBlack(fb, x, y);
+}
+
+bool gapFillAllowedAt(int idx) {
+    return s_edge[idx] != LC_EDGE_BOTTOM && s_py[idx] < BOUNDARY_GAP_FILL_Y_MAX;
+}
+
+void closeBoundaryBlackGaps() {
+    const int P = s_sampleCount;
+    if (P <= 0) return;
+
+    uint8_t fill[ARC_MAX_SAMPLES] = {};
+    for (int i = 0; i < P; i++) {
+        if (s_black[i] || !gapFillAllowedAt(i)) continue;
+
+        for (int gap = 1; gap <= BOUNDARY_BLACK_GAP_FILL; gap++) {
+            bool allGap = true;
+            for (int k = 0; k < gap; k++) {
+                const int idx = (i + k) % P;
+                if (s_black[idx] || !gapFillAllowedAt(idx)) {
+                    allGap = false;
+                    break;
+                }
+            }
+            if (!allGap) break;
+
+            const int before = (i - 1 + P) % P;
+            const int after = (i + gap) % P;
+            if (gapFillAllowedAt(before) && gapFillAllowedAt(after) &&
+                s_black[before] && s_black[after]) {
+                for (int k = 0; k < gap; k++) fill[(i + k) % P] = 1;
+                break;
+            }
+        }
+    }
+
+    for (int i = 0; i < P; i++) {
+        if (fill[i]) s_black[i] = 1;
+    }
+}
+
 void buildArcGeometry() {
     if (s_geometryReady) return;
     s_sampleCount = 0;
@@ -130,15 +200,19 @@ void buildArcGeometry() {
     const float cy = (sideY * sideY - topY * topY + dx * dx) / (2.0f * (sideY - topY));
     const float r = cy - topY;
 
-    // Closed loop order mirrors LineCount: bottom -> right side -> top arc -> left side.
+    // Closed loop order: bottom -> right tilted side -> right outward shelf ->
+    // top arc -> left inward shelf -> left tilted side.
     for (int x = ARC_BOTTOM_LEFT_X; x <= ARC_BOTTOM_RIGHT_X; x += ARC_SAMPLE_STEP) {
         addSample(x, ARC_BOTTOM_Y, LC_EDGE_BOTTOM);
     }
     for (int y = ARC_BOTTOM_Y - ARC_SAMPLE_STEP; y >= ARC_SIDE_Y; y -= ARC_SAMPLE_STEP) {
         const int dy = ARC_BOTTOM_Y - y;
         const int span = ARC_BOTTOM_Y - ARC_SIDE_Y;
-        const int x = ARC_BOTTOM_RIGHT_X + ((ARC_RIGHT_X - ARC_BOTTOM_RIGHT_X) * dy + span / 2) / span;
+        const int x = ARC_BOTTOM_RIGHT_X + ((ARC_INNER_RIGHT_X - ARC_BOTTOM_RIGHT_X) * dy + span / 2) / span;
         addSample(x, y, LC_EDGE_RIGHT);
+    }
+    for (int x = ARC_INNER_RIGHT_X + ARC_SAMPLE_STEP; x <= ARC_RIGHT_X; x += ARC_SAMPLE_STEP) {
+        addSample(x, ARC_SIDE_Y, LC_EDGE_TOP);
     }
     for (int x = ARC_RIGHT_X - ARC_SAMPLE_STEP; x >= ARC_LEFT_X; x -= ARC_SAMPLE_STEP) {
         const float xdx = (float)x - cx;
@@ -146,10 +220,13 @@ void buildArcGeometry() {
         const int y = (inside > 0.0f) ? (int)(cy - sqrtf(inside) + 0.5f) : ARC_SIDE_Y;
         addSample(x, y, LC_EDGE_TOP);
     }
+    for (int x = ARC_LEFT_X + ARC_SAMPLE_STEP; x <= ARC_INNER_LEFT_X; x += ARC_SAMPLE_STEP) {
+        addSample(x, ARC_SIDE_Y, LC_EDGE_TOP);
+    }
     for (int y = ARC_SIDE_Y + ARC_SAMPLE_STEP; y <= ARC_BOTTOM_Y - ARC_SAMPLE_STEP; y += ARC_SAMPLE_STEP) {
         const int dy = y - ARC_SIDE_Y;
         const int span = ARC_BOTTOM_Y - ARC_SIDE_Y;
-        const int x = ARC_LEFT_X + ((ARC_BOTTOM_LEFT_X - ARC_LEFT_X) * dy + span / 2) / span;
+        const int x = ARC_INNER_LEFT_X + ((ARC_BOTTOM_LEFT_X - ARC_INNER_LEFT_X) * dy + span / 2) / span;
         addSample(x, y, LC_EDGE_LEFT);
     }
 
@@ -158,9 +235,9 @@ void buildArcGeometry() {
 
 void sampleArcLoop(camera_fb_t* fb) {
     for (int i = 0; i < s_sampleCount; i++) {
-        cameraData d = updateRawGrayHSV(fb, s_px[i], s_py[i]);
-        s_black[i] = isBlack(d) ? 1 : 0;
+        s_black[i] = boundarySampleBlack(fb, s_px[i], s_py[i]) ? 1 : 0;
     }
+    closeBoundaryBlackGaps();
 }
 
 uint16_t countArcBlackSamples() {
@@ -431,9 +508,7 @@ void tryStartCurveCommit(const LineCounts& lc, const LineClass& cls) {
     const int outI = singleOut(lc, cls.inIndex);
     if (outI < 0) return;
     const Crossing& o = lc.crossings[outI];
-    const bool sideBoost = (o.edge == LC_EDGE_LEFT || o.edge == LC_EDGE_RIGHT) &&
-                           o.pixelY >= ARC_SIDE_GAIN_Y;
-    if (!sideBoost) return;
+    if (o.pixelY < ARC_SIDE_GAIN_Y) return;
     s_curveActive = true;
     s_curveLockPos = o.pos;
     s_curveCalm = 0;
@@ -588,8 +663,9 @@ void modeLineFollowRun(camera_fb_t* fb, YacheEncodedSerial& teensy) {
     updateCommitSettle(cls, lc.count);
     updateCurveRelease(fresh, s_lastAngle, steerOut);
 
+    const bool viewerCommitActive = s_commitActive || s_curveActive;
     xs_storeLineDebug(lc, cls, steerOut, errByte, s_lastAngle);
-    xs_storeLineSteer(steerOut, s_commitActive, s_commitLocked, s_commitSettle, greenCmd,
+    xs_storeLineSteer(steerOut, viewerCommitActive, s_commitLocked, s_commitSettle, greenCmd,
                       arcBlackCount, arcBlackSaturated);
     // Viewer-only sensor state. Silver and green write each side independently;
     // red, gap/no-line and plain line write both sides at their own priority.
@@ -626,4 +702,3 @@ void modeLineFollowRun(camera_fb_t* fb, YacheEncodedSerial& teensy) {
         gapDetected ? 1 : 0, intersectionSaturated ? 1 : 0, arcBlackSaturated ? 1 : 0, greenLeft, greenRight,
         rawGreen, greenCmd, s_commitActive ? 1 : 0, s_curveActive ? 1 : 0);
 }
-

@@ -988,11 +988,8 @@ if (!navigator.serial) {
 //  MARKERS
 // ═════════════════════════════════════════════════════════════════════════════
 const ZONE_COLORS = ['#ff8800','#ff3366','#00ccff','#aaff00','#cc44ff'];
-let markers = [
-  { id:1, name:'Left sensor',  x:70, y:60, w:5, h:5, color:'#ff8800', visible:true },
-  { id:2, name:'Right sensor', x:90, y:60, w:5, h:5, color:'#ff8800', visible:true },
-];
-let nextId = 3, placeMode = false, placingWhich = null;
+let markers = [];
+let nextId = 1, placeMode = false, placingWhich = null;
 
 function setPlaceMode(on) {
   placeMode = on;
@@ -1080,16 +1077,14 @@ const LC_IN_COLOR  = '#2ecc71';   // green  = the line the robot is on (in)
 const LC_OUT_COLOR = '#e8840a';   // orange = branches (out)
 const LC_FO_COLOR  = LC_OUT_COLOR; // orange line = focused out used for normal steering
 const LC_COMMIT_COLOR = LC_IN_COLOR; // green outer ring = committed green-turn goal
-const LC_WIDE_OUT_COLOR = '#ff4fd8'; // magenta = out point at/over hamidashi width threshold
 
 const FALLBACK_STREAM_GUIDES = {
-  arc: [80,5, 25,35, 135,35, 40,85, 120,85],
+  arc: [80,5, 25,35, 35,35, 125,35, 135,35, 40,85, 120,85],
   silverCols: [
     { x: 33, y0: 0, y1: 70 },
     { x: 127, y0: 0, y1: 70 },
   ],
   colorLine: { x0: 25, x1: 135, y: 65 },
-  hamWidthMin: 12,
 };
 let STREAM_GUIDES = window.XIAO_STREAM_GUIDES || FALLBACK_STREAM_GUIDES;
 let colorComX = null;
@@ -1105,10 +1100,11 @@ function readCppConst(src, name) {
 function guidesFromModeSource(src) {
   const c = name => readCppConst(src, name);
   const required = [
-    'ARC_TOP_X','ARC_TOP_Y','ARC_LEFT_X','ARC_RIGHT_X','ARC_SIDE_Y',
+    'ARC_TOP_X','ARC_TOP_Y','ARC_LEFT_X','ARC_RIGHT_X',
+    'ARC_INNER_LEFT_X','ARC_INNER_RIGHT_X','ARC_SIDE_Y',
     'ARC_BOTTOM_LEFT_X','ARC_BOTTOM_Y','ARC_BOTTOM_RIGHT_X',
     'SILVER_COL_LEFT','SILVER_COL_RIGHT','SILVER_ROW_MIN','SILVER_ROW_MAX',
-    'COLOR_X_MIN','COLOR_X_MAX','COLOR_ROW','HAMIDASHI_OUT_WIDTH_MIN'
+    'COLOR_X_MIN','COLOR_X_MAX','COLOR_ROW'
   ];
   const v = Object.fromEntries(required.map(k => [k, c(k)]));
   if (Object.values(v).some(x => x === null)) return null;
@@ -1116,6 +1112,8 @@ function guidesFromModeSource(src) {
     arc: [
       v.ARC_TOP_X, v.ARC_TOP_Y,
       v.ARC_LEFT_X, v.ARC_SIDE_Y,
+      v.ARC_INNER_LEFT_X, v.ARC_SIDE_Y,
+      v.ARC_INNER_RIGHT_X, v.ARC_SIDE_Y,
       v.ARC_RIGHT_X, v.ARC_SIDE_Y,
       v.ARC_BOTTOM_LEFT_X, v.ARC_BOTTOM_Y,
       v.ARC_BOTTOM_RIGHT_X, v.ARC_BOTTOM_Y,
@@ -1125,7 +1123,6 @@ function guidesFromModeSource(src) {
       { x: v.SILVER_COL_RIGHT, y0: v.SILVER_ROW_MIN, y1: v.SILVER_ROW_MAX },
     ],
     colorLine: { x0: v.COLOR_X_MIN, x1: v.COLOR_X_MAX, y: v.COLOR_ROW },
-    hamWidthMin: v.HAMIDASHI_OUT_WIDTH_MIN,
   };
 }
 
@@ -1193,23 +1190,31 @@ function parseLC(text) {
 
 function drawArcRoi(a, held) {
   const topX = a[0], topY = a[1];
-  const leftX = a[2], leftY = a[3];
-  const rightX = a[4], rightY = a[5];
-  const bottomLeftX = a[6], bottomY = a[7];
-  const bottomRightX = a[8];
-  const dx = rightX - topX;
-  const cy = (rightY * rightY - topY * topY + dx * dx) / (2 * (rightY - topY));
+  const shelf = a.length >= 14;
+  const leftArcX = a[2], sideY = a[3];
+  const leftArcY = a[3];
+  const leftInnerX = shelf ? a[4] : a[2];
+  const rightInnerX = shelf ? a[6] : a[4];
+  const rightArcX = shelf ? a[8] : a[4];
+  const rightArcY = shelf ? a[9] : a[5];
+  const bottomLeftX = shelf ? a[10] : a[6];
+  const bottomY = shelf ? a[11] : a[7];
+  const bottomRightX = shelf ? a[12] : a[8];
+  const dx = rightArcX - topX;
+  const cy = (rightArcY * rightArcY - topY * topY + dx * dx) / (2 * (rightArcY - topY));
   const r = cy - topY;
-  const leftA = Math.atan2(leftY - cy, leftX - topX);
-  const rightA = Math.atan2(rightY - cy, rightX - topX);
+  const leftA = Math.atan2(leftArcY - cy, leftArcX - topX);
+  const rightA = Math.atan2(rightArcY - cy, rightArcX - topX);
 
   octx.strokeStyle = held ? LC_OUT_COLOR : '#5b9cf6';
   octx.lineWidth = 1;
   octx.beginPath();
   octx.moveTo(bottomLeftX + .5, bottomY + .5);
   octx.lineTo(bottomRightX + .5, bottomY + .5);
-  octx.lineTo(rightX + .5, rightY + .5);
+  octx.lineTo(rightInnerX + .5, sideY + .5);
+  if (shelf) octx.lineTo(rightArcX + .5, rightArcY + .5);
   octx.arc(topX + .5, cy + .5, r, rightA, leftA, true);
+  if (shelf) octx.lineTo(leftInnerX + .5, sideY + .5);
   octx.lineTo(bottomLeftX + .5, bottomY + .5);
   octx.stroke();
 }
@@ -1274,8 +1279,7 @@ function drawLcOverlay() {
 
   d.crossings.forEach((c, idx) => {
     const isIn = c.role === 'i';
-    const isWideOut = !isIn && c.width !== null && c.width >= STREAM_GUIDES.hamWidthMin;
-    const pointColor = isIn ? LC_IN_COLOR : (isWideOut ? LC_WIDE_OUT_COLOR : LC_OUT_COLOR);
+    const pointColor = isIn ? LC_IN_COLOR : LC_OUT_COLOR;
 
     octx.beginPath();
     octx.arc(c.x + .5, c.y + .5, 2.6, 0, Math.PI * 2);
@@ -1288,15 +1292,6 @@ function drawLcOverlay() {
       octx.beginPath();
       octx.arc(c.x + .5, c.y + .5, 5.8, 0, Math.PI * 2);
       octx.lineWidth = 1.2; octx.strokeStyle = LC_COMMIT_COLOR; octx.stroke();
-    }
-    if (isWideOut) {
-      octx.beginPath();
-      octx.arc(c.x + .5, c.y + .5, 7.2, 0, Math.PI * 2);
-      octx.lineWidth = 1.4; octx.strokeStyle = LC_WIDE_OUT_COLOR; octx.stroke();
-      octx.fillStyle = LC_WIDE_OUT_COLOR;
-      octx.font = '7px monospace';
-      octx.fillText('w' + c.width,
-        Math.min(c.x + 5, overlay.width - 42), Math.max(c.y - 5, 7));
     }
     if ((idx === steerIdx || c.role === 'i') && c.width !== null) {
       octx.fillStyle = '#d7dce8';

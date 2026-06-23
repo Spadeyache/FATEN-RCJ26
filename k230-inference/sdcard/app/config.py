@@ -32,7 +32,7 @@ CAMERA_CALIB_PATH  = "/data/calibration/camera.json"
 # ============================================================================
 WIDTH              = 640
 HEIGHT             = 480
-CAMERA_PIXFORMAT   = "GRAYSCALE"  # GRAYSCALE is much faster than RGB888 here.
+CAMERA_PIXFORMAT   = "GRAYSCALE"  # model trained on grayscale captures (maincam.py) — keep in sync
 HMIRROR            = False
 VFLIP              = False
 
@@ -83,7 +83,7 @@ STATUS_COLOR_FOUND = (0, 255, 0)     # green: at least one victim
 # ============================================================================
 SHOW_DISPLAY       = True
 DEBUG_EVERY        = 30
-PROFILE_TIMING     = False
+PROFILE_TIMING     = True
 SETTLE_MS          = 200
 COLOR_PALETTE      = [(220, 20, 60), (119, 11, 32),
                       (0,   0, 142), (0,   0, 230)]
