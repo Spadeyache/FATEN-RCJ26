@@ -1,7 +1,7 @@
 #include "ModeNoGI.h"
-#include "vision.h"
-#include "config.h"
-#include "serial_print.h"
+#include "../processing/vision.h"
+#include "../config/config.h"
+#include "../config/serial_print.h"
 
 void modeNoGIRun(camera_fb_t* fb, YacheEncodedSerial& teensy) {
     // ── 1. Scan first NOGI_SCAN_ROW_COUNT rows across the full frame width ────
@@ -24,3 +24,4 @@ void modeNoGIRun(camera_fb_t* fb, YacheEncodedSerial& teensy) {
         "mode=2 feat=%d blk=%d",
         featureId, totalBlack);
 }
+

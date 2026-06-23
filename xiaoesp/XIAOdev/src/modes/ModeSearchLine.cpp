@@ -1,12 +1,13 @@
 #include "ModeSearchLine.h"
-#include "vision.h"
-#include "config.h"
-#include "serial_print.h"
+#include "../processing/vision.h"
+#include "../config/config.h"
+#include "../config/serial_print.h"
 
 static uint8_t countSilverOnColumn(camera_fb_t* fb, uint8_t col) {
     uint8_t count = 0;
     for (uint8_t y = LF_SILVER_SIDE_ROW_MIN; y <= LF_SILVER_SIDE_ROW_MAX; y++) {
-        if (isSilver(updateRawGrayHSV(fb, col, y))) count++;
+        RawRgb px;
+        if (sampleRawRgb(fb, col, y, px) && isSilverRaw(px)) count++;
     }
     return count;
 }
@@ -42,3 +43,4 @@ void modeSearchLineRun(camera_fb_t* fb, YacheEncodedSerial& teensy) {
         "mode=1 feat=%d sil=%d sL=%d sR=%d blk=%d",
         featureId, silverCount, silverSideLeft, silverSideRight, blackCount);
 }
+

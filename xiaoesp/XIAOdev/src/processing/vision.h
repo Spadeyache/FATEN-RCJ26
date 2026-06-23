@@ -29,6 +29,12 @@ typedef struct {
     HSV hsv;
 } cameraData;
 
+struct RawRgb {
+    uint8_t r;
+    uint8_t g;
+    uint8_t b;
+};
+
 // Function declarations
 uint16_t unpackRGB565(const uint8_t* data, size_t index);
 void rgb565To888(uint16_t px, uint8_t& r8, uint8_t& g8, uint8_t& b8);
@@ -37,6 +43,7 @@ void rgb888Calibration(uint8_t& r8, uint8_t& g8, uint8_t& b8);
 uint8_t rgbToGray(uint8_t r, uint8_t g, uint8_t b);
 HSV rgb888_to_hsv(uint8_t r8, uint8_t g8, uint8_t b8);
 cameraData updateRawGrayHSV(camera_fb_t* fb, uint8_t x, uint8_t y, bool = false);
+bool sampleRawRgb(camera_fb_t* fb, uint8_t x, uint8_t y, RawRgb& out);
 
 // Fills out[x] for each column x in [xMin, xMax].
 // out must have at least (xMax + 1) elements (i.e. 160 for full-width).
@@ -45,7 +52,9 @@ void scanRow(camera_fb_t* fb, uint8_t y, uint8_t xMin, uint8_t xMax, cameraData*
 // Color classifiers — thresholds are defined in config.h
 bool isBlack(const cameraData& d);
 bool isSilver(const cameraData& d);
+bool isSilverRaw(const RawRgb& d);
 bool isGreen(const cameraData& d);
 bool isRed(const cameraData& d);
 
 #endif // VISION_H
+

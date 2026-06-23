@@ -1,17 +1,16 @@
 #include <Arduino.h>
 #include "esp_log.h"
-#include "YacheEncodedSerial.h"
-#include "camera_config.h"
-#include "vision.h"
-#include "config.h"
-#include "serial_print.h"
-#include "ModeLineFollow.h"
-#include "ModeLineFollow2.h"
-#include "ModeSearchLine.h"
-#include "ModeNoGI.h"
-#include "ModeGap.h"
-#include "LineCount.h"
-// #include "wifi_config.h"
+#include "src/drivers/yacheEncodedSerial.h"
+#include "src/drivers/camera_config.h"
+#include "src/processing/vision.h"
+#include "src/config/config.h"
+#include "src/config/serial_print.h"
+#include "src/modes/ModeLineFollow.h"
+#include "src/modes/ModeSearchLine.h"
+#include "src/modes/ModeNoGI.h"
+#include "src/modes/ModeGap.h"
+#include "src/stream/XiaoStream.h"
+// #include "src/drivers/wifi_config.h"
 
 // Stream FPS cap — limits USB interrupt pressure on Core 1.
 // Lower = less impact on loop speed. 10 is a good balance.
@@ -49,7 +48,7 @@ static uint16_t fletcher16(const uint8_t* d, size_t n) {
 }
 
 void streamTask(void* pvParameters);
-static void sendLineCountDebugOnly();
+static void sendStreamDebugOnly();
 void runCameraCalibration();   // blocking RGB calibration mode (see bottom of file)
 
 // logf — only emits in OUTPUT_LOG builds; silent in OUTPUT_STREAM
@@ -136,15 +135,13 @@ void loop() {
 
     // ── Dispatch to active mode ───────────────────────────────────────────────
     //  Line-follow mode 0 uses modeLineFollowRun(), currently the arc-ROI
-    //  black-line steering path. modeLineFollow2Run() remains available as a
-    //  fallback/default path for experiments.
+    //  black-line steering path.
     switch (mode) {
-        // case MODE_LINEFOLLOW:  modeLineFollow2Run(fb, teensy); break;
         case MODE_LINEFOLLOW:  modeLineFollowRun(fb, teensy); break;
         case MODE_SEARCH_LINE: modeSearchLineRun(fb, teensy);  break;
         case MODE_NOGI:        modeNoGIRun(fb, teensy);        break;
         case MODE_GAP:         modeGapRun(fb, teensy);         break;
-        default:               modeLineFollow2Run(fb, teensy); break;
+        default:               modeLineFollowRun(fb, teensy);  break;
     }
 
 #ifdef OUTPUT_STREAM
@@ -156,7 +153,7 @@ void loop() {
     uint8_t next = readIdx; readIdx = writeIdx; writeIdx = next;
     xSemaphoreGive(frameReady);
 #else
-    sendLineCountDebugOnly();
+    sendStreamDebugOnly();
 #endif
 #endif
 
@@ -164,21 +161,23 @@ void loop() {
 }
 
 #ifdef OUTPUT_STREAM
-static void sendLineCountDebugOnly() {
+static void sendStreamDebugOnly() {
     static uint32_t lastSent = 0;
     const uint32_t now = millis();
     if ((uint32_t)(now - lastSent) < (1000UL / STREAM_FPS)) return;
     lastSent = now;
 
-    char cfgLine[128];
     char lcLine[384];
     char rowLine[48];
-    int cfgLen = lc_formatConfig(cfgLine, sizeof(cfgLine));
-    int lcLen = lc_formatDebug(lcLine, sizeof(lcLine));
-    int rowLen = row55_formatDebug(rowLine, sizeof(rowLine));
+    char evtLine[96];
+    int lcLen = xs_formatLineDebug(lcLine, sizeof(lcLine));
+    int rowLen = xs_formatSensorRow(rowLine, sizeof(rowLine));
 
     if (serialMutex) xSemaphoreTake(serialMutex, portMAX_DELAY);
-    if (cfgLen > 0) Serial.write((const uint8_t*)cfgLine, cfgLen);
+    int evtLen = 0;
+    while ((evtLen = xs_formatEvent(evtLine, sizeof(evtLine))) > 0) {
+        Serial.write((const uint8_t*)evtLine, evtLen);
+    }
     if (lcLen > 0) Serial.write((const uint8_t*)lcLine, lcLen);
     if (rowLen > 0) Serial.write((const uint8_t*)rowLine, rowLen);
     if (serialMutex) xSemaphoreGive(serialMutex);
@@ -207,12 +206,11 @@ void streamTask(void* pvParameters) {
 
         // LineCount overlay line — ASCII, emitted under the mutex *before* the
         // frame so the viewer parses it as text (never inside the pixel bytes).
-        char cfgLine[128];
         char lcLine[384];
         char rowLine[48];
-        int  cfgLen = lc_formatConfig(cfgLine, sizeof(cfgLine));
-        int  lcLen = lc_formatDebug(lcLine, sizeof(lcLine));
-        int  rowLen = row55_formatDebug(rowLine, sizeof(rowLine));
+        char evtLine[96];
+        int  lcLen = xs_formatLineDebug(lcLine, sizeof(lcLine));
+        int  rowLen = xs_formatSensorRow(rowLine, sizeof(rowLine));
 
         // Frame integrity: send payload length + a Fletcher-16 checksum so the
         // viewer can drop torn frames and resync instead of rendering garbage.
@@ -220,7 +218,10 @@ void streamTask(void* pvParameters) {
         const uint16_t crc  = fletcher16(buf, plen);
 
         xSemaphoreTake(serialMutex, portMAX_DELAY);
-        if (cfgLen > 0) Serial.write((const uint8_t*)cfgLine, cfgLen);
+        int evtLen = 0;
+        while ((evtLen = xs_formatEvent(evtLine, sizeof(evtLine))) > 0) {
+            Serial.write((const uint8_t*)evtLine, evtLen);
+        }
         if (lcLen > 0) Serial.write((const uint8_t*)lcLine, lcLen);
         if (rowLen > 0) Serial.write((const uint8_t*)rowLine, rowLen);
         Serial.write(MAGIC_IMAGE,      4);

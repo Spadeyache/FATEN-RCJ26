@@ -1,8 +1,9 @@
 #include "ModeLineFollow.h"
-#include "vision.h"
-#include "config.h"
-#include "serial_print.h"
-#include "LineCount.h"
+#include "../processing/vision.h"
+#include "../config/config.h"
+#include "../config/serial_print.h"
+#include "../processing/LineCount.h"
+#include "../stream/XiaoStream.h"
 
 #include <Arduino.h>
 #include <math.h>
@@ -173,7 +174,8 @@ uint16_t countArcBlackSamples() {
 uint8_t countSilverOnColumn(camera_fb_t* fb, uint8_t col) {
     uint8_t count = 0;
     for (uint8_t y = SILVER_ROW_MIN; y <= SILVER_ROW_MAX; y++) {
-        if (isSilver(updateRawGrayHSV(fb, col, y))) count++;
+        RawRgb px;
+        if (sampleRawRgb(fb, col, y, px) && isSilverRaw(px)) count++;
     }
     return count;
 }
@@ -333,7 +335,8 @@ int selectSteeringOut(const LineCounts& lc, int inIndex) {
     return best;
 }
 
-void clearCommit() {
+void clearCommit(const char* reason = "clear") {
+    if (s_commitActive) xs_noteCommitEnd(reason);
     s_commitActive = false;
     s_commitSeenBranch = false;
     s_commitLocked = false;
@@ -352,6 +355,7 @@ void startCommit(bool left) {
     s_commitSeenBranch = false;
     s_commitLocked = false;
     s_commitSettle = 0;
+    xs_noteCommitStart(left);
     clearCurveCommit();   // green takes over steering; drop any auto curve lock
 }
 
@@ -375,6 +379,7 @@ int committedOut(const LineCounts& lc, int inIndex) {
         if (best >= 0) {
             s_commitLocked = true;
             s_commitLockPos = lc.crossings[best].pos;
+            xs_noteCommitLock(s_commitLeft, lc.crossings[best].pixelX, lc.crossings[best].pixelY);
         }
         return best;
     }
@@ -406,7 +411,7 @@ void updateCommitSettle(const LineClass& cls, uint8_t crossingCount) {
     }
 
     if (s_commitSeenBranch && crossingCount == 2 && cls.outCount == 1) {
-        if (++s_commitSettle >= COMMIT_SETTLE_FRAMES) clearCommit();
+        if (++s_commitSettle >= COMMIT_SETTLE_FRAMES) clearCommit("settled");
     } else {
         s_commitSettle = 0;
     }
@@ -501,7 +506,7 @@ uint8_t arcAngleError(const LineCounts& lc, int inIndex, int outIndex, float& an
 
 void modeLineFollowReset() {
     resetGreenFilter();
-    clearCommit();
+    clearCommit("reset");
     clearCurveCommit();
     lc_resetTracking();
     s_lastErr = LF_ERROR_CENTER;
@@ -510,6 +515,8 @@ void modeLineFollowReset() {
 }
 
 void modeLineFollowRun(camera_fb_t* fb, YacheEncodedSerial& teensy) {
+    xs_beginSensorFrame();
+
     LineCounts lc;
     detectArcCrossings(fb, lc);
 
@@ -537,7 +544,7 @@ void modeLineFollowRun(camera_fb_t* fb, YacheEncodedSerial& teensy) {
     } else if (!s_commitActive) {
         greenCmd = updateGreenFilter(rawGreen);
         if (greenCmd != 0) { resetGreenFilter(); clearCurveCommit(); }
-        if (greenCmd == 1) clearCommit();
+        if (greenCmd == 1) clearCommit("uturn");
         if (greenCmd == 2) startCommit(true);
         if (greenCmd == 3) startCommit(false);
     }
@@ -581,40 +588,32 @@ void modeLineFollowRun(camera_fb_t* fb, YacheEncodedSerial& teensy) {
     updateCommitSettle(cls, lc.count);
     updateCurveRelease(fresh, s_lastAngle, steerOut);
 
-    lc_storeDebug(lc, cls, steerOut, errByte, s_lastAngle);
-    lc_storeStreamGuides(ARC_TOP_X, ARC_TOP_Y,
-                         ARC_LEFT_X, ARC_SIDE_Y,
-                         ARC_RIGHT_X, ARC_SIDE_Y,
-                         ARC_BOTTOM_LEFT_X, ARC_BOTTOM_Y,
-                         ARC_BOTTOM_RIGHT_X, ARC_BOTTOM_Y,
-                         SILVER_COL_LEFT, SILVER_COL_RIGHT,
-                         SILVER_ROW_MIN, SILVER_ROW_MAX,
-                         COLOR_X_MIN, COLOR_X_MAX, COLOR_ROW,
-                         HAMIDASHI_OUT_WIDTH_MIN);
-    // Keep serial [LC] compact: do not emit arc/box geometry.
-    // lc_storeArcRoi(ARC_TOP_X, ARC_TOP_Y,
-    //                ARC_LEFT_X, ARC_SIDE_Y,
-    //                ARC_RIGHT_X, ARC_SIDE_Y,
-    //                ARC_BOTTOM_LEFT_X, ARC_BOTTOM_Y,
-    //                ARC_BOTTOM_RIGHT_X, ARC_BOTTOM_Y);
-    lc_storeSteer(steerOut, s_commitActive, s_commitLocked, s_commitSettle, greenCmd,
-                  arcBlackCount, arcBlackSaturated);
-    // Left/right are independent: silver/red/gap are whole-row, so both sides
-    // share them; green is per-window (greenLeft/greenRight from rawGreenOnColorRow).
-    // Each side is classified on its own: green if green pixels pass, else black
-    // only if black pixels are actually present, else white. So one side reading
-    // black never forces the other — a green side still shows green.
-    uint8_t leftClass, rightClass;
-    if (featureId == FEAT_SILVER)   { leftClass = rightClass = ROW55_SILVER; }
-    else if (featureId == FEAT_RED) { leftClass = rightClass = ROW55_RED; }
-    else if (gapDetected)           { leftClass = rightClass = ROW55_WHITE; }
-    else {
-        leftClass  = (greenLeft  > GREEN_PX_THRESHOLD) ? ROW55_GREEN
-                   : (blackLeft  > GREEN_PX_THRESHOLD) ? ROW55_BLACK : ROW55_WHITE;
-        rightClass = (greenRight > GREEN_PX_THRESHOLD) ? ROW55_GREEN
-                   : (blackRight > GREEN_PX_THRESHOLD) ? ROW55_BLACK : ROW55_WHITE;
+    xs_storeLineDebug(lc, cls, steerOut, errByte, s_lastAngle);
+    xs_storeLineSteer(steerOut, s_commitActive, s_commitLocked, s_commitSettle, greenCmd,
+                      arcBlackCount, arcBlackSaturated);
+    // Viewer-only sensor state. Silver and green write each side independently;
+    // red, gap/no-line and plain line write both sides at their own priority.
+    if (colorBlack > GAP_BLACK_MAX) {
+        xs_setSensorBoth(XS_BLACK, XS_PRIO_LINE);
     }
-    row55_storeDebug(leftClass, rightClass);
+    if (gapDetected) {
+        xs_setSensorBoth(XS_WHITE, XS_PRIO_GAP);
+    }
+    if (greenLeft > GREEN_PX_THRESHOLD) {
+        xs_setSensorSide(XS_LEFT, XS_GREEN, XS_PRIO_GREEN);
+    }
+    if (greenRight > GREEN_PX_THRESHOLD) {
+        xs_setSensorSide(XS_RIGHT, XS_GREEN, XS_PRIO_GREEN);
+    }
+    if (redCount > RED_THRESHOLD) {
+        xs_setSensorBoth(XS_RED, XS_PRIO_RED);
+    }
+    if (silverLeft > SILVER_THRESHOLD) {
+        xs_setSensorSide(XS_LEFT, XS_SILVER, XS_PRIO_SILVER);
+    }
+    if (silverRight > SILVER_THRESHOLD) {
+        xs_setSensorSide(XS_RIGHT, XS_SILVER, XS_PRIO_SILVER);
+    }
 
     teensy.send(XIAO_REG_FEATURE, featureId);
     teensy.send(XIAO_REG_COM, errByte);
@@ -627,3 +626,4 @@ void modeLineFollowRun(camera_fb_t* fb, YacheEncodedSerial& teensy) {
         gapDetected ? 1 : 0, intersectionSaturated ? 1 : 0, arcBlackSaturated ? 1 : 0, greenLeft, greenRight,
         rawGreen, greenCmd, s_commitActive ? 1 : 0, s_curveActive ? 1 : 0);
 }
+

@@ -1,6 +1,6 @@
 #pragma once
 #include "esp_camera.h"
-#include "YacheEncodedSerial.h"
+#include "../drivers/yacheEncodedSerial.h"
 
 // Mode 3 — Gap movement helper
 //
@@ -9,3 +9,4 @@
 //   XIAO_REG_ANGLE = 127 + signed angle in degrees from back-row COM to front-row COM
 //
 void modeGapRun(camera_fb_t* fb, YacheEncodedSerial& teensy);
+

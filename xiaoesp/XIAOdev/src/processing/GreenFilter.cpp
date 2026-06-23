@@ -1,5 +1,5 @@
 #include "GreenFilter.h"
-#include "config.h"
+#include "../config/config.h"
 
 // Rolling window of raw observations (0 none, 1 uturn, 2 left, 3 right).
 static uint8_t s_q[GF_QUEUE_SIZE];
@@ -34,3 +34,4 @@ uint8_t gf_update(uint8_t raw) {
     if (vR >= GF_VOTES) return 3;
     return 0;
 }
+

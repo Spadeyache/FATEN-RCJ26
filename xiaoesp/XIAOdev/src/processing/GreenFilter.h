@@ -16,3 +16,4 @@ void    gf_reset();                  // clear the vote window (e.g. after acting
 uint8_t gf_update(uint8_t raw);      // push one observation, return confirmed code
 
 #endif // GREENFILTER_H
+

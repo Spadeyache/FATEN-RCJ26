@@ -182,3 +182,4 @@
                                     //   gate (loop samples). Pos distinguishes edges/corners → holds the
                                     //   branch identity far better than pixelX as crossings converge.
 #define COMMIT_SINGLE_OUT_FRAMES 6   // clear commit after seeing only one out for this many frames
+

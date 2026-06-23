@@ -1,6 +1,6 @@
 #include "vision.h"
-#include "config.h"
-#include "serial_print.h"
+#include "../config/config.h"
+#include "../config/serial_print.h"
 #include <Arduino.h>
 
 // const float R_Gain = 1.0;
@@ -156,6 +156,44 @@ cameraData updateRawGrayHSV(camera_fb_t* fb, uint8_t coordX, uint8_t coordY, boo
     return res;
 }
 
+bool sampleRawRgb(camera_fb_t* fb, uint8_t coordX, uint8_t coordY, RawRgb& out) {
+    out = {0, 0, 0};
+    if (!fb || !fb->buf) return false;
+
+    const int w = fb->width;
+    const int h = fb->height;
+    const int halfW = VISION_SAMPLE_HALF_W;
+    const int halfH = VISION_SAMPLE_HALF_H;
+
+    if (coordX < halfW) return false;
+    if (coordX >= w - halfW) return false;
+    if (coordY < halfH) return false;
+    if (coordY >= h - halfH) return false;
+
+    long rSum = 0, gSum = 0, bSum = 0;
+    int count = 0;
+    for (int dy = -halfH; dy <= halfH; dy++) {
+        for (int dx = -halfW; dx <= halfW; dx++) {
+            const int x = coordX + dx;
+            const int y = coordY + dy;
+            if (x < 0 || x >= w || y < 0 || y >= h) continue;
+
+            uint8_t r, g, b;
+            rgb565To888(unpackRGB565(fb->buf, y * w + x), r, g, b);
+            rSum += r;
+            gSum += g;
+            bSum += b;
+            count++;
+        }
+    }
+
+    if (count == 0) return false;
+    out.r = (uint8_t)(rSum / count);
+    out.g = (uint8_t)(gSum / count);
+    out.b = (uint8_t)(bSum / count);
+    return true;
+}
+
 // void debugGray(camera_fb_t* fb) {
 //     int w = fb->width;
 //     int h = fb->height;
@@ -256,6 +294,10 @@ bool isSilver(const cameraData& d) {
     return (d.avgR >= SILVER_RAW_R_MIN) && (d.avgG >= SILVER_RAW_G_MIN) && (d.avgB >= SILVER_RAW_B_MIN);
 }
 
+bool isSilverRaw(const RawRgb& d) {
+    return (d.r >= SILVER_RAW_R_MIN) && (d.g >= SILVER_RAW_G_MIN) && (d.b >= SILVER_RAW_B_MIN);
+}
+
 bool isGreen(const cameraData& d) {
     return (d.hsv.h >= GREEN_HUE_MIN && d.hsv.h <= GREEN_HUE_MAX)
         && (((d.hsv.s >= GREEN_SAT_MIN) && (d.hsv.v >= GREEN_VAL_MIN))
@@ -267,3 +309,4 @@ bool isRed(const cameraData& d) {
         && (d.hsv.s >= RED_SAT_MIN)
         && (d.hsv.v >= RED_VAL_MIN);
 }
+

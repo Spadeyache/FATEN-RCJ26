@@ -1,7 +1,7 @@
 #include "ModeGap.h"
-#include "vision.h"
-#include "config.h"
-#include "serial_print.h"
+#include "../processing/vision.h"
+#include "../config/config.h"
+#include "../config/serial_print.h"
 #include <math.h>
 
 // Gap mode local tuning. Keep these here so gap behavior can be tuned without
@@ -55,3 +55,4 @@ void modeGapRun(camera_fb_t* fb, YacheEncodedSerial& teensy) {
         "mode=3 front=%d back=%d flag=%d fcom=%.1f bcom=%.1f dx=%.1f ang=%.1f enc=%d",
         frontBlack, backBlack, frontLineSeen, frontCom, backCom, dx, angleDeg, encodedAngle);
 }
+
