@@ -14,6 +14,11 @@
 // #define OUTPUT_LOG
 // #define OUTPUT_CALIBRATE// Calibration mode prints only center 10x10 raw RGB.
 
+// OUTPUT_STREAM submode:
+//   1 = send camera frames + [LC]/[ROW]/[EVT] overlay text
+//   0 = send only [LC]/[ROW]/[EVT] text, no image payload
+#define STREAM_SEND_CAMERA_IMAGES 1
+
 
 // ── Serial baud rates ────────────────────────────────────────────────────────
 #define SERIAL_DEBUG_BAUD    115200

@@ -19,15 +19,15 @@ constexpr int ARC_MAX_SAMPLES = 340;
 // Shift all line-follow ROI X coords right to correct optical center (lens/mirror bias).
 constexpr int ARC_X_SHIFT = 0;//7
 // Shift all line-follow ROI Y coords down (lower the boxes in the frame).
-constexpr int ARC_Y_SHIFT = 5;//7
+constexpr int ARC_Y_SHIFT = 7;//7
 
 // Mode 0 black-line ROI:
 //   closed loop = bottom edge -> right tilted side -> top arc -> left tilted side.
 //   Detection samples every point on that loop with the same black classifier.
 constexpr uint8_t ARC_TOP_X = 80 + ARC_X_SHIFT;
 constexpr uint8_t ARC_TOP_Y = 3 + ARC_Y_SHIFT;
-constexpr uint8_t ARC_LEFT_X = 25+10 + ARC_X_SHIFT;
-constexpr uint8_t ARC_RIGHT_X = 135-10 + ARC_X_SHIFT;
+constexpr uint8_t ARC_LEFT_X = 25+0 + ARC_X_SHIFT;
+constexpr uint8_t ARC_RIGHT_X = 135-0 + ARC_X_SHIFT;
 constexpr uint8_t ARC_SIDE_Y = 33 + ARC_Y_SHIFT;
 constexpr uint8_t ARC_BOTTOM_Y = 85 + ARC_Y_SHIFT; //85 i might need to change the IN_PX gain
 constexpr uint8_t ARC_BOTTOM_LEFT_X = 40 + ARC_X_SHIFT;
@@ -41,8 +41,8 @@ constexpr uint8_t ARC_RUN_MIN_LEN = 3;
 
 // Error = 127 + signed angle * ANGLE_SCALE * side boost + bottom in-point offset * IN_PX_SCALE.
 constexpr float ARC_ANGLE_SCALE = 1.7f; //2.0 
-constexpr float ARC_IN_PX_SCALE = 0.8f; // balance of front and back gain
-constexpr uint8_t ARC_SIDE_GAIN_Y = 40;  //boosts with gain in the side bellow Y : for tight turns
+constexpr float ARC_IN_PX_SCALE = 0.6f; // balance of front and back gain
+constexpr uint8_t ARC_SIDE_GAIN_Y = 45;  //boosts with gain in the side bellow Y : for tight turns
 constexpr float ARC_SIDE_GAIN_MULT = 1.0f; //1.6
 constexpr uint8_t TIGHT_SLOW_OUT_Y = 65;
 constexpr uint8_t SINGLE_FRONT_ROW_DY = 12;
@@ -673,9 +673,12 @@ void modeLineFollowRun(camera_fb_t* fb, YacheEncodedSerial& teensy) {
         s_lastErr = errByte;
         fresh = true;
     } else if (cls.inIndex >= 0) {
-        errByte = singlePointError(fb, lc.crossings[cls.inIndex], s_lastAngle, s_lastPos);
+        // One isolated crossing, especially near the front, is not enough to steer.
+        // Wait for an in/out pair instead of line-following from a single point.
+        errByte = LF_ERROR_CENTER;
         s_lastErr = errByte;
-        fresh = true;
+        s_lastAngle = 0.0f;
+        s_lastPos = 0.0f;
     } else if (lc.count == 0 || !cls.inHeld) {
         errByte = LF_ERROR_CENTER;
         s_lastErr = errByte;

@@ -51,6 +51,7 @@ static uint16_t fletcher16(const uint8_t* d, size_t n) {
 }
 
 void streamTask(void* pvParameters);
+static void sendStreamDebugOnly();
 static bool sampleCenterRawRgb(camera_fb_t* fb, uint8_t& r, uint8_t& g, uint8_t& b, uint16_t& n);
 
 // logf — only emits in OUTPUT_LOG builds; silent in OUTPUT_STREAM
@@ -82,6 +83,7 @@ void setup() {
     delay(500);
 
 #ifdef OUTPUT_STREAM
+#if STREAM_SEND_CAMERA_IMAGES
     if (!psramFound()) {
         Serial.println("FATAL: PSRAM not found");
         while (true) delay(1000);
@@ -100,6 +102,14 @@ void setup() {
     }
     xTaskCreatePinnedToCore(streamTask, "streamTask", 4096, nullptr, 1, &streamTaskHandle, 0);
     logf("Stream task on Core 0\n");
+#else
+    serialMutex = xSemaphoreCreateMutex();
+    if (!serialMutex) {
+        Serial.println("FATAL: FreeRTOS primitives failed");
+        while (true) delay(1000);
+    }
+    logf("Stream image payload disabled; sending [LC]/[ROW] debug only\n");
+#endif
 #endif
     pinMode(LED_BUILTIN, OUTPUT);
 }
@@ -155,12 +165,16 @@ void loop() {
     }
 
 #ifdef OUTPUT_STREAM
+#if STREAM_SEND_CAMERA_IMAGES
     // ── Hand frame to stream task (non-blocking) ──────────────────────────────
     streamW[writeIdx] = (uint16_t)fb->width;
     streamH[writeIdx] = (uint16_t)fb->height;
     memcpy(streamBuf[writeIdx], fb->buf, fb->len);
     uint8_t next = readIdx; readIdx = writeIdx; writeIdx = next;
     xSemaphoreGive(frameReady);
+#else
+    sendStreamDebugOnly();
+#endif
 #endif
 
     Camera_Return(fb);
@@ -168,6 +182,30 @@ void loop() {
 }
 
 #ifdef OUTPUT_STREAM
+static void sendStreamDebugOnly() {
+    static uint32_t lastSent = 0;
+    const uint32_t now = millis();
+    if ((uint32_t)(now - lastSent) < (1000UL / STREAM_FPS)) return;
+    lastSent = now;
+
+    char lcLine[384];
+    char rowLine[48];
+    char evtLine[96];
+    int lcLen = xs_formatLineDebug(lcLine, sizeof(lcLine));
+    int rowLen = xs_formatSensorRow(rowLine, sizeof(rowLine));
+
+    if (serialMutex) xSemaphoreTake(serialMutex, portMAX_DELAY);
+    int evtLen = 0;
+    while ((evtLen = xs_formatEvent(evtLine, sizeof(evtLine))) > 0) {
+        Serial.write((const uint8_t*)evtLine, evtLen);
+    }
+    if (lcLen > 0) Serial.write((const uint8_t*)lcLine, lcLen);
+    if (rowLen > 0) Serial.write((const uint8_t*)rowLine, rowLen);
+    if (serialMutex) xSemaphoreGive(serialMutex);
+}
+#endif
+
+#if defined(OUTPUT_STREAM) && STREAM_SEND_CAMERA_IMAGES
 // ── Stream task: Core 0 ────────────────────────────────────────────────────────
 void streamTask(void* pvParameters) {
     const TickType_t minInterval = pdMS_TO_TICKS(1000 / STREAM_FPS);
