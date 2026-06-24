@@ -16,26 +16,34 @@ constexpr int ARC_MAX_SAMPLES = 340;
 //run this to update serial
 //powershell -ExecutionPolicy Bypass -File xiaoesp\XIAOdev\src\stream\update_stream_guides.ps1
 
+// Shift all line-follow ROI X coords right to correct optical center (lens/mirror bias).
+constexpr int ARC_X_SHIFT = 0;//7
+// Shift all line-follow ROI Y coords down (lower the boxes in the frame).
+constexpr int ARC_Y_SHIFT = 5;//7
+
 // Mode 0 black-line ROI:
-//   top arc passes through (80,5), (25,35), (135,35)
-constexpr uint8_t ARC_TOP_X = 80;
-constexpr uint8_t ARC_TOP_Y = 3;
-constexpr uint8_t ARC_LEFT_X = 25;
-constexpr uint8_t ARC_RIGHT_X = 135;
-constexpr uint8_t ARC_SIDE_Y = 33;
-constexpr uint8_t ARC_BOTTOM_Y = 85; //85 i might need to change the IN_PX gain
-constexpr uint8_t ARC_BOTTOM_LEFT_X = 40;
-constexpr uint8_t ARC_BOTTOM_RIGHT_X = 120;
-constexpr uint8_t ARC_SAMPLE_STEP = 1;
-constexpr uint8_t BOUNDARY_BLACK_NEIGHBOR_RADIUS = 2;
-constexpr uint8_t BOUNDARY_BLACK_GAP_FILL = 5;
-constexpr uint8_t BOUNDARY_GAP_FILL_Y_MAX = 60;
+//   closed loop = bottom edge -> right tilted side -> top arc -> left tilted side.
+//   Detection samples every point on that loop with the same black classifier.
+constexpr uint8_t ARC_TOP_X = 80 + ARC_X_SHIFT;
+constexpr uint8_t ARC_TOP_Y = 3 + ARC_Y_SHIFT;
+constexpr uint8_t ARC_LEFT_X = 25+10 + ARC_X_SHIFT;
+constexpr uint8_t ARC_RIGHT_X = 135-10 + ARC_X_SHIFT;
+constexpr uint8_t ARC_SIDE_Y = 33 + ARC_Y_SHIFT;
+constexpr uint8_t ARC_BOTTOM_Y = 85 + ARC_Y_SHIFT; //85 i might need to change the IN_PX gain
+constexpr uint8_t ARC_BOTTOM_LEFT_X = 40 + ARC_X_SHIFT;
+constexpr uint8_t ARC_BOTTOM_RIGHT_X = 120 + ARC_X_SHIFT;
+constexpr float ARC_SAMPLE_SPACING = 1.0f;
+constexpr float ARC_PI = 3.14159265358979323846f;
+constexpr uint8_t ARC_BOUNDARY_BAND_HALF_W = 2;   // 5 px wide, across the boundary point
+constexpr uint8_t ARC_BOUNDARY_BAND_HALF_H = 10;  // row +/- 10, helps through LED glare gaps
+constexpr uint8_t ARC_BOUNDARY_BLACK_HITS = 3;
+constexpr uint8_t ARC_RUN_MIN_LEN = 3;
 
 // Error = 127 + signed angle * ANGLE_SCALE * side boost + bottom in-point offset * IN_PX_SCALE.
-constexpr float ARC_ANGLE_SCALE = 2.0f; //2.0 
+constexpr float ARC_ANGLE_SCALE = 1.7f; //2.0 
 constexpr float ARC_IN_PX_SCALE = 0.8f; // balance of front and back gain
 constexpr uint8_t ARC_SIDE_GAIN_Y = 40;  //boosts with gain in the side bellow Y : for tight turns
-constexpr float ARC_SIDE_GAIN_MULT = 1.60f; //1.8
+constexpr float ARC_SIDE_GAIN_MULT = 1.0f; //1.6
 constexpr uint8_t TIGHT_SLOW_OUT_Y = 65;
 constexpr uint8_t SINGLE_FRONT_ROW_DY = 12;
 constexpr uint8_t SINGLE_FRONT_ROW_HALF_W = 30;
@@ -128,68 +136,63 @@ void addSample(int x, int y, uint8_t edge) {
     s_sampleCount++;
 }
 
-bool isBlackPixelAt(camera_fb_t* fb, int x, int y) {
+bool sampleRawAt(camera_fb_t* fb, int x, int y, uint8_t& r, uint8_t& g, uint8_t& b) {
     if (!fb || !fb->buf) return false;
     if (x < 0 || x >= fb->width || y < 0 || y >= fb->height) return false;
-
-    uint8_t r, g, b;
     rgb565To888(unpackRGB565(fb->buf, y * fb->width + x), r, g, b);
-    rgb888Calibration(r, g, b);
-    return rgbToGray(r, g, b) <= BLACK_GRAY_MAX;
-}
-
-bool neighborhoodBlack(camera_fb_t* fb, uint8_t x, uint8_t y) {
-    const int r = BOUNDARY_BLACK_NEIGHBOR_RADIUS;
-    return isBlackPixelAt(fb, x, y) ||
-           isBlackPixelAt(fb, (int)x - r, y) ||
-           isBlackPixelAt(fb, (int)x + r, y) ||
-           isBlackPixelAt(fb, x, (int)y - r) ||
-           isBlackPixelAt(fb, x, (int)y + r) ||
-           isBlackPixelAt(fb, (int)x - r, (int)y - r) ||
-           isBlackPixelAt(fb, (int)x + r, (int)y - r) ||
-           isBlackPixelAt(fb, (int)x - r, (int)y + r) ||
-           isBlackPixelAt(fb, (int)x + r, (int)y + r);
+    return true;
 }
 
 bool boundarySampleBlack(camera_fb_t* fb, uint8_t x, uint8_t y) {
-    return neighborhoodBlack(fb, x, y);
-}
+    uint8_t blackHits = 0;
+    uint8_t saturatedHits = 0;
 
-bool gapFillAllowedAt(int idx) {
-    return s_edge[idx] != LC_EDGE_BOTTOM && s_py[idx] < BOUNDARY_GAP_FILL_Y_MAX;
-}
+    for (int dy = -(int)ARC_BOUNDARY_BAND_HALF_H; dy <= (int)ARC_BOUNDARY_BAND_HALF_H; dy++) {
+        for (int dx = -(int)ARC_BOUNDARY_BAND_HALF_W; dx <= (int)ARC_BOUNDARY_BAND_HALF_W; dx++) {
+            uint8_t r, g, b;
+            if (!sampleRawAt(fb, (int)x + dx, (int)y + dy, r, g, b)) continue;
 
-void closeBoundaryBlackGaps() {
-    const int P = s_sampleCount;
-    if (P <= 0) return;
-
-    uint8_t fill[ARC_MAX_SAMPLES] = {};
-    for (int i = 0; i < P; i++) {
-        if (s_black[i] || !gapFillAllowedAt(i)) continue;
-
-        for (int gap = 1; gap <= BOUNDARY_BLACK_GAP_FILL; gap++) {
-            bool allGap = true;
-            for (int k = 0; k < gap; k++) {
-                const int idx = (i + k) % P;
-                if (s_black[idx] || !gapFillAllowedAt(idx)) {
-                    allGap = false;
-                    break;
-                }
+            if (r >= SILVER_RAW_R_MIN && g >= SILVER_RAW_G_MIN && b >= SILVER_RAW_B_MIN) {
+                saturatedHits++;
+                continue;
             }
-            if (!allGap) break;
 
-            const int before = (i - 1 + P) % P;
-            const int after = (i + gap) % P;
-            if (gapFillAllowedAt(before) && gapFillAllowedAt(after) &&
-                s_black[before] && s_black[after]) {
-                for (int k = 0; k < gap; k++) fill[(i + k) % P] = 1;
-                break;
-            }
+            rgb888Calibration(r, g, b);
+            if (rgbToGray(r, g, b) <= BLACK_GRAY_MAX) blackHits++;
         }
     }
 
-    for (int i = 0; i < P; i++) {
-        if (fill[i]) s_black[i] = 1;
+    if (blackHits == 0) return false;
+    const int threshold = max(1, (int)ARC_BOUNDARY_BLACK_HITS - (int)saturatedHits);
+    return blackHits >= threshold;
+}
+
+void addLineSamples(float x0, float y0, float x1, float y1, uint8_t edge,
+                    bool includeFirst, bool includeLast) {
+    const float dx = x1 - x0;
+    const float dy = y1 - y0;
+    const int steps = max(1, (int)lroundf(sqrtf(dx * dx + dy * dy) / ARC_SAMPLE_SPACING));
+    const int first = includeFirst ? 0 : 1;
+    const int last = includeLast ? steps : steps - 1;
+
+    for (int i = first; i <= last; i++) {
+        const float t = (float)i / (float)steps;
+        addSample((int)lroundf(x0 + dx * t), (int)lroundf(y0 + dy * t), edge);
+    }
+}
+
+void addArcSamples(float cx, float cy, float r, float startRad, float endRad,
+                   uint8_t edge, bool includeFirst, bool includeLast) {
+    float sweep = endRad - startRad;
+    while (sweep > 0.0f) sweep -= 2.0f * ARC_PI;
+    const int steps = max(1, (int)lroundf(fabsf(sweep) * r / ARC_SAMPLE_SPACING));
+    const int first = includeFirst ? 0 : 1;
+    const int last = includeLast ? steps : steps - 1;
+
+    for (int i = first; i <= last; i++) {
+        const float t = (float)i / (float)steps;
+        const float a = startRad + sweep * t;
+        addSample((int)lroundf(cx + cosf(a) * r), (int)lroundf(cy + sinf(a) * r), edge);
     }
 }
 
@@ -205,28 +208,17 @@ void buildArcGeometry() {
     const float cy = (sideY * sideY - topY * topY + dx * dx) / (2.0f * (sideY - topY));
     const float r = cy - topY;
 
+    const float rightA = atan2f((float)ARC_SIDE_Y - cy, (float)ARC_RIGHT_X - cx);
+    const float leftA = atan2f((float)ARC_SIDE_Y - cy, (float)ARC_LEFT_X - cx);
+
     // Closed loop order mirrors LineCount: bottom -> right side -> top arc -> left side.
-    for (int x = ARC_BOTTOM_LEFT_X; x <= ARC_BOTTOM_RIGHT_X; x += ARC_SAMPLE_STEP) {
-        addSample(x, ARC_BOTTOM_Y, LC_EDGE_BOTTOM);
-    }
-    for (int y = ARC_BOTTOM_Y - ARC_SAMPLE_STEP; y >= ARC_SIDE_Y; y -= ARC_SAMPLE_STEP) {
-        const int dy = ARC_BOTTOM_Y - y;
-        const int span = ARC_BOTTOM_Y - ARC_SIDE_Y;
-        const int x = ARC_BOTTOM_RIGHT_X + ((ARC_RIGHT_X - ARC_BOTTOM_RIGHT_X) * dy + span / 2) / span;
-        addSample(x, y, LC_EDGE_RIGHT);
-    }
-    for (int x = ARC_RIGHT_X - ARC_SAMPLE_STEP; x >= ARC_LEFT_X; x -= ARC_SAMPLE_STEP) {
-        const float xdx = (float)x - cx;
-        const float inside = r * r - xdx * xdx;
-        const int y = (inside > 0.0f) ? (int)(cy - sqrtf(inside) + 0.5f) : ARC_SIDE_Y;
-        addSample(x, y, LC_EDGE_TOP);
-    }
-    for (int y = ARC_SIDE_Y + ARC_SAMPLE_STEP; y <= ARC_BOTTOM_Y - ARC_SAMPLE_STEP; y += ARC_SAMPLE_STEP) {
-        const int dy = y - ARC_SIDE_Y;
-        const int span = ARC_BOTTOM_Y - ARC_SIDE_Y;
-        const int x = ARC_LEFT_X + ((ARC_BOTTOM_LEFT_X - ARC_LEFT_X) * dy + span / 2) / span;
-        addSample(x, y, LC_EDGE_LEFT);
-    }
+    addLineSamples(ARC_BOTTOM_LEFT_X, ARC_BOTTOM_Y, ARC_BOTTOM_RIGHT_X, ARC_BOTTOM_Y,
+                   LC_EDGE_BOTTOM, true, true);
+    addLineSamples(ARC_BOTTOM_RIGHT_X, ARC_BOTTOM_Y, ARC_RIGHT_X, ARC_SIDE_Y,
+                   LC_EDGE_RIGHT, false, true);
+    addArcSamples(cx, cy, r, rightA, leftA, LC_EDGE_TOP, false, true);
+    addLineSamples(ARC_LEFT_X, ARC_SIDE_Y, ARC_BOTTOM_LEFT_X, ARC_BOTTOM_Y,
+                   LC_EDGE_LEFT, false, false);
 
     s_geometryReady = true;
 }
@@ -235,7 +227,6 @@ void sampleArcLoop(camera_fb_t* fb) {
     for (int i = 0; i < s_sampleCount; i++) {
         s_black[i] = boundarySampleBlack(fb, s_px[i], s_py[i]) ? 1 : 0;
     }
-    closeBoundaryBlackGaps();
 }
 
 uint16_t countArcBlackSamples() {
@@ -346,7 +337,7 @@ void registerCrossing(LineCounts& out, int idx, int len) {
 }
 
 void emitRun(LineCounts& out, int start, int runStartK, int len, int perimeter) {
-    if (len < LC_RUN_MIN_LEN) return;
+    if (len < ARC_RUN_MIN_LEN) return;
     registerCrossing(out, (start + runStartK + len / 2) % perimeter, len);
 }
 
@@ -585,7 +576,7 @@ bool singleFrontRowDirection(camera_fb_t* fb, const Crossing& p, Crossing& out) 
     const int x1 = min((int)COLOR_X_MAX, (int)p.pixelX + SINGLE_FRONT_ROW_HALF_W);
     int weighted = 0, hits = 0;
     for (int x = x0; x <= x1; x++) {
-        if (!neighborhoodBlack(fb, (uint8_t)x, (uint8_t)y)) continue;
+        if (!boundarySampleBlack(fb, (uint8_t)x, (uint8_t)y)) continue;
         weighted += x;
         hits++;
     }

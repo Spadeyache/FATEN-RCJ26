@@ -129,7 +129,7 @@ inline float robotRoll()  { return -Sensors::IMU::getPitch(); }   // + = left si
 //   Two gain sets, switched together with the base speed: the moment
 //   frictionCircAdj drops the base below FRIC_SPEED_FLAT (i.e. on a slope), the
 //   controller also swaps to the *_SLOPE gains. Flat ground uses the *_FLAT set.
-constexpr float PID_KP_FLAT  = 1.5f;   // TODO: tune for fast flat-line racing
+constexpr float PID_KP_FLAT  = 1.85f; //1.5   // TODO: tune for fast flat-line racing
 constexpr float PID_KI_FLAT  = 0.0f;
 constexpr float PID_KD_FLAT  = 0.0f;
 
@@ -168,7 +168,7 @@ constexpr float ROTAXIS_DOWN_MIN  = 0.60f;  // gain: downhill-rear scale at full
 
 // --- frictionCircAdj tuning --------------------------------------------------
 constexpr float FRIC_TILT_DEG   = 8.0f;   // |pitch| or |roll| past this counts as "on a slope"
-constexpr float FRIC_SPEED_FLAT = 60.0f;  // 70 base speed on flat ground
+constexpr float FRIC_SPEED_FLAT = 30.0f;  // 70 base speed on flat ground
 constexpr float FRIC_SPEED_TILT = 40.0f;  // 55 base speed once tilted
 
 inline float rollGainFactor(float aRoll) {       // 1.0 → GRAV_GAIN_MIN as |roll| grows

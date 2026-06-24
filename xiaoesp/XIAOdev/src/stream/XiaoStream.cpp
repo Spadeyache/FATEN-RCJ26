@@ -184,4 +184,3 @@ int xs_formatEvent(char* buf, int bufLen) {
     return snprintf(buf, bufLen, "[EVT] kind=commit action=%s side=%c x=%u y=%u\n",
                     e.action, e.side, e.x, e.y);
 }
-

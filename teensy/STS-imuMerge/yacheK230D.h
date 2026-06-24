@@ -10,7 +10,8 @@
 //
 //    [cls] [score] [x1_hi] [x1_lo] [y1_hi] [y1_lo] [x2_hi] [x2_lo] [y2_hi] [y2_lo]
 //
-//      cls    : 0=silver, 1=black (raw model class -- caller does any swapping)
+//      cls    : raw model class. 3-class model: 0=dead/black ball,
+//               1=alive/silver ball, 2=evac point/corner. Caller maps semantics.
 //      score  : 0..255  (= round(model_confidence * 255))
 //      x1..y2 : signed 16-bit BE pixel coords in SENSOR frame (640x480)
 //
@@ -44,8 +45,9 @@ enum K230DCommand : uint8_t {
 };
 
 enum K230DClass : uint8_t {
-    K230D_CLS_SILVER = 0,
-    K230D_CLS_BLACK  = 1,
+    K230D_CLS_DEAD  = 0,   // black ball
+    K230D_CLS_ALIVE = 1,   // silver ball
+    K230D_CLS_POINT = 2,   // evacuation point / corner
 };
 
 struct K230DBox {

@@ -7,12 +7,21 @@ $outPath = Join-Path $streamDir 'stream_guides.generated.js'
 $src = Get-Content -Raw -Path $modePath
 
 function Get-Const($name) {
-    $pattern = "constexpr\s+(?:uint8_t|uint16_t|int)\s+$name\s*=\s*([A-Za-z0-9_]+)"
+    # Capture the whole right-hand side up to the ';' so expressions like
+    # "80 + ARC_X_SHIFT" are handled, not just a single token.
+    $pattern = "constexpr\s+(?:uint8_t|uint16_t|int)\s+$name\s*=\s*([^;]+);"
     $m = [regex]::Match($src, $pattern)
     if (-not $m.Success) { throw "Missing constexpr $name in $modePath" }
-    $value = $m.Groups[1].Value
-    if ($value -match '^[0-9]+$') { return [int]$value }
-    return Get-Const $value
+
+    # Drop any trailing line comment and surrounding whitespace.
+    $expr = ($m.Groups[1].Value -replace '//.*$', '').Trim()
+
+    # Recursively resolve referenced constants, leaving numbers/operators intact.
+    $resolved = [regex]::Replace($expr, '[A-Za-z_][A-Za-z0-9_]*', {
+        param($t) [string](Get-Const $t.Value)
+    })
+
+    return [int](Invoke-Expression $resolved)
 }
 
 $values = @{

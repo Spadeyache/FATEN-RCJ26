@@ -31,6 +31,8 @@ bool    tightSlowFlag();     // XIAO tight-turn target is low in frame → drive
 bool    gapBothRowsFlag();   // LINE_ANGLE mode: both scan rows see a qualifying black chunk
 bool    obstacleSeeLine();   // OBSTACLE mode: arc sees a black line (FLAG bit0)
 float   obstacleAngle();     // OBSTACLE mode: line tilt 0..254 (127 = 0°)
+bool    silverSeen();        // SILVER_ALIGN mode: silver tape in view (FLAG bit0)
+float   silverAlignAngle();  // SILVER_ALIGN mode: tape tilt 0..254 (127 = perpendicular)
 
 void    setMode(XiaoMode m);
 void    clearFilter();    // forget votes after a mode change / state transition

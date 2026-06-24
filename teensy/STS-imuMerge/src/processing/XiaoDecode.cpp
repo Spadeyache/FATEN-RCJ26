@@ -40,6 +40,8 @@ bool    tightSlowFlag()    { return _tightSlowFlag; }
 bool    gapBothRowsFlag()  { return _commitFlag; }  // XIAO_FLAG_COMMIT bit reused for both-rows flag
 bool    obstacleSeeLine()  { return _commitFlag; }  // XIAO_FLAG_COMMIT bit reused for see-line flag
 float   obstacleAngle()    { return _gapAngle; }    // ANGLE register reused for line tilt
+bool    silverSeen()       { return _commitFlag; }  // XIAO_FLAG_COMMIT bit reused for silver-seen flag
+float   silverAlignAngle() { return _gapAngle; }    // ANGLE register reused for tape tilt
 
 void setMode(XiaoMode m) {
     Sensors::XIAO_link::send(XIAO_REG_MODE, (uint8_t)m);

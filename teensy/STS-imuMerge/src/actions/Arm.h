@@ -22,6 +22,16 @@ void init();
 void grab(bool closed);
 void lift(int pos);
 
+// Evacuation-zone victim handling.
+//   captureDead()/captureAlive(): take one ball into storage via the matching
+//     arm (black=dead, silver=alive). Blocking, open-loop.
+//   releaseAll(): open everything to drop all held balls at the corner.
+// NOTE: Phase 1 placeholders — both capture calls currently drive the single
+// existing gripper. TODO: wire the dedicated black/silver arms in Arm.cpp.
+void captureDead();
+void captureAlive();
+void releaseAll();
+
 // Manual servo attach/detach — used when re-engaging the gripper inside
 // long sequences after init() detached it.
 void attachGrabServos();

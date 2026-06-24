@@ -59,6 +59,7 @@ enum XiaoMode : uint8_t {
     XIAO_MODE_NOGI        = 2,
     XIAO_MODE_LINE_ANGLE  = 3,   // line slope + crossing count during gap traversal
     XIAO_MODE_OBSTACLE    = 4,   // obstacle re-acquire: arc see-line flag + line tilt angle
+    XIAO_MODE_SILVER_ALIGN= 5,   // evac entry: silver-tape tilt angle for perpendicular align
 };
 
 #define KRS_BAUD            115200UL
@@ -132,6 +133,12 @@ enum XiaoMode : uint8_t {
 #define EVAC_GRAB_STOP_WINDOW          4
 #define EVAC_GRAB_STOP_REQUIRED        3
 
+// EVAC collection / deposit policy
+#define EVAC_MAX_BALLS                 3          // stop collecting at this many
+#define EVAC_SEARCH_TIMEOUT_MS         120000UL   // 2-min collection window (from search start)
+#define EVAC_POINT_STOP_HEIGHT_PX      120.0f     // deploy: stop approaching the corner at this box height
+#define EVAC_DEPLOY_TIMEOUT_MS         30000UL    // safety: give up hunting the corner after this
+
 // =============================================================================
 //  CommandFilter — moving-average vote thresholds (votes within the last
 //  FILTER_QUEUE_SIZE frames needed to confirm each event)
@@ -149,10 +156,18 @@ enum XiaoMode : uint8_t {
 #define K230_MAX_DETECTIONS 16
 #define K230_CMD_INTERVAL   100        // ms
 
-// K230 YOLO class IDs. Set these to the model's raw output IDs.
-// Current model/viewer mapping is flipped, so raw 1=silver and raw 0=black.
-#define K230_CLASS_SILVER   1
-#define K230_CLASS_BLACK    0
+// K230 YOLO raw class IDs — MUST match the deployed model's class order.
+// 3-class model: 0=dead (black ball), 1=alive (silver ball), 2=evac point.
+// VERIFY against the model: watch the "K230D BOX cls=" serial output (PRINT_K230)
+// and confirm a known object reports the expected id before relying on it.
+#define K230_CLASS_DEAD     0   // black ball  — dead victim   (chase + grab)
+#define K230_CLASS_ALIVE    1   // silver ball — live victim   (chase + grab)
+#define K230_CLASS_POINT    2   // evacuation point / corner   (deposit target)
+
+// Back-compat aliases for older code that referred to silver/black.
+#define K230_CLASS_SILVER   K230_CLASS_ALIVE
+#define K230_CLASS_BLACK    K230_CLASS_DEAD
+
 #define K230_FRAME_WIDTH    640.0f
 #define K230_FRAME_CENTER_X (K230_FRAME_WIDTH * 0.5f)
 

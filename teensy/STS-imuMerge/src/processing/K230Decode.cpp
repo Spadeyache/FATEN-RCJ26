@@ -15,6 +15,13 @@ uint8_t score = 0;
 uint32_t updatedMs = 0;
 }
 
+namespace pointPOS {
+bool valid = false;
+float direction = 0.0f;
+uint8_t score = 0;
+uint32_t updatedMs = 0;
+}
+
 namespace {
     constexpr int16_t SENSOR_W = (int16_t)K230_FRAME_WIDTH;
     constexpr int16_t SENSOR_H = 480;
@@ -57,9 +64,13 @@ namespace {
         return direction;
     }
 
+    // Map raw model class -> viewer numbering (0=alive/silver, 1=dead/black,
+    // 2=evac point). Keeps the historic ball swap so the box-viewer HTML colours
+    // stay consistent, and passes the point class through as 2.
     uint8_t viewerClassFor(uint8_t rawCls) {
-        if (rawCls == K230_CLASS_SILVER) return 0;
-        if (rawCls == K230_CLASS_BLACK) return 1;
+        if (rawCls == K230_CLASS_ALIVE) return 0;
+        if (rawCls == K230_CLASS_DEAD)  return 1;
+        if (rawCls == K230_CLASS_POINT) return 2;
         return rawCls;
     }
 
@@ -109,7 +120,11 @@ uint8_t          boxCount()     { return _k230d.boxCount(); }
 uint32_t         lastPacketMs() { return _k230d.lastPacketMs(); }
 
 bool isVictimClass(uint8_t cls) {
-    return cls == K230_CLASS_SILVER || cls == K230_CLASS_BLACK;
+    return cls == K230_CLASS_DEAD || cls == K230_CLASS_ALIVE;
+}
+
+bool isPointClass(uint8_t cls) {
+    return cls == K230_CLASS_POINT;
 }
 
 bool updateGoalFromVictim(const K230DBox &msg) {
@@ -154,6 +169,38 @@ bool checkVictim(const K230DBox *msgs, uint8_t msgCount) {
 // Check the latest K230D frame held by this decoder.
 bool checkVictim() {
     return checkVictim(boxes(), boxCount());
+}
+
+// Pick the highest-score evac-point box in an explicit list and load pointPOS.
+bool checkPoint(const K230DBox *msgs, uint8_t msgCount) {
+    if (msgs == nullptr || msgCount == 0) {
+        pointPOS::valid = false;
+        return false;
+    }
+
+    const K230DBox *best = nullptr;
+    for (uint8_t i = 0; i < msgCount; i++) {
+        if (!isPointClass(msgs[i].cls)) continue;
+        if (best == nullptr || msgs[i].score > best->score) {
+            best = &msgs[i];
+        }
+    }
+
+    if (best == nullptr) {
+        pointPOS::valid = false;
+        return false;
+    }
+
+    pointPOS::valid     = true;
+    pointPOS::direction = normalizedDirectionFor(*best);
+    pointPOS::score     = best->score;
+    pointPOS::updatedMs = millis();
+    return true;
+}
+
+// Check the latest K230D frame held by this decoder for an evac point.
+bool checkPoint() {
+    return checkPoint(boxes(), boxCount());
 }
 
 void setRunning(bool run) {

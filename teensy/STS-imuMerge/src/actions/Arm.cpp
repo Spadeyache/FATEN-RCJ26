@@ -50,6 +50,27 @@ void grab(bool closed) {
     }
 }
 
+namespace {
+    // Close→reopen the gripper once to scoop a ball into storage. Blocking.
+    void scoopOnce() {
+        attachGrabServos();
+        grab(true);   delay(300);   // close: pull the ball into storage
+        grab(false);  delay(150);   // reopen: ready for the next ball
+        detachGrabServos();
+    }
+}
+
+// Phase 1: both routes drive the single gripper. TODO: actuate the dedicated
+// black (dead) and silver (alive) arms separately once they are wired.
+void captureDead()  { scoopOnce(); }
+void captureAlive() { scoopOnce(); }
+
+void releaseAll() {
+    attachGrabServos();
+    grab(false);  delay(300);       // open everything to drop held balls
+    detachGrabServos();
+}
+
 // Blocking. Only call from setup() or controlled-stop sequences.
 void lift(int pos) {
     int rd = _krs.setPos(KRS_ID, pos);

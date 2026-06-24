@@ -25,16 +25,13 @@ namespace Processing {
 namespace K230Decode {
 
 enum ObjectType : uint8_t {
-    SILVER      = K230_CLASS_SILVER,
-    BLACK       = K230_CLASS_BLACK,
+    DEAD        = K230_CLASS_DEAD,    // black ball
+    ALIVE       = K230_CLASS_ALIVE,   // silver ball
+    POINT       = K230_CLASS_POINT,   // evacuation point / corner
 
-    // Legacy names kept so older state code can still compile while the
-    // K230 YOLO model now reports silver/black classes.
-    ALIVE       = SILVER,
-    DEAD        = BLACK,
-    EVAC_RED    = 3,
-    EVAC_GREEN  = 4,
-    OBSTACLE    = 5,
+    // Back-compat aliases.
+    BLACK       = DEAD,
+    SILVER      = ALIVE,
     NONE        = 255,
 };
 
@@ -46,10 +43,19 @@ struct Detection {
 
 using Box = K230DBox;
 
+// Current victim (Dead/Alive ball) target.
 namespace goalPOS {
 extern bool valid;
 extern float direction;   // normalized: (box_center_x - 320) / 320
-extern uint8_t cls;
+extern uint8_t cls;       // K230_CLASS_DEAD or K230_CLASS_ALIVE
+extern uint8_t score;
+extern uint32_t updatedMs;
+}
+
+// Current evacuation-point (corner) target.
+namespace pointPOS {
+extern bool valid;
+extern float direction;   // normalized: (box_center_x - 320) / 320
 extern uint8_t score;
 extern uint32_t updatedMs;
 }
@@ -62,7 +68,8 @@ const Box*       boxes();         // pointer to internal box array
 uint8_t          boxCount();      // number of valid boxes
 uint32_t         lastPacketMs();  // millis() timestamp of last valid frame
 
-bool isVictimClass(uint8_t cls);
+bool isVictimClass(uint8_t cls);   // true for Dead or Alive ball classes
+bool isPointClass(uint8_t cls);    // true for the evac-point/corner class
 bool updateGoalFromVictim(const K230DBox &msg);
 
 // Check one decoded K230D box. Returns true only for configured silver/black
@@ -77,6 +84,12 @@ bool checkVictim(const K230DBox *msgs, uint8_t msgCount);
 // Check the most recent K230D frame already stored by this decoder. This is the
 // normal call for state-machine code such as EVAC_Search.
 bool checkVictim();
+
+// Evac-point (corner) detection, mirroring the victim helpers above. Picks the
+// highest-score POINT box, updates pointPOS, and returns true. With no match it
+// clears pointPOS::valid and returns false. Used by the deposit flow.
+bool checkPoint(const K230DBox *msgs, uint8_t msgCount);
+bool checkPoint();
 
 void setRunning(bool run);        // true -> send DETECT command, false -> IDLE
 bool isRunning();

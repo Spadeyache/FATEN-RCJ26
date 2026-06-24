@@ -2,10 +2,10 @@
 // Keep this file next to esp32_camera_viewer.html so the viewer can load it
 // without asking the XIAO to spend serial bandwidth on static geometry.
 window.XIAO_STREAM_GUIDES = {
-  arc: [80, 3, 25, 33, 135, 33, 40, 85, 120, 85],
+  arc: [80, 8, 35, 38, 125, 38, 40, 90, 120, 90],
   silverCols: [
     { x: 33, y0: 0, y1: 70 },
     { x: 127, y0: 0, y1: 70 },
   ],
-  colorLine: { x0: 25, x1: 135, y: 65 },
+  colorLine: { x0: 35, x1: 125, y: 65 },
 };

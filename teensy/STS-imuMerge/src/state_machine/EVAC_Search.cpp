@@ -1,9 +1,11 @@
 #include "EVAC_Search.h"
 #include "StateMachine.h"
+#include "EvacContext.h"
 #include "../../config.h"
 #include "../../pins_teensy.h"
 
 #include "../actions/Drive.h"
+#include "../actions/Arm.h"
 #include "../processing/Mapping.h"
 #include "../processing/K230Decode.h"
 
@@ -25,7 +27,7 @@ namespace EVAC_Search {
 namespace {
     bool          _initialised = false;
     bool          _grabbing = false;
-    bool          _grabReachedTarget = false;
+    uint8_t       _grabType = K230_CLASS_ALIVE;   // class of the ball being grabbed
     uint8_t       _grabLostFrames = 0;
     uint8_t       _grabDirCount = 0;
     uint8_t       _grabDirIndex = 0;
@@ -131,32 +133,44 @@ void onEnter() {
     // Processing::K230Decode::setRunning(true);
     _initialised = true;
     _grabbing = false;
-    _grabReachedTarget = false;
     resetGrabFilter(0.0f);
     resetGrabStopFilter();
     _lastBeep    = 0;
+
+    // 2-minute collection window starts now.
+    EvacContext::startSearchTimer();
+}
+
+// Capture the reached victim with the matching arm and book it into the context.
+static void captureVictim(uint8_t cls) {
+    Actions::Drive::stop();
+    if (cls == K230_CLASS_DEAD) {
+        Actions::Arm::captureDead();
+        EvacContext::addDead();
+    } else {
+        Actions::Arm::captureAlive();
+        EvacContext::addAlive();
+    }
+#if PRINT_STATE
+    Serial.printf("EVAC_SEARCH captured cls=%u  held=%u (dead=%u alive=%u)\n",
+                  cls, EvacContext::heldTotal(),
+                  EvacContext::heldDead(), EvacContext::heldAlive());
+#endif
 }
 
 bool grabBall() {
-    if (_grabReachedTarget) {
-        Actions::Drive::stop();
-        return true;
-    }
-
     const K230DBox *target = closestCenterVictim();
 
     if (target != nullptr) {
         Processing::K230Decode::updateGoalFromVictim(*target);
+        _grabType = target->cls;
         const float32_t height = boxHeightPx(*target);
         if (pushGrabStopSample(height >= EVAC_GRAB_STOP_HEIGHT_PX)) {
-            _grabReachedTarget = true;
-            Actions::Drive::stop();
-#if PRINT_STATE
-            Serial.printf("EVAC_SEARCH grab stop height=%.1f dir=%.3f\n",
-                          height,
-                          Processing::K230Decode::goalPOS::direction);
-#endif
-            return true;
+            // Reached the ball — grab it, then signal "done" so update() goes
+            // back to spinning for the next victim.
+            captureVictim(_grabType);
+            resetGrabStopFilter();
+            return false;
         }
 
         const float32_t smoothedDir = pushGrabDirection(directionFor(*target));
@@ -192,6 +206,18 @@ void update() {
 
     Processing::Mapping::tick();
 
+    // Leave-collection decision: storage full, or the 2-minute window expired.
+    if (EvacContext::full() || EvacContext::searchTimedOut()) {
+        Actions::Drive::stop();
+        if (EvacContext::heldTotal() > 0) {
+            StateMachine::transitionTo(StateMachine::EVAC_DEPLOY);
+        } else {
+            // Timed out with nothing aboard — give up and leave the zone.
+            StateMachine::transitionTo(StateMachine::EVAC_EXIT);
+        }
+        return;
+    }
+
     if (!_grabbing) {
         if (Processing::K230Decode::checkVictim()) {
             _grabbing = true;
@@ -203,7 +229,7 @@ void update() {
                           Processing::K230Decode::goalPOS::cls,
                           Processing::K230Decode::goalPOS::score);
 #endif
-            grabBall();
+            _grabbing = grabBall();
         } else {
             Actions::Drive::motor(EVAC_SEARCH_SPIN_LEFT, EVAC_SEARCH_SPIN_RIGHT);
         }
@@ -220,9 +246,6 @@ void update() {
     //     analogWrite(BUZZER_PIN, 160); delay(120); analogWrite(BUZZER_PIN, 0);
     //     _lastBeep = now;
     // }
-
-    // TODO phase 2:
-    //   if (foundVictim) StateMachine::transitionTo(StateMachine::EVAC_DEPLOY);
 }
 
 }  // namespace EVAC_Search

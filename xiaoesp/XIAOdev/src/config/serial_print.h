@@ -15,8 +15,8 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 // ── Module enable flags (1 = on, 0 = off) ────────────────────────────────────
-// All flags are forced off in OUTPUT_STREAM mode to keep the binary stream clean.
-#ifdef OUTPUT_STREAM
+// All flags are forced off in OUTPUT_STREAM / OUTPUT_CALIBRATE.
+#if defined(OUTPUT_STREAM) || defined(OUTPUT_CALIBRATE)
   #define SPRINT_RESULTS    0
   #define SPRINT_CLASSIFY   0
   #define SPRINT_RGB_HSV    0

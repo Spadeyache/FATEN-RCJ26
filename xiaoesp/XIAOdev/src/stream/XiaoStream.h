@@ -48,4 +48,3 @@ void xs_noteCommitEnd(const char* reason);
 int xs_formatLineDebug(char* buf, int bufLen);
 int xs_formatSensorRow(char* buf, int bufLen);
 int xs_formatEvent(char* buf, int bufLen);
-

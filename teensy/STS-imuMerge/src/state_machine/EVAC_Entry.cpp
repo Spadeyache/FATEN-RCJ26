@@ -1,5 +1,6 @@
 #include "EVAC_Entry.h"
 #include "StateMachine.h"
+#include "EvacContext.h"
 #include "../../config.h"
 #include "../../pins_teensy.h"
 
@@ -31,6 +32,9 @@ void onEnter() {
 #if PRINT_STATE
     Serial.println("State: EVAC_ENTRY");
 #endif
+
+    // Fresh evac run: clear held counts (search timer starts in EVAC_SEARCH).
+    EvacContext::reset();
 
     // Actions::Arm::attachGrabServos();
     // Actions::Arm::lift(4050);

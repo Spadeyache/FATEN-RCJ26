@@ -12,11 +12,8 @@
 //    OUTPUT_LOG    → human-readable debug text over Serial (use with serial monitor)
 #define OUTPUT_STREAM
 // #define OUTPUT_LOG
+// #define OUTPUT_CALIBRATE// Calibration mode prints only center 10x10 raw RGB.
 
-// In OUTPUT_STREAM builds, set to 0 to send only the ASCII debug overlay lines
-// ([LC] box/points/error and [ROW] scan colors) and skip the binary camera
-// image payload. This makes the point/box stream much more robust while tuning.
-#define STREAM_SEND_CAMERA_IMAGES 1
 
 // ── Serial baud rates ────────────────────────────────────────────────────────
 #define SERIAL_DEBUG_BAUD    115200
@@ -59,6 +56,7 @@
 #define MODE_NOGI          2
 #define MODE_LINE_ANGLE    3   // line slope + crossing count during gap traversal
 #define MODE_OBSTACLE      4   // obstacle re-acquire: arc see-line flag + line tilt angle
+#define MODE_SILVER_ALIGN  5   // evac entry: silver-tape tilt angle for perpendicular align
 
 //  Camera Vision range
 #define SCAN_COL_MIN       50   // First column (inclusive)
@@ -82,17 +80,6 @@
 
 #define RED_SAT_MIN        80
 #define RED_VAL_MIN        40
-
-// ── Camera RGB calibration routine (firmware) ────────────────────────────────
-// Used only by runCameraCalibration() (call is commented out in setup()).
-// Reads RAW RGB over a centre box, smoothed across CALIB_AVG_FRAMES frames.
-// Capture black then white (SPACE from the viewer) → prints vision.cpp constants:
-//   offset D = black * CALIB_MARGIN,   gain = 255 / (white - black).
-#define CALIB_BOX_CX      80    // sample-box centre column
-#define CALIB_BOX_CY      60    // sample-box centre row
-#define CALIB_BOX_HALF     8    // box is (2*HALF+1)^2, e.g. 17x17
-#define CALIB_AVG_FRAMES  10    // rolling frames averaged before a capture
-#define CALIB_MARGIN      0.8f  // black offset safety margin (matches vision.cpp)
 
 // ── Pixel sampling window used by updateRawGrayHSV() ─────────────────────────
 // Width/height must be odd. A 5x1 sample gives horizontal smoothing without
@@ -152,7 +139,7 @@
 #define LC_ROI_Y_TOP         15   // top edge (far from robot, small pixelY)
 #define LC_ROI_Y_BOT         80   // 65 bottom edge (near robot, large pixelY)
 
-#define LC_RUN_MIN_LEN         3   // min contiguous black samples on the border to count a line (≈ line width)
+#define LC_RUN_MIN_LEN         5   // min contiguous black samples on the border to count a line (≈ line width)
 #define LC_MATCH_GATE         30   // max loop-distance (samples) for the tracker to accept a match
 #define LC_LOST_FRAMES         5   // frames the IN may stay unseen before the base case re-seeds
 #define LF_EDGE_BLACK_THRESHOLD 5  // top/bottom ROI row black count <= this means that edge has no line

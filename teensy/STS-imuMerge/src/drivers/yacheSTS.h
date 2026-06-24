@@ -25,6 +25,7 @@ class yacheSTS {
     private:
         SMS_STS _sts;
         uint8_t _ids[4]    = {STS_ID_FL, STS_ID_FR, STS_ID_BL, STS_ID_BR};   // FL, FR, BL, BR
+        int8_t  _invert[4] = {STS_INVERT_FL, STS_INVERT_FR, STS_INVERT_BL, STS_INVERT_BR};
         int16_t _speeds[4] = {0, 0, 0, 0};
         uint8_t _accs[4]   = {0, 0, 0, 0};
 };

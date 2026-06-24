@@ -1,4 +1,5 @@
 #include "camera_config.h"
+#include "../config/config.h"
 #include "esp_camera.h"
 #include <Arduino.h>
 
@@ -38,7 +39,9 @@ bool Camera_Init() {
 
     esp_err_t err = esp_camera_init(&config);
     if (err != ESP_OK) {
+#ifndef OUTPUT_CALIBRATE
         Serial.printf("Camera init failed with error 0x%x\n", err);
+#endif
         return false;
     }
 
@@ -97,20 +100,24 @@ bool Camera_Init() {
         s->set_colorbar(s, 0);
 
         // --- 180° rotation (hardware, zero per-frame cost) ---
-        s->set_vflip(s, 1);   // vertical flip
-        s->set_hflip(s, 1);   // horizontal flip
+        // s->set_vflip(s, 1);     // vertical flip
+        // s->set_hmirror(s, 1);   // horizontal mirror
 
 
     }
     
     // Warmup: discard first 15 frames so sensor stabilizes
+#ifndef OUTPUT_CALIBRATE
     Serial.println("Camera warming up...");
+#endif
     for (int i = 0; i < 15; i++) {
         camera_fb_t* fb = esp_camera_fb_get();
         if (fb) esp_camera_fb_return(fb);
         delay(50);
     }
+#ifndef OUTPUT_CALIBRATE
     Serial.println("Camera ready.");
+#endif
 
     return true;
 }

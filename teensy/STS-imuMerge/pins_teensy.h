@@ -33,10 +33,19 @@
 #define STS_SERIAL          Serial5  // buffer enable: STS_EN_PIN (see above)
 
 //   On-bus servo IDs (FL, FR, BL, BR).
-#define STS_ID_FL            4
-#define STS_ID_FR            1
-#define STS_ID_BL            2
-#define STS_ID_BR            3
+#define STS_ID_FL            1
+#define STS_ID_FR            4
+#define STS_ID_BL            3
+#define STS_ID_BR            2
+
+//   Per-wheel spin-direction sign (+1 normal, -1 inverted). Applied at the
+//   lowest level in yacheSTS::power(): a positive power() arg must drive that
+//   wheel forward. Left/right are mirror-mounted, so left wheels default to -1.
+//   Flip a wheel here if it spins the wrong way.
+#define STS_INVERT_FL      (-1)
+#define STS_INVERT_FR      (+1)
+#define STS_INVERT_BL      (-1)
+#define STS_INVERT_BR      (+1)
 
 // =============================================================================
 //  Lift arm — KRS3031 smart servo (half-duplex via 74HCT126 buffer)
