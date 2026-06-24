@@ -296,7 +296,7 @@ void runLinePID() {
     const float kd = slope ? PID_KD_SLOPE : PID_KD_FLAT;
 
     const bool tightSlow = Processing::XiaoDecode::tightSlowFlag();
-    const float correction = kp * rawError + ki * integral + kd * derivative;
+    const float correction = (kp * rawError + ki * integral + kd * derivative);
     const bool  steepTurn = fabsf(correction) >= STEEP_TURN_CORR_THRESHOLD;
     const float base = tightSlow
         ? TIGHT_SLOW_BASE_SPEED

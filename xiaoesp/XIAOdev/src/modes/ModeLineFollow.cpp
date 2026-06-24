@@ -19,7 +19,7 @@ constexpr int ARC_MAX_SAMPLES = 340;
 // Shift all line-follow ROI X coords right to correct optical center (lens/mirror bias).
 constexpr int ARC_X_SHIFT = 0;//7
 // Shift all line-follow ROI Y coords down (lower the boxes in the frame).
-constexpr int ARC_Y_SHIFT = 7;//7
+constexpr int ARC_Y_SHIFT = 0;//7
 
 // Mode 0 black-line ROI:
 //   closed loop = bottom edge -> right tilted side -> top arc -> left tilted side.
@@ -265,6 +265,11 @@ bool hasBottomLinePoint(const LineCounts& lc) {
         if (lc.crossings[i].edge == LC_EDGE_BOTTOM || lc.crossings[i].pixelY >= ARC_BOTTOM_Y) return true;
     }
     return false;
+}
+
+bool gapByCrossings(const LineCounts& lc) {
+    if (lc.count == 0) return true;
+    return lc.count == 1 && lc.crossings[0].edge != LC_EDGE_TOP;
 }
 
 uint8_t rawGreenOnColorRow(camera_fb_t* fb, float lineCom, uint8_t& greenLeft, uint8_t& greenRight,
@@ -631,7 +636,7 @@ void modeLineFollowRun(camera_fb_t* fb, YacheEncodedSerial& teensy) {
     uint8_t colorBlack, redCount;
     scanColorRow(fb, colorCom, colorBlack, redCount);
     const bool bottomLinePoint = hasBottomLinePoint(lc);
-    const bool gapDetected = colorBlack <= GAP_BLACK_MAX && !bottomLinePoint;
+    const bool gapDetected = gapByCrossings(lc);
     const bool intersectionSaturated = colorBlack > INTERSECTION_BLACK_SAT_THRESHOLD;
 
     uint8_t greenLeft = 0, greenRight = 0, blackLeft = 0, blackRight = 0;
@@ -675,6 +680,9 @@ void modeLineFollowRun(camera_fb_t* fb, YacheEncodedSerial& teensy) {
     } else if (cls.inIndex >= 0) {
         // One isolated crossing, especially near the front, is not enough to steer.
         // Wait for an in/out pair instead of line-following from a single point.
+        // errByte = singlePointError(fb, lc.crossings[cls.inIndex], s_lastAngle, s_lastPos);
+        // s_lastErr = errByte;
+        // fresh = true;
         errByte = LF_ERROR_CENTER;
         s_lastErr = errByte;
         s_lastAngle = 0.0f;
