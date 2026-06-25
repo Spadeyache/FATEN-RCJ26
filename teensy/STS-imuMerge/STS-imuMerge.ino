@@ -1,9 +1,11 @@
 // =============================================================================
 //  STS-imuMerge.ino — Arduino entry point
-//
+
 //  This file is intentionally tiny. All logic lives under src/<layer>/.
 //  See README.md for the architecture overview and folder rules.
 // =============================================================================
+
+
 
 #include "config.h"
 #include "pins_teensy.h"
@@ -29,8 +31,8 @@ FLASHMEM void setup() {
     // analogWrite(BUZZER_PIN, 30);
     pinMode(STS_EN_PIN, OUTPUT);
     digitalWrite(STS_EN_PIN, HIGH);
-    // pinMode(BUZZER_PIN, OUTPUT);
-    // tone(BUZZER_PIN, 2000, 300);
+    pinMode(BUZZER_PIN, OUTPUT);
+    tone(BUZZER_PIN, 4000, 300);
 
     Actions::Drive::init();
     // Actions::Arm::init();           // servos + KRS, sets initial pose
@@ -62,7 +64,7 @@ void loop() {
     // Actions::Drive::motorRaw(-40, 40,40,40);
     // Actions::Forward::forward(100, 80);
     // Actions::Turn::turn(90, 40);
-    // Actions::Drive::motorRaw(0, 0,40,0);
+    // Actions::Drive::motorRaw(40, 40,0,0);
     // delay(1500);
     // return;
     // ========================================================================

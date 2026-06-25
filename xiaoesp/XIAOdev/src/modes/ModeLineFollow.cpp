@@ -67,7 +67,7 @@ constexpr uint8_t SILVER_ROW_MAX = LF_SILVER_ROW_MAX;
 constexpr uint8_t SILVER_THRESHOLD = 6; //num of px
 
 // Row-25 color processing. Bounds follow the arc ROI side walls, not the full image.
-constexpr uint8_t COLOR_ROW = 65;
+constexpr uint8_t COLOR_ROW = 45;
 constexpr uint8_t COLOR_X_MIN = ARC_LEFT_X;
 constexpr uint8_t COLOR_X_MAX = ARC_RIGHT_X;
 constexpr uint8_t RED_THRESHOLD = 30;
@@ -76,13 +76,9 @@ constexpr uint8_t GREEN_WINDOW = 25;
 constexpr uint8_t GREEN_LINE_HALF_W = 4;
 constexpr uint8_t GREEN_PX_THRESHOLD = 5;
 
-// Green command filter, local to mode 0. raw/command: 0 none, 1 u-turn, 2 left, 3 right.
-constexpr uint8_t GREEN_QUEUE_SIZE = 15;
-constexpr uint8_t GREEN_SIDE_VOTES = 4;
-constexpr uint8_t GREEN_UTURN_VOTES = 2;
-constexpr uint8_t GREEN_BOTH_VOTES = 4;
-// On confirm, re-send the latched turn command this many consecutive frames.
-constexpr uint8_t GREEN_SEND_REPEAT = 3;
+// Raw green reading, sent straight to the Teensy each frame (0 none, 1 u-turn /
+// both-green, 2 left, 3 right). No XIAO-side voting — the Teensy CommandFilter
+// does all the debouncing (see Processing::CommandFilter).
 
 // During a black-saturated intersection row, ignore/reset green votes so green
 // after the intersection does not accidentally command a turn.
@@ -119,13 +115,6 @@ uint8_t s_black[ARC_MAX_SAMPLES];
 int     s_sampleCount = 0;
 bool    s_geometryReady = false;
 
-uint8_t s_greenQ[GREEN_QUEUE_SIZE] = {};
-uint8_t s_greenHead = 0;
-// Once the green filter confirms a turn (uturn/left/right) we latch it and send
-// the same command to the Teensy for GREEN_SEND_REPEAT consecutive frames, then
-// reset the filter. The Teensy confirms after 2 of those.
-uint8_t s_greenSendCmd = 0;
-uint8_t s_greenSendCount = 0;
 bool    s_commitActive = false;
 bool    s_commitLeft = false;
 bool    s_commitSeenBranch = false;
@@ -448,31 +437,6 @@ uint8_t rawGreenOnColorRow(camera_fb_t* fb, float lineCom, uint8_t& greenLeft, u
     if (left && right) return 1;
     if (left) return 2;
     if (right) return 3;
-    return 0;
-}
-
-void resetGreenFilter() {
-    for (uint8_t i = 0; i < GREEN_QUEUE_SIZE; i++) s_greenQ[i] = 0;
-    s_greenHead = 0;
-}
-
-uint8_t updateGreenFilter(uint8_t raw) {
-    s_greenQ[s_greenHead] = raw;
-    s_greenHead = (uint8_t)((s_greenHead + 1) % GREEN_QUEUE_SIZE);
-
-    uint8_t vL = 0, vR = 0, vU = 0;
-    for (uint8_t i = 0; i < GREEN_QUEUE_SIZE; i++) {
-        switch (s_greenQ[i]) {
-            case 1: vU++; vL++; vR++; break;
-            case 2: vL++; break;
-            case 3: vR++; break;
-            default: break;
-        }
-    }
-
-    if (vU >= GREEN_UTURN_VOTES || (vL >= GREEN_BOTH_VOTES && vR >= GREEN_BOTH_VOTES)) return 1;
-    if (vL >= GREEN_SIDE_VOTES) return 2;
-    if (vR >= GREEN_SIDE_VOTES) return 3;
     return 0;
 }
 
@@ -824,9 +788,6 @@ uint8_t singlePointError(camera_fb_t* fb, const Crossing& p, float& angleOut, fl
 }  // namespace
 
 void modeLineFollowReset() {
-    resetGreenFilter();
-    s_greenSendCmd = 0;
-    s_greenSendCount = 0;
     clearCommit("reset");
     clearCurveCommit();
     lc_resetTracking();
@@ -862,31 +823,9 @@ void modeLineFollowRun(camera_fb_t* fb, YacheEncodedSerial& teensy) {
 
     uint8_t greenLeft = 0, greenRight = 0, blackLeft = 0, blackRight = 0;
     uint8_t rawGreen = rawGreenOnColorRow(fb, colorCom, greenLeft, greenRight, blackLeft, blackRight);
-    uint8_t greenCmd = 0;
-    if (s_greenSendCmd != 0) {
-        // Mid-burst: keep emitting the latched command, then reset after 3 sends.
-        greenCmd = s_greenSendCmd;
-        if (++s_greenSendCount >= GREEN_SEND_REPEAT) {
-            s_greenSendCmd = 0;
-            s_greenSendCount = 0;
-            resetGreenFilter();
-        }
-    } else if (gapDetected) {
-        resetGreenFilter();
-        rawGreen = 0;
-    } else {
-        // Keep the green vote filter on the XIAO, but left/right are no longer
-        // steered here via startCommit — they are sent to the Teensy as
-        // FEAT_GREEN_LEFT/RIGHT and executed there as a hardcoded forward+turn.
-        // On confirm, latch the command and start a 3-frame send burst.
-        greenCmd = updateGreenFilter(rawGreen);
-        if (greenCmd != 0) {
-            s_greenSendCmd = greenCmd;   // this frame counts as send #1
-            s_greenSendCount = 1;
-            clearCurveCommit();
-            if (greenCmd == 1) clearCommit("uturn");
-        }
-    }
+    // No XIAO-side filtering: forward the raw per-frame green reading and let the
+    // Teensy CommandFilter vote/debounce. (1 u-turn, 2 left, 3 right.)
+    const uint8_t greenCmd = gapDetected ? 0 : rawGreen;
 
     uint8_t featureId = FEAT_NONE;
     uint8_t errByte = s_lastErr;

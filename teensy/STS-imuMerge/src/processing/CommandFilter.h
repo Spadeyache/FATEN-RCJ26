@@ -1,10 +1,14 @@
 #pragma once
 
 // =============================================================================
-//  Processing::CommandFilter — moving-average (ring-buffer) vote on the XIAO
-//  FEATURE byte. An event is confirmed once it reaches its FILTER_THRESHOLD_*
-//  vote count within the last FILTER_QUEUE_SIZE frames. Events:
-//      FEAT_RED / FEAT_SILVER / FEAT_UTURN / FEAT_LINE_LOST  (see config.h)
+//  Processing::CommandFilter — majority-vote ring buffer for the XIAO command
+//  byte. The XIAO now sends the RAW per-frame reading (no XIAO-side filtering);
+//  all debouncing happens here.
+//
+//  A command is confirmed once it reaches its FILTER_THRESHOLD_<kind> votes
+//  within the last FILTER_QUEUE_SIZE frames. Multi-cause logic (U-turn fires
+//  when BOTH left- and right-green are glimpsed in the same window) is embedded
+//  in update() — see comments inside.
 //
 //  Vote totals are exposed as members for debug logging.
 // =============================================================================
@@ -14,13 +18,12 @@
 
 class CommandFilter {
 public:
-    uint8_t votesUturn    = 0;
-    uint8_t votesRed      = 0;
-    uint8_t votesSilver   = 0;
-    uint8_t votesLineLost = 0;
-    uint8_t votesGreenLeft  = 0;
-    uint8_t votesGreenRight = 0;
-    uint8_t votesSearchLineBlack = 0;  // SEARCH_LINE-mode black return line — used by LINE_Obstacle
+    uint8_t votesLeft   = 0;   // u-turn is derived from votesLeft + votesRight, no separate type
+    uint8_t votesRight  = 0;
+    uint8_t votesRed    = 0;
+    uint8_t votesSilver = 0;
+    uint8_t votesNoLine = 0;
+    uint8_t votesSearchLineBlack = 0;  // SEARCH_LINE-mode black return line — used by uturn recovery / LINE_Obstacle
 
     CommandFilter() { clear(); }
 

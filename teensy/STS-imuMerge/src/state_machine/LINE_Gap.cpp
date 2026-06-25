@@ -1,6 +1,7 @@
 #include "LINE_Gap.h"
 #include "StateMachine.h"
 #include "../../config.h"
+#include "../../pins_teensy.h"
 
 #include "../sensors/XIAO_link.h"
 #include "../processing/XiaoDecode.h"
@@ -9,53 +10,42 @@
 #include <Arduino.h>
 
 // =============================================================================
-//  LINE_Gap — gap-crossing sequence.
+//  LINE_Gap - gap-crossing sequence.
 //
 //  XIAO runs MODE_LINE_ANGLE, which sends every frame:
-//    ANGLE  — slope of the line between mid and bottom scan rows (127 = 0°)
-//    FLAG   — both-rows flag: set when both scan rows see a qualifying black chunk
-//    COM    — arc crossing count (same ROI as line follow)
+//    ANGLE  - slope of the line between mid and bottom scan rows (127 = 0 deg)
+//    FLAG   - both-rows flag: set when both scan rows see a qualifying black chunk
+//    COM    - arc crossing count (same ROI as line follow)
 //
-//  Sequence:
-//    1. GAP_BACK_TO_FLAG  — reverse slowly until both-rows flag is set
-//    2. GAP_BACK_EXTRA    — delay + reverse a fixed amount more, then stop
-//    3. GAP_SAMPLE_COUNT  — collect 5 frames of crossing count; round average
-//    4a. count > 1        → return to LINE_FOLLOW (robot straddles an intersection)
-//    4b. count == 1       → GAP_ALIGN_ANGLE: P-spin until |angle| < 5°
-//    5. GAP_CROSS_GAP     — drive forward until both-rows flag drops → LINE_FOLLOW
+//  This is intentionally one blocking chunk instead of a mini state machine.
 // =============================================================================
 
 namespace LINE_Gap {
 
 namespace {
-    enum GapPhase : uint8_t {
-        GAP_BACK_TO_FLAG,
-        GAP_BACK_EXTRA,
-        GAP_SAMPLE_COUNT,
-        GAP_ALIGN_ANGLE,
-        GAP_CROSS_GAP,
-    };
-
-    GapPhase phase = GAP_BACK_TO_FLAG;
-
-    // Reverse speed while searching for the line (slow, hardcoded)
     constexpr float GAP_BACK_SPEED       = -25.0f;
-    // Extra reverse after flag: fixed time at the same speed
-    constexpr uint32_t GAP_BACK_EXTRA_MS = 120;
-    // Crossing-count sample frames
-    constexpr uint8_t  GAP_SAMPLE_FRAMES = 5;
-    // Angle alignment: proportional gain and deadband
-    constexpr float GAP_ALIGN_KP         = 0.8f;   // motor% per degree; max ±50 clamped below
-    constexpr float GAP_ALIGN_MAX_SPEED  = 50.0f;
-    constexpr float GAP_ALIGN_DEADBAND   = 5.0f;   // degrees — stop spinning below this
-    // Gap crossing forward speed
-    constexpr float GAP_FORWARD_SPEED    = 45.0f;
+    constexpr uint8_t GAP_SAMPLE_FRAMES  = 5;
 
-    uint8_t  s_sampleN   = 0;
-    uint16_t s_sampleSum = 0;
+    constexpr float GAP_ALIGN_KP         = 1.8f;
+    constexpr float GAP_ALIGN_MAX_SPEED  = 50.0f;
+    constexpr float GAP_ALIGN_DEADBAND   = 5.0f;
+
+    constexpr float GAP_FORWARD_SPEED    = 45.0f;
 
     inline float signedAngleDeg() {
         return Processing::XiaoDecode::gapAngle() - 127.0f;
+    }
+
+    inline void updateXiaoNow() {
+        Sensors::XIAO_link::tick();
+        Processing::XiaoDecode::tick(true);
+    }
+
+    inline void returnToLineFollow() {
+        Actions::Drive::stop();
+        Processing::XiaoDecode::setMode(XIAO_MODE_LINE);
+        Processing::XiaoDecode::clearFilter();
+        StateMachine::transitionTo(StateMachine::LINE_FOLLOW);
     }
 }
 
@@ -66,99 +56,78 @@ void onEnter() {
     Actions::Drive::stop();
     Processing::XiaoDecode::setMode(XIAO_MODE_LINE_ANGLE);
     Processing::XiaoDecode::clearFilter();
-    phase    = GAP_BACK_TO_FLAG;
-    s_sampleN   = 0;
-    s_sampleSum = 0;
+    
+    // tone(BUZZER_PIN, 7000, 100);
 }
 
 void update() {
-    Sensors::XIAO_link::tick();
-    Processing::XiaoDecode::tick(true);
-
-    switch (phase) {
-
-        // ── 1. Reverse until both scan rows see the line ──────────────────────
-        case GAP_BACK_TO_FLAG:
-            if (Processing::XiaoDecode::gapBothRowsFlag()) {
-                Actions::Drive::stop();
-                phase = GAP_BACK_EXTRA;
-                return;
-            }
-            Actions::Drive::motor(GAP_BACK_SPEED, GAP_BACK_SPEED);
-            return;
-
-        // ── 2. Short extra reverse + stop ────────────────────────────────────
-        case GAP_BACK_EXTRA:
-            delay(30);
-            Actions::Drive::motor(GAP_BACK_SPEED, GAP_BACK_SPEED);
-            delay(GAP_BACK_EXTRA_MS);
-            Actions::Drive::stop();
-            s_sampleN   = 0;
-            s_sampleSum = 0;
-            phase = GAP_SAMPLE_COUNT;
-            return;
-
-        // ── 3. Sample crossing count over N frames ────────────────────────────
-        case GAP_SAMPLE_COUNT: {
-            Sensors::XIAO_link::tick();
-            Processing::XiaoDecode::tick(true);
-            s_sampleSum += Processing::XiaoDecode::gapLineCount();
-            s_sampleN++;
-
-            if (s_sampleN < GAP_SAMPLE_FRAMES) return;
-
-            const uint8_t avgCount = (uint8_t)((s_sampleSum + GAP_SAMPLE_FRAMES / 2) / GAP_SAMPLE_FRAMES);
-
-#if PRINT_STATE
-            Serial.print("GAP sample avg count: "); Serial.println(avgCount);
-#endif
-            if (avgCount > 1) {
-                // Multiple lines detected — straddle/intersection, return to follow
-                Processing::XiaoDecode::setMode(XIAO_MODE_LINE);
-                Processing::XiaoDecode::clearFilter();
-                StateMachine::transitionTo(StateMachine::LINE_FOLLOW);
-                return;
-            }
-
-            // Single line — align to its angle then cross
-            Processing::XiaoDecode::clearFilter();
-            phase = GAP_ALIGN_ANGLE;
-            return;
-        }
-
-        // ── 4. P-spin until aligned (|angle| < deadband) ─────────────────────
-        case GAP_ALIGN_ANGLE: {
-            const float angle = signedAngleDeg();
-#if PRINT_STATE
-            Serial.print("GAP align angle: "); Serial.println(angle);
-#endif
-            if (angle >= -GAP_ALIGN_DEADBAND && angle <= GAP_ALIGN_DEADBAND) {
-                Actions::Drive::stop();
-                phase = GAP_CROSS_GAP;
-                return;
-            }
-
-            float power = angle * GAP_ALIGN_KP;
-            if (power >  GAP_ALIGN_MAX_SPEED) power =  GAP_ALIGN_MAX_SPEED;
-            if (power < -GAP_ALIGN_MAX_SPEED) power = -GAP_ALIGN_MAX_SPEED;
-
-            // Positive angle → line tilts right → spin left motor forward, right back
-            Actions::Drive::motor(power, -power);
-            return;
-        }
-
-        // ── 5. Drive forward until both-rows flag drops ───────────────────────
-        case GAP_CROSS_GAP:
-            if (!Processing::XiaoDecode::gapBothRowsFlag()) {
-                Actions::Drive::stop();
-                Processing::XiaoDecode::setMode(XIAO_MODE_LINE);
-                Processing::XiaoDecode::clearFilter();
-                StateMachine::transitionTo(StateMachine::LINE_FOLLOW);
-                return;
-            }
-            Actions::Drive::motor(GAP_FORWARD_SPEED, GAP_FORWARD_SPEED);
-            return;
+// Reverse until both scan rows see the line.
+    updateXiaoNow();
+    while (!Processing::XiaoDecode::gapBothRowsFlag()) {
+        Actions::Drive::motor(GAP_BACK_SPEED, GAP_BACK_SPEED);
+        delay(5);
+        updateXiaoNow();
     }
+    delay(30);
+    Actions::Drive::stop();
+    
+
+// Classify Gap and line loss
+    uint16_t sampleSum = 0;
+    for (uint8_t i = 0; i < GAP_SAMPLE_FRAMES; i++) {
+        delay(15);
+        updateXiaoNow();
+        sampleSum += Processing::XiaoDecode::gapLineCount();
+    }
+    const uint8_t avgCount = (uint8_t)((sampleSum + GAP_SAMPLE_FRAMES / 2) / GAP_SAMPLE_FRAMES);
+
+    
+#if PRINT_STATE
+    Serial.print("GAP sample avg count: ");
+    Serial.println(avgCount);
+#endif
+    
+    // If there is >=2 then there is a line to follow. 0,1 mean a dead end, so we continue with gap program.
+    if (avgCount >= 2) {
+        returnToLineFollow();
+        return;
+    }
+
+    tone(BUZZER_PIN, 7000, 100);
+
+    // Single crossing: spin in place until the line angle is nearly straight.
+    Processing::XiaoDecode::clearFilter();
+    updateXiaoNow();
+    while (true) {
+        const float angle = signedAngleDeg();
+
+#if PRINT_STATE
+        Serial.print("GAP align angle: ");
+        Serial.println(angle);
+#endif
+
+        if (angle >= -GAP_ALIGN_DEADBAND && angle <= GAP_ALIGN_DEADBAND) break;
+
+        float power = angle * GAP_ALIGN_KP;
+        if (power >  GAP_ALIGN_MAX_SPEED) power =  GAP_ALIGN_MAX_SPEED;
+        if (power < -GAP_ALIGN_MAX_SPEED) power = -GAP_ALIGN_MAX_SPEED;
+
+        // Positive angle means the line tilts right, so spin left-forward/right-back.
+        Actions::Drive::motor(-power, power);
+        delay(5);
+        updateXiaoNow();
+    }
+    Actions::Drive::stop();
+
+    // 5. Cross the gap; when both rows no longer see the same line, go back.
+    updateXiaoNow();
+    while (Processing::XiaoDecode::gapBothRowsFlag()) {
+        Actions::Drive::motor(GAP_FORWARD_SPEED, GAP_FORWARD_SPEED);
+        delay(5);
+        updateXiaoNow();
+    }
+    delay(4000);
+    returnToLineFollow();
 }
 
 }  // namespace LINE_Gap

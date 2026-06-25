@@ -148,9 +148,12 @@ enum XiaoMode : uint8_t {
 #define FILTER_QUEUE_SIZE        15
 #define FILTER_THRESHOLD_RED      5   // red line
 #define FILTER_THRESHOLD_SILVER   4   // silver (evac entry)
-#define FILTER_THRESHOLD_UTURN    2   // U-turn — XIAO sends a 3-frame burst, confirm at 2
 #define FILTER_THRESHOLD_LINELOST  3   // sustained line loss → gap
-#define FILTER_THRESHOLD_GREEN    2   // green left/right — XIAO sends a 3-frame burst, confirm at 2
+#define FILTER_THRESHOLD_GREEN    4   // green left/right (matches main); u-turn = both sides build up
+
+// After firing any green turn (u-turn / left / right), ignore all green for this
+// long so the same intersection isn't re-read on the way out.
+#define DISABLE_GREEN_MS         500
 
 // =============================================================================
 //  K230D AI processor

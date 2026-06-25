@@ -116,7 +116,6 @@ void update() {
     // ── 1. Back off, turn out, nudge forward ──────────────────────────────────
     Actions::Forward::forward(-70, 50);
     Actions::Turn::turn(-80.0f);
-    Actions::Forward::forward(70, 2);
 
     Actions::Drive::stop();
     Processing::XiaoDecode::setMode(XIAO_MODE_OBSTACLE);
