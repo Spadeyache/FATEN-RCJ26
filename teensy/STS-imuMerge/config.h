@@ -48,6 +48,8 @@
 #define FEAT_RED            2   // raw red on the scan row (Teensy filters)
 #define FEAT_SILVER         3   // raw silver on the scan row (Teensy filters)
 #define FEAT_LINE_LOST      4   // raw "no line" on the scan row (Teensy filters)
+#define FEAT_GREEN_LEFT     7   // XIAO GreenFilter-confirmed left turn  (hardcoded fwd+turn)
+#define FEAT_GREEN_RIGHT    8   // XIAO GreenFilter-confirmed right turn (hardcoded fwd+turn)
 
 // FEATURE byte — mode-scoped codes for SEARCH_LINE / NOGI modes (separate code space):
 #define FEAT_SEARCH_LINE_SILVER 5   // SEARCH_LINE mode: silver tape
@@ -146,8 +148,9 @@ enum XiaoMode : uint8_t {
 #define FILTER_QUEUE_SIZE        15
 #define FILTER_THRESHOLD_RED      5   // red line
 #define FILTER_THRESHOLD_SILVER   4   // silver (evac entry)
-#define FILTER_THRESHOLD_UTURN    3   // U-turn — confirmed when seen > 2 times
+#define FILTER_THRESHOLD_UTURN    2   // U-turn — XIAO sends a 3-frame burst, confirm at 2
 #define FILTER_THRESHOLD_LINELOST  3   // sustained line loss → gap
+#define FILTER_THRESHOLD_GREEN    2   // green left/right — XIAO sends a 3-frame burst, confirm at 2
 
 // =============================================================================
 //  K230D AI processor

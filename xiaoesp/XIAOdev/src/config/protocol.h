@@ -21,6 +21,10 @@
 #define FEAT_SILVER        3
 #define FEAT_LINE_LOST     4
 
+// FEATURE byte: line-follow green turns (hardcoded forward+turn on Teensy).
+#define FEAT_GREEN_LEFT    7
+#define FEAT_GREEN_RIGHT   8
+
 // FEATURE byte: other modes.
 #define FEAT_SEARCH_LINE_SILVER 5
 #define FEAT_SEARCH_LINE_BLACK  6

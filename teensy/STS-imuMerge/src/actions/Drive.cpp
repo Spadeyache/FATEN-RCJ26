@@ -168,7 +168,7 @@ constexpr float ROTAXIS_DOWN_MIN  = 0.60f;  // gain: downhill-rear scale at full
 
 // --- frictionCircAdj tuning --------------------------------------------------
 constexpr float FRIC_TILT_DEG   = 8.0f;   // |pitch| or |roll| past this counts as "on a slope"
-constexpr float FRIC_SPEED_FLAT = 45.0f;  // 70 base speed on flat ground
+constexpr float FRIC_SPEED_FLAT = 70.0f;  // 70 base speed on flat ground
 constexpr float FRIC_SPEED_TILT = 40.0f;  // 55 base speed once tilted
 
 inline float rollGainFactor(float aRoll) {       // 1.0 → GRAV_GAIN_MIN as |roll| grows

@@ -81,6 +81,8 @@ constexpr uint8_t GREEN_QUEUE_SIZE = 15;
 constexpr uint8_t GREEN_SIDE_VOTES = 4;
 constexpr uint8_t GREEN_UTURN_VOTES = 2;
 constexpr uint8_t GREEN_BOTH_VOTES = 4;
+// On confirm, re-send the latched turn command this many consecutive frames.
+constexpr uint8_t GREEN_SEND_REPEAT = 3;
 
 // During a black-saturated intersection row, ignore/reset green votes so green
 // after the intersection does not accidentally command a turn.
@@ -119,6 +121,11 @@ bool    s_geometryReady = false;
 
 uint8_t s_greenQ[GREEN_QUEUE_SIZE] = {};
 uint8_t s_greenHead = 0;
+// Once the green filter confirms a turn (uturn/left/right) we latch it and send
+// the same command to the Teensy for GREEN_SEND_REPEAT consecutive frames, then
+// reset the filter. The Teensy confirms after 2 of those.
+uint8_t s_greenSendCmd = 0;
+uint8_t s_greenSendCount = 0;
 bool    s_commitActive = false;
 bool    s_commitLeft = false;
 bool    s_commitSeenBranch = false;
@@ -623,7 +630,9 @@ void clearCurveCommit() {
     s_curveLost = 0;
 }
 
-void startCommit(bool left) {
+// Retained for reference: green left/right are now handled as a hardcoded
+// forward+turn on the Teensy (FEAT_GREEN_LEFT/RIGHT), not via this commit.
+[[maybe_unused]] void startCommit(bool left) {
     s_commitActive = true;
     s_commitLeft = left;
     s_commitSeenBranch = false;
@@ -816,6 +825,8 @@ uint8_t singlePointError(camera_fb_t* fb, const Crossing& p, float& angleOut, fl
 
 void modeLineFollowReset() {
     resetGreenFilter();
+    s_greenSendCmd = 0;
+    s_greenSendCount = 0;
     clearCommit("reset");
     clearCurveCommit();
     lc_resetTracking();
@@ -852,15 +863,29 @@ void modeLineFollowRun(camera_fb_t* fb, YacheEncodedSerial& teensy) {
     uint8_t greenLeft = 0, greenRight = 0, blackLeft = 0, blackRight = 0;
     uint8_t rawGreen = rawGreenOnColorRow(fb, colorCom, greenLeft, greenRight, blackLeft, blackRight);
     uint8_t greenCmd = 0;
-    if (gapDetected) {
+    if (s_greenSendCmd != 0) {
+        // Mid-burst: keep emitting the latched command, then reset after 3 sends.
+        greenCmd = s_greenSendCmd;
+        if (++s_greenSendCount >= GREEN_SEND_REPEAT) {
+            s_greenSendCmd = 0;
+            s_greenSendCount = 0;
+            resetGreenFilter();
+        }
+    } else if (gapDetected) {
         resetGreenFilter();
         rawGreen = 0;
-    } else if (!s_commitActive) {
+    } else {
+        // Keep the green vote filter on the XIAO, but left/right are no longer
+        // steered here via startCommit — they are sent to the Teensy as
+        // FEAT_GREEN_LEFT/RIGHT and executed there as a hardcoded forward+turn.
+        // On confirm, latch the command and start a 3-frame send burst.
         greenCmd = updateGreenFilter(rawGreen);
-        if (greenCmd != 0) { resetGreenFilter(); clearCurveCommit(); }
-        if (greenCmd == 1) clearCommit("uturn");
-        if (greenCmd == 2) startCommit(true);
-        if (greenCmd == 3) startCommit(false);
+        if (greenCmd != 0) {
+            s_greenSendCmd = greenCmd;   // this frame counts as send #1
+            s_greenSendCount = 1;
+            clearCurveCommit();
+            if (greenCmd == 1) clearCommit("uturn");
+        }
     }
 
     uint8_t featureId = FEAT_NONE;
@@ -909,6 +934,8 @@ void modeLineFollowRun(camera_fb_t* fb, YacheEncodedSerial& teensy) {
 
     // Priority: silver > red > white-white gap > green.
     if (greenCmd == 1) featureId = FEAT_UTURN;
+    if (greenCmd == 2) featureId = FEAT_GREEN_LEFT;
+    if (greenCmd == 3) featureId = FEAT_GREEN_RIGHT;
     if (gapDetected) featureId = FEAT_LINE_LOST;
     if (redCount > RED_THRESHOLD) featureId = FEAT_RED;
     if (silverDetected) featureId = FEAT_SILVER;

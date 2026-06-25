@@ -18,6 +18,8 @@ public:
     uint8_t votesRed      = 0;
     uint8_t votesSilver   = 0;
     uint8_t votesLineLost = 0;
+    uint8_t votesGreenLeft  = 0;
+    uint8_t votesGreenRight = 0;
     uint8_t votesSearchLineBlack = 0;  // SEARCH_LINE-mode black return line — used by LINE_Obstacle
 
     CommandFilter() { clear(); }

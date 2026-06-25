@@ -8,6 +8,7 @@
 #include "../processing/XiaoDecode.h"
 #include "../actions/Drive.h"
 #include "../actions/Turn.h"
+#include "../actions/Forward.h"
 
 #include <Arduino.h>
 
@@ -75,6 +76,27 @@ void update() {
             Actions::Drive::stop();
             Processing::XiaoDecode::setMode(XIAO_MODE_LINE);
             delay(200);
+            Processing::XiaoDecode::clearFilter();
+            return;
+
+        // Green turns: hardcoded straight-in then 90° spin (no continuous commit).
+        case FEAT_GREEN_LEFT:
+            #if PRINT_ACTIONS
+                        Serial.println("Action: Green-Left");
+            #endif
+            Actions::Forward::forward(50.0f, 40.0f);
+            Actions::Turn::turn(-90.0f, 60.0f);   // for left
+            Actions::Drive::stop();
+            Processing::XiaoDecode::clearFilter();
+            return;
+
+        case FEAT_GREEN_RIGHT:
+            #if PRINT_ACTIONS
+                        Serial.println("Action: Green-Right");
+            #endif
+            Actions::Forward::forward(50.0f, 40.0f);
+            Actions::Turn::turn(90.0f, 60.0f);  // for right
+            Actions::Drive::stop();
             Processing::XiaoDecode::clearFilter();
             return;
 
