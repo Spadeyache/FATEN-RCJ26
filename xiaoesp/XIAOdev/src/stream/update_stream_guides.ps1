@@ -2,16 +2,21 @@ $ErrorActionPreference = 'Stop'
 
 $streamDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $modePath = Join-Path $streamDir '..\modes\ModeLineFollow.cpp'
+$hardwarePath = Join-Path $streamDir '..\config\hardware_config.h'
 $outPath = Join-Path $streamDir 'stream_guides.generated.js'
 
-$src = Get-Content -Raw -Path $modePath
+$src = (Get-Content -Raw -Path $modePath) + "`n" + (Get-Content -Raw -Path $hardwarePath)
 
 function Get-Const($name) {
     # Capture the whole right-hand side up to the ';' so expressions like
     # "80 + ARC_X_SHIFT" are handled, not just a single token.
-    $pattern = "constexpr\s+(?:uint8_t|uint16_t|int)\s+$name\s*=\s*([^;]+);"
+    $pattern = "constexpr\s+(?:uint8_t|uint16_t|int|float)\s+$name\s*=\s*([^;]+);"
     $m = [regex]::Match($src, $pattern)
-    if (-not $m.Success) { throw "Missing constexpr $name in $modePath" }
+    if (-not $m.Success) {
+        $pattern = "(?m)^\s*#define\s+$name\s+(.+?)\s*$"
+        $m = [regex]::Match($src, $pattern)
+    }
+    if (-not $m.Success) { throw "Missing constant $name in $modePath or $hardwarePath" }
 
     # Drop any trailing line comment and surrounding whitespace.
     $expr = ($m.Groups[1].Value -replace '//.*$', '').Trim()

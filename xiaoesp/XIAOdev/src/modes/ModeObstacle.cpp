@@ -21,16 +21,16 @@
 namespace {
 
 // ── Box geometry (copied from ModeLineFollow) ────────────────────────────────
-constexpr int     ARC_MAX_SAMPLES   = 340;
-constexpr uint8_t ARC_TOP_X         = 80;
-constexpr uint8_t ARC_TOP_Y         = 3;
-constexpr uint8_t ARC_LEFT_X        = 25;
-constexpr uint8_t ARC_RIGHT_X       = 135;
-constexpr uint8_t ARC_SIDE_Y        = 33;
-constexpr uint8_t ARC_BOTTOM_Y      = 85;
-constexpr uint8_t ARC_BOTTOM_LEFT_X = 40;
-constexpr uint8_t ARC_BOTTOM_RIGHT_X= 120;
-constexpr uint8_t ARC_SAMPLE_STEP   = 1;
+constexpr int     ARC_MAX_SAMPLES   = LF_ARC_MAX_SAMPLES;
+constexpr uint8_t ARC_TOP_X         = LF_ARC_TOP_X;
+constexpr uint8_t ARC_TOP_Y         = LF_ARC_TOP_Y;
+constexpr uint8_t ARC_LEFT_X        = LF_ARC_LEFT_X;
+constexpr uint8_t ARC_RIGHT_X       = LF_ARC_RIGHT_X;
+constexpr uint8_t ARC_SIDE_Y        = LF_ARC_SIDE_Y;
+constexpr uint8_t ARC_BOTTOM_Y      = LF_ARC_BOTTOM_Y;
+constexpr uint8_t ARC_BOTTOM_LEFT_X = LF_ARC_BOTTOM_LEFT_X;
+constexpr uint8_t ARC_BOTTOM_RIGHT_X= LF_ARC_BOTTOM_RIGHT_X;
+constexpr uint8_t ARC_SAMPLE_STEP   = (uint8_t)LF_ARC_SAMPLE_SPACING;
 constexpr uint8_t BLACK_NEIGHBOR_R  = 2;
 
 // ── Detection thresholds (copied from line follow / LineCount) ───────────────

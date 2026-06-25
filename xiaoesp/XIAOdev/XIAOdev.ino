@@ -27,7 +27,7 @@
 YacheEncodedSerial teensy(Serial1);
 
 // ── Dual-core streaming globals ────────────────────────────────────────────────
-static constexpr size_t FRAME_BYTES = 160UL * 120UL * 2UL;
+static constexpr size_t FRAME_BYTES = CAMERA_FRAME_BYTES;
 
 static uint8_t*  streamBuf[2]    = {nullptr, nullptr};
 static uint16_t  streamW[2], streamH[2];
@@ -71,7 +71,7 @@ void setup() {
 
     Serial.begin(SERIAL_DEBUG_BAUD);
 #ifndef OUTPUT_CALIBRATE
-    Serial1.begin(SERIAL_TEENSY_BAUD, SERIAL_8N1, D7, D6);
+    Serial1.begin(SERIAL_TEENSY_BAUD, SERIAL_8N1, SERIAL_TEENSY_RX_PIN, SERIAL_TEENSY_TX_PIN);
     while (!Serial1) delay(10);
 #endif
 

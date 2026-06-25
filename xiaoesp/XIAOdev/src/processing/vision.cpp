@@ -12,20 +12,13 @@ const uint8_t R_D = 0;
 const uint8_t G_D = 0;
 const uint8_t B_D = 0;
 #else
-// Paste measured calibration values here.
-// copy into vision.cpp
-const float R_Gain = 4.561717f;
-const float G_Gain = 1.033225f;
-const float B_Gain = 1.811080f;
+const float R_Gain = 1.98598130841;     // 1.98598130841
+const float G_Gain = 2.25265017668;     // 2.25265017668
+const float B_Gain = 3.1;     // 4.0
 
-const uint8_t R_D = 0;
-const uint8_t G_D = 0;
-const uint8_t B_D = 0;
-
-// y = slope * raw + intercept
-// R: y = 4.561717 * raw + 0.000
-// G: y = 1.033225 * raw + 0.000
-// B: y = 1.811080 * raw + 0.000
+const uint8_t R_D = 12.4 * 0.8;       // avgR_Black : 0.8 is the safety margin
+const uint8_t G_D = 25.2 * 0.8;       // 
+const uint8_t B_D = 17.4 * 0.8;        // 
 #endif
 
 void rgb888Calibration(uint8_t& r8, uint8_t& g8, uint8_t& b8) {

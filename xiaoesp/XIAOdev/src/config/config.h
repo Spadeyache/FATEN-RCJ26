@@ -1,5 +1,8 @@
 #pragma once
 
+#include "hardware_config.h"
+#include "protocol.h"
+
 // ─────────────────────────────────────────────────────────────────────────────
 //  Xiao ESP32-S3 — Universal Configuration
 //  Edit this file to tune all vision thresholds and mode parameters.
@@ -10,9 +13,9 @@
 //  Define exactly ONE:
 //    OUTPUT_STREAM → binary camera frames over Serial (use with HTML viewer)
 //    OUTPUT_LOG    → human-readable debug text over Serial (use with serial monitor)
-// #define OUTPUT_STREAM
+#define OUTPUT_STREAM
 // #define OUTPUT_LOG
-#define OUTPUT_CALIBRATE// Calibration mode prints only center 10x10 raw RGB.
+// #define OUTPUT_CALIBRATE// Calibration mode prints only center 10x10 raw RGB.
 
 // OUTPUT_STREAM submode:
 //   1 = send camera frames + [LC]/[ROW]/[EVT] overlay text
@@ -21,8 +24,6 @@
 
 
 // ── Serial baud rates ────────────────────────────────────────────────────────
-#define SERIAL_DEBUG_BAUD    115200
-#define SERIAL_TEENSY_BAUD   4000000
 
 // ═════════════════════════════════════════════════════════════════════════════
 //  XIAO ↔ Teensy protocol  —  KEEP IN SYNC with teensy/STS-imuMerge/config.h
@@ -34,34 +35,11 @@
 //    reg 0x04 ANGLE    X→T  gap line angle (gap mode)
 //    reg 0x05 FLAG     X→T  bit0 commit, bit1 tight-turn slow drive
 // ═════════════════════════════════════════════════════════════════════════════
-#define XIAO_REG_FEATURE   0x01
-#define XIAO_REG_COM       0x02
-#define XIAO_REG_MODE      0x03
-#define XIAO_REG_ANGLE     0x04
-#define XIAO_REG_FLAG      0x05
-
-#define XIAO_FLAG_COMMIT      0x01
-#define XIAO_FLAG_TIGHT_SLOW  0x02
-
 // FEATURE byte — LINE-follow mode events (the clean contract):
-#define FEAT_NONE          0
-#define FEAT_UTURN         1   // confirmed by the XIAO GreenFilter (both-green)
-#define FEAT_RED           2   // raw red on the scan row
-#define FEAT_SILVER        3   // raw silver on the scan row
-#define FEAT_LINE_LOST     4   // raw "no line" on the scan row
 
 // FEATURE byte — mode-scoped codes for SEARCH_LINE / NOGI modes (separate code space):
-#define FEAT_SEARCH_LINE_SILVER 5   // SEARCH_LINE mode: silver tape
-#define FEAT_SEARCH_LINE_BLACK  6   // SEARCH_LINE mode: black return line
-#define FEAT_NOGI_INTERSECT 6   // NOGI mode: intersection
 
 // Mode IDs received on XIAO_REG_MODE
-#define MODE_LINEFOLLOW    0
-#define MODE_SEARCH_LINE   1
-#define MODE_NOGI          2
-#define MODE_LINE_ANGLE    3   // line slope + crossing count during gap traversal
-#define MODE_OBSTACLE      4   // obstacle re-acquire: arc see-line flag + line tilt angle
-#define MODE_SILVER_ALIGN  5   // evac entry: silver-tape tilt angle for perpendicular align
 
 //  Camera Vision range
 #define SCAN_COL_MIN       50   // First column (inclusive)

@@ -18,6 +18,8 @@ static uint8_t s_edge[LC_MAX_PERIM];
 static bool    s_hasPrev    = false;
 static float   s_prevInPos  = 0.0f;
 static uint8_t s_lostFrames = 0;
+static bool    s_hasPrevFocus = false;
+static float   s_prevFocusPos = 0.0f;
 
 // Sample one border pixel into the loop arrays at slot i.
 static inline void lc_sample(camera_fb_t* fb, int x, int y, uint8_t edge, int i) {
@@ -114,6 +116,12 @@ int lc_trackPoint(float prevPos, const LineCounts& lc) {
     return best;
 }
 
+static int lc_trackNonTop(float prevPos, const LineCounts& lc) {
+    int idx = lc_trackPoint(prevPos, lc);
+    if (idx >= 0 && lc.crossings[idx].edge == LC_EDGE_TOP) return -1;
+    return idx;
+}
+
 int lc_lowestPixel(const LineCounts& lc) {
     int     best = -1;
     uint8_t maxY = 0;
@@ -130,6 +138,13 @@ int lc_lowestPixel(const LineCounts& lc) {
 void lc_resetTracking() {
     s_hasPrev    = false;
     s_lostFrames = 0;
+    s_hasPrevFocus = false;
+}
+
+void lc_noteFocusPoint(const LineCounts& lc, int focusIndex) {
+    if (focusIndex < 0 || focusIndex >= lc.count) return;
+    s_prevFocusPos = lc.crossings[focusIndex].pos;
+    s_hasPrevFocus = true;
 }
 
 // ── Committed goal (green turn) ──────────────────────────────────────────────
@@ -235,20 +250,25 @@ LineClass lc_updateIn(const LineCounts& lc) {
     int idx = -1;
 
     if (s_hasPrev) {
-        idx = lc_trackPoint(s_prevInPos, lc);
+        idx = lc_trackNonTop(s_prevInPos, lc);
         if (idx >= 0) {
-            if (lc.crossings[idx].edge == LC_EDGE_TOP) {
-                idx = -1;
-                s_hasPrev = false;
-                s_lostFrames = 0;
-            } else {
-                s_prevInPos  = lc.crossings[idx].pos;   // matched → advance the track
-                s_lostFrames = 0;
-            }
+            s_prevInPos  = lc.crossings[idx].pos;   // matched → advance the track
+            s_lostFrames = 0;
         } else {
-            // Transient miss: hold previous pos rather than latch onto a branch.
-            r.inHeld = true;
-            if (++s_lostFrames >= LC_LOST_FRAMES) s_hasPrev = false;  // give up → re-seed below
+            // If the old in-point is gone, the robot may have driven over last
+            // frame's focus/out point. Try that before holding stale in.
+            if (s_hasPrevFocus) {
+                idx = lc_trackNonTop(s_prevFocusPos, lc);
+            }
+            if (idx >= 0) {
+                s_prevInPos  = lc.crossings[idx].pos;
+                s_lostFrames = 0;
+                r.inHeld     = false;
+            } else {
+                // Transient miss: hold previous pos rather than latch onto a branch.
+                r.inHeld = true;
+                if (++s_lostFrames >= LC_LOST_FRAMES) s_hasPrev = false;  // give up → re-seed below
+            }
         }
     }
 

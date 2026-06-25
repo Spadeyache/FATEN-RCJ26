@@ -10,50 +10,58 @@
 
 namespace {
 
-constexpr int ARC_MAX_SAMPLES = 340;
+constexpr int ARC_MAX_SAMPLES = LF_ARC_MAX_SAMPLES;
 
 
 //run this to update serial
 //powershell -ExecutionPolicy Bypass -File xiaoesp\XIAOdev\src\stream\update_stream_guides.ps1
 
 // Shift all line-follow ROI X coords right to correct optical center (lens/mirror bias).
-constexpr int ARC_X_SHIFT = 0;//7
+constexpr int ARC_X_SHIFT = LF_ARC_X_SHIFT;
 // Shift all line-follow ROI Y coords down (lower the boxes in the frame).
-constexpr int ARC_Y_SHIFT = 0;//7
+constexpr int ARC_Y_SHIFT = LF_ARC_Y_SHIFT;
 
 // Mode 0 black-line ROI:
 //   closed loop = bottom edge -> right tilted side -> top arc -> left tilted side.
 //   Detection samples every point on that loop with the same black classifier.
-constexpr uint8_t ARC_TOP_X = 80 + ARC_X_SHIFT;
-constexpr uint8_t ARC_TOP_Y = 3 + ARC_Y_SHIFT;
-constexpr uint8_t ARC_LEFT_X = 25+0 + ARC_X_SHIFT;
-constexpr uint8_t ARC_RIGHT_X = 135-0 + ARC_X_SHIFT;
-constexpr uint8_t ARC_SIDE_Y = 33 + ARC_Y_SHIFT;
-constexpr uint8_t ARC_BOTTOM_Y = 85 + ARC_Y_SHIFT; //85 i might need to change the IN_PX gain
-constexpr uint8_t ARC_BOTTOM_LEFT_X = 40 + ARC_X_SHIFT;
-constexpr uint8_t ARC_BOTTOM_RIGHT_X = 120 + ARC_X_SHIFT;
-constexpr float ARC_SAMPLE_SPACING = 1.0f;
+constexpr uint8_t ARC_TOP_X = LF_ARC_TOP_X;
+constexpr uint8_t ARC_TOP_Y = LF_ARC_TOP_Y;
+constexpr uint8_t ARC_LEFT_X = LF_ARC_LEFT_X;
+constexpr uint8_t ARC_RIGHT_X = LF_ARC_RIGHT_X;
+constexpr uint8_t ARC_SIDE_Y = LF_ARC_SIDE_Y;
+constexpr uint8_t ARC_BOTTOM_Y = LF_ARC_BOTTOM_Y;
+constexpr uint8_t ARC_BOTTOM_LEFT_X = LF_ARC_BOTTOM_LEFT_X;
+constexpr uint8_t ARC_BOTTOM_RIGHT_X = LF_ARC_BOTTOM_RIGHT_X;
+constexpr float ARC_SAMPLE_SPACING = LF_ARC_SAMPLE_SPACING;
 constexpr float ARC_PI = 3.14159265358979323846f;
-constexpr uint8_t ARC_BOUNDARY_BAND_HALF_W = 2;   // 5 px wide, across the boundary point
-constexpr uint8_t ARC_BOUNDARY_BAND_HALF_H = 10;  // row +/- 10, helps through LED glare gaps
-constexpr uint8_t ARC_BOUNDARY_BLACK_HITS = 3;
-constexpr uint8_t ARC_RUN_MIN_LEN = 3;
+constexpr uint8_t ARC_BOUNDARY_BAND_HALF_W = 5;  // x +/- 5 = 11 px wide
+constexpr uint8_t ARC_BOUNDARY_BAND_HALF_H = 2;  // y +/- 2 = 5 px tall
+constexpr uint8_t ARC_BOUNDARY_BLACK_HITS = 20; //11(5+5+1) * 5(2+2+1) =  55px can be black at max
+constexpr uint8_t ARC_UPPER_SIDE_BLACK_HITS = 5;
+constexpr uint8_t ARC_UPPER_SIDE_Y_MAX = 55;
+constexpr uint8_t ARC_UPPER_SIDE_INNER_W = 6;
+constexpr uint8_t ARC_UPPER_SIDE_HALF_H = 1;
+constexpr uint8_t ARC_RUN_MIN_LEN = 14;
+constexpr uint8_t ARC_CLOSE_GAP_MAX = 3;          // BB + up to 3 white + BB => one black run
+constexpr uint8_t ARC_CLOSE_GAP_SIDE_BLACK = 2;
 
-// Error = 127 + signed angle * ANGLE_SCALE * side boost + bottom in-point offset * IN_PX_SCALE.
-constexpr float ARC_ANGLE_SCALE = 1.7f; //2.0 
-constexpr float ARC_IN_PX_SCALE = 0.6f; // balance of front and back gain
-constexpr uint8_t ARC_SIDE_GAIN_Y = 45;  //boosts with gain in the side bellow Y : for tight turns
-constexpr float ARC_SIDE_GAIN_MULT = 1.0f; //1.6
-constexpr uint8_t TIGHT_SLOW_OUT_Y = 65;
+// Error = 127 + signed angle + line-center offset + a smaller in-point offset.
+// The center term uses the average of in/out X so the robot body rides on the line.
+constexpr float ARC_ANGLE_SCALE = 1.1f;
+constexpr float ARC_CENTER_PX_SCALE = 0.45f;
+constexpr float ARC_IN_PX_SCALE = 0.7f;
+constexpr uint8_t ARC_SIDE_GAIN_Y = 55;  //boosts with gain in the side bellow Y : for tight turns
+constexpr float ARC_SIDE_GAIN_MULT = 2.0f; //1.6
+constexpr uint8_t TIGHT_SLOW_OUT_Y = 55;
 constexpr uint8_t SINGLE_FRONT_ROW_DY = 12;
 constexpr uint8_t SINGLE_FRONT_ROW_HALF_W = 30;
 constexpr uint8_t SINGLE_FRONT_ROW_MIN_BLACK = 3;
 
 // Silver rescue-zone tape scan: same side-column logic as the older line/search modes.
-constexpr uint8_t SILVER_COL_LEFT = 33;
-constexpr uint8_t SILVER_COL_RIGHT = 127;
-constexpr uint8_t SILVER_ROW_MIN = 0;
-constexpr uint8_t SILVER_ROW_MAX = 70;
+constexpr uint8_t SILVER_COL_LEFT = LF_SILVER_COL_LEFT;
+constexpr uint8_t SILVER_COL_RIGHT = LF_SILVER_COL_RIGHT;
+constexpr uint8_t SILVER_ROW_MIN = LF_SILVER_ROW_MIN;
+constexpr uint8_t SILVER_ROW_MAX = LF_SILVER_ROW_MAX;
 constexpr uint8_t SILVER_THRESHOLD = 6; //num of px
 
 // Row-25 color processing. Bounds follow the arc ROI side walls, not the full image.
@@ -98,7 +106,7 @@ constexpr uint8_t HAMIDASHI_OUT_WIDTH_MIN = 12;
 
 // If the forward arc/side ROI contains about two lines worth of black,
 // treat it as saturated/intersection-like and drive straight instead of chasing an out point.
-constexpr uint16_t ARC_BLACK_CENTER_THRESHOLD = 50;
+constexpr uint16_t ARC_BLACK_CENTER_THRESHOLD = 75;
 
 uint8_t s_px[ARC_MAX_SAMPLES];
 uint8_t s_py[ARC_MAX_SAMPLES];
@@ -143,12 +151,29 @@ bool sampleRawAt(camera_fb_t* fb, int x, int y, uint8_t& r, uint8_t& g, uint8_t&
     return true;
 }
 
-bool boundarySampleBlack(camera_fb_t* fb, uint8_t x, uint8_t y) {
+bool upperTiltedSide(uint8_t edge, uint8_t y) {
+    return (edge == LC_EDGE_LEFT || edge == LC_EDGE_RIGHT) && y <= ARC_UPPER_SIDE_Y_MAX;
+}
+
+bool boundarySampleBlack(camera_fb_t* fb, uint8_t x, uint8_t y, uint8_t edge) {
     uint8_t blackHits = 0;
     uint8_t saturatedHits = 0;
+    const bool upperSide = upperTiltedSide(edge, y);
 
-    for (int dy = -(int)ARC_BOUNDARY_BAND_HALF_H; dy <= (int)ARC_BOUNDARY_BAND_HALF_H; dy++) {
-        for (int dx = -(int)ARC_BOUNDARY_BAND_HALF_W; dx <= (int)ARC_BOUNDARY_BAND_HALF_W; dx++) {
+    const int dyMin = upperSide ? -(int)ARC_UPPER_SIDE_HALF_H : -(int)ARC_BOUNDARY_BAND_HALF_H;
+    const int dyMax = upperSide ?  (int)ARC_UPPER_SIDE_HALF_H :  (int)ARC_BOUNDARY_BAND_HALF_H;
+    int dxMin = -(int)ARC_BOUNDARY_BAND_HALF_W;
+    int dxMax =  (int)ARC_BOUNDARY_BAND_HALF_W;
+    if (upperSide && edge == LC_EDGE_LEFT) {
+        dxMin = 1;
+        dxMax = (int)ARC_UPPER_SIDE_INNER_W;
+    } else if (upperSide && edge == LC_EDGE_RIGHT) {
+        dxMin = -(int)ARC_UPPER_SIDE_INNER_W;
+        dxMax = -1;
+    }
+
+    for (int dy = dyMin; dy <= dyMax; dy++) {
+        for (int dx = dxMin; dx <= dxMax; dx++) {
             uint8_t r, g, b;
             if (!sampleRawAt(fb, (int)x + dx, (int)y + dy, r, g, b)) continue;
 
@@ -163,7 +188,9 @@ bool boundarySampleBlack(camera_fb_t* fb, uint8_t x, uint8_t y) {
     }
 
     if (blackHits == 0) return false;
-    const int threshold = max(1, (int)ARC_BOUNDARY_BLACK_HITS - (int)saturatedHits);
+    const uint8_t baseThreshold = upperSide ? ARC_UPPER_SIDE_BLACK_HITS
+                                            : ARC_BOUNDARY_BLACK_HITS;
+    const int threshold = (int)baseThreshold - (int)saturatedHits;
     return blackHits >= threshold;
 }
 
@@ -225,8 +252,57 @@ void buildArcGeometry() {
 
 void sampleArcLoop(camera_fb_t* fb) {
     for (int i = 0; i < s_sampleCount; i++) {
-        s_black[i] = boundarySampleBlack(fb, s_px[i], s_py[i]) ? 1 : 0;
+        s_black[i] = boundarySampleBlack(fb, s_px[i], s_py[i], s_edge[i]) ? 1 : 0;
     }
+}
+
+void closeSmallArcGaps() {
+    const int P = s_sampleCount;
+    if (P <= 0) return;
+
+    int start = -1;
+    for (int i = 0; i < P; i++) {
+        if (!s_black[i]) {
+            start = i;
+            break;
+        }
+    }
+    if (start < 0) return;
+
+    uint8_t closed[ARC_MAX_SAMPLES];
+    for (int i = 0; i < P; i++) closed[i] = s_black[i];
+
+    int k = 0;
+    while (k < P) {
+        const int idx = (start + k) % P;
+        if (s_black[idx]) {
+            k++;
+            continue;
+        }
+
+        const int runStartK = k;
+        int len = 0;
+        while (k < P && !s_black[(start + k) % P]) {
+            len++;
+            k++;
+        }
+
+        if (len > ARC_CLOSE_GAP_MAX) continue;
+
+        bool leftOk = true;
+        bool rightOk = true;
+        for (int j = 1; j <= ARC_CLOSE_GAP_SIDE_BLACK; j++) {
+            if (!s_black[(start + runStartK - j + P) % P]) leftOk = false;
+            if (!s_black[(start + runStartK + len + j - 1) % P]) rightOk = false;
+        }
+        if (!leftOk || !rightOk) continue;
+
+        for (int j = 0; j < len; j++) {
+            closed[(start + runStartK + j) % P] = 1;
+        }
+    }
+
+    for (int i = 0; i < P; i++) s_black[i] = closed[i];
 }
 
 uint16_t countArcBlackSamples() {
@@ -353,6 +429,7 @@ void detectArcCrossings(camera_fb_t* fb, LineCounts& out) {
 
     buildArcGeometry();
     sampleArcLoop(fb);
+    closeSmallArcGaps();
 
     const int P = s_sampleCount;
     out.perimeter = (float)P;
@@ -382,6 +459,50 @@ void detectArcCrossings(camera_fb_t* fb, LineCounts& out) {
     if (len > 0) emitRun(out, start, runStartK, len, P);
 }
 
+bool forwardEdge(uint8_t edge) {
+    return edge == LC_EDGE_TOP || edge == LC_EDGE_LEFT || edge == LC_EDGE_RIGHT;
+}
+
+void mergeTwoForwardOuts(LineCounts& lc, LineClass& cls) {
+    int aIndex = -1;
+    int bIndex = -1;
+    uint8_t forwardOutCount = 0;
+    for (int i = 0; i < lc.count; i++) {
+        if (i == cls.inIndex) continue;
+        if (!forwardEdge(lc.crossings[i].edge)) continue;
+        if (forwardOutCount == 0) aIndex = i;
+        else if (forwardOutCount == 1) bIndex = i;
+        forwardOutCount++;
+    }
+    if (forwardOutCount != 2 || aIndex < 0 || bIndex < 0) return;
+
+    const Crossing a = lc.crossings[aIndex];
+    const Crossing b = lc.crossings[bIndex];
+    float aPos = a.pos;
+    float bPos = b.pos;
+    if (lc.perimeter > 0.0f && fabsf(aPos - bPos) > lc.perimeter * 0.5f) {
+        if (aPos < bPos) aPos += lc.perimeter;
+        else             bPos += lc.perimeter;
+    }
+
+    Crossing merged;
+    merged.pos = (aPos + bPos) * 0.5f;
+    if (lc.perimeter > 0.0f && merged.pos >= lc.perimeter) merged.pos -= lc.perimeter;
+    merged.edge = (a.edge == b.edge) ? a.edge : LC_EDGE_TOP;
+    merged.pixelX = (uint8_t)(((uint16_t)a.pixelX + (uint16_t)b.pixelX) / 2);
+    merged.pixelY = (uint8_t)(((uint16_t)a.pixelY + (uint16_t)b.pixelY) / 2);
+    const uint16_t mergedWidth = (uint16_t)a.width + (uint16_t)b.width;
+    merged.width = (uint8_t)(mergedWidth > 255 ? 255 : mergedWidth);
+
+    lc.crossings[aIndex] = merged;
+    for (int i = bIndex; i < (int)lc.count - 1; i++) {
+        lc.crossings[i] = lc.crossings[i + 1];
+    }
+    lc.count--;
+    if (cls.inIndex > bIndex) cls.inIndex--;
+    cls.outCount = (cls.inIndex >= 0) ? (uint8_t)(lc.count - 1) : lc.count;
+}
+
 int selectSteeringOut(const LineCounts& lc, int inIndex) {
     int best = -1;
     int bestRank = 1000;
@@ -401,6 +522,19 @@ int selectSteeringOut(const LineCounts& lc, int inIndex) {
             best = i;
             bestRank = rank;
             bestDx = dx;
+        }
+    }
+    return best;
+}
+
+int selectWidestOut(const LineCounts& lc, int inIndex) {
+    int best = -1;
+    uint8_t bestWidth = 0;
+    for (int i = 0; i < lc.count; i++) {
+        if (i == inIndex) continue;
+        if (best < 0 || lc.crossings[i].width > bestWidth) {
+            best = i;
+            bestWidth = lc.crossings[i].width;
         }
     }
     return best;
@@ -552,15 +686,17 @@ uint8_t vectorError(const Crossing& in, const Crossing& out, float sideMult,
 
     float angleDeg = atan2f(dx, dy) * 57.2957795f;
     const float inOffset = (float)in.pixelX - LF_CENTER_X;
+    const float centerOffset = (((float)in.pixelX + (float)out.pixelX) * 0.5f) - LF_CENTER_X;
     float err = (float)LF_ERROR_CENTER +
         angleDeg * ARC_ANGLE_SCALE * sideMult +
+        centerOffset * ARC_CENTER_PX_SCALE +
         inOffset * ARC_IN_PX_SCALE;
 
     if (err < 0.0f) err = 0.0f;
     if (err > 254.0f) err = 254.0f;
 
     angleOut = angleDeg;
-    posOut = inOffset;
+    posOut = centerOffset;
     return (uint8_t)(err + 0.5f);
 }
 
@@ -581,7 +717,7 @@ bool singleFrontRowDirection(camera_fb_t* fb, const Crossing& p, Crossing& out) 
     const int x1 = min((int)COLOR_X_MAX, (int)p.pixelX + SINGLE_FRONT_ROW_HALF_W);
     int weighted = 0, hits = 0;
     for (int x = x0; x <= x1; x++) {
-        if (!boundarySampleBlack(fb, (uint8_t)x, (uint8_t)y)) continue;
+        if (!boundarySampleBlack(fb, (uint8_t)x, (uint8_t)y, LC_EDGE_BOTTOM)) continue;
         weighted += x;
         hits++;
     }
@@ -625,9 +761,12 @@ void modeLineFollowRun(camera_fb_t* fb, YacheEncodedSerial& teensy) {
     detectArcCrossings(fb, lc);
 
     LineClass cls = lc_updateIn(lc);
+    mergeTwoForwardOuts(lc, cls);
     const int normalSteerOut = selectSteeringOut(lc, cls.inIndex);
-    const uint16_t arcBlackCount = countArcBlackSamples();
-    const bool arcBlackSaturated = arcBlackCount >= ARC_BLACK_CENTER_THRESHOLD;
+    const uint16_t arcBlackCount = 0; // saturation disabled
+    const bool arcBlackSaturated = false;
+    // const uint16_t arcBlackCount = countArcBlackSamples();
+    // const bool arcBlackSaturated = arcBlackCount >= ARC_BLACK_CENTER_THRESHOLD;
     // digitalWrite(LED_BUILTIN, arcBlackSaturated ? LOW : HIGH);  // ESP32 LED active-LOW
     const uint8_t silverLeft = countSilverOnColumn(fb, SILVER_COL_LEFT);
     const uint8_t silverRight = countSilverOnColumn(fb, SILVER_COL_RIGHT);
@@ -637,12 +776,13 @@ void modeLineFollowRun(camera_fb_t* fb, YacheEncodedSerial& teensy) {
     scanColorRow(fb, colorCom, colorBlack, redCount);
     const bool bottomLinePoint = hasBottomLinePoint(lc);
     const bool gapDetected = gapByCrossings(lc);
-    const bool intersectionSaturated = colorBlack > INTERSECTION_BLACK_SAT_THRESHOLD;
+    const bool intersectionSaturated = false;
+    // const bool intersectionSaturated = colorBlack > INTERSECTION_BLACK_SAT_THRESHOLD;
 
     uint8_t greenLeft = 0, greenRight = 0, blackLeft = 0, blackRight = 0;
     uint8_t rawGreen = rawGreenOnColorRow(fb, colorCom, greenLeft, greenRight, blackLeft, blackRight);
     uint8_t greenCmd = 0;
-    if (intersectionSaturated || gapDetected) {
+    if (gapDetected) {
         resetGreenFilter();
         rawGreen = 0;
     } else if (!s_commitActive) {
@@ -660,20 +800,24 @@ void modeLineFollowRun(camera_fb_t* fb, YacheEncodedSerial& teensy) {
     // Auto curve commit: lock a tight-turn out so the mid-turn return-stub can't
     // steal the target. Suppressed during a saturated (intersection) row and
     // outranked by the green commit. Priority: green > curve > normal.
-    if (arcBlackSaturated) clearCurveCommit();
-    else                   tryStartCurveCommit(lc, cls);
+    // if (arcBlackSaturated) clearCurveCommit();
+    // else                   tryStartCurveCommit(lc, cls);
+    tryStartCurveCommit(lc, cls);
 
     int steerOut;
-    if (s_commitActive)     steerOut = committedOut(lc, cls.inIndex);
-    else if (s_curveActive) steerOut = curveCommittedOut(lc, cls.inIndex);
-    else                    steerOut = normalSteerOut;
+    if (s_commitActive)          steerOut = committedOut(lc, cls.inIndex);
+    else if (s_curveActive)      steerOut = curveCommittedOut(lc, cls.inIndex);
+    // else if (arcBlackSaturated)  steerOut = selectWidestOut(lc, cls.inIndex);
+    else                         steerOut = normalSteerOut;
+    lc_noteFocusPoint(lc, steerOut);
 
-    if (arcBlackSaturated) {
-        errByte = LF_ERROR_CENTER;
-        s_lastErr = errByte;
-        s_lastAngle = 0.0f;
-        s_lastPos = 0.0f;
-    } else if (cls.inIndex >= 0 && steerOut >= 0) {
+    // if (arcBlackSaturated) {
+    //     errByte = LF_ERROR_CENTER;
+    //     s_lastErr = errByte;
+    //     s_lastAngle = 0.0f;
+    //     s_lastPos = 0.0f;
+    // } else
+    if (cls.inIndex >= 0 && steerOut >= 0) {
         errByte = arcAngleError(lc, cls.inIndex, steerOut, s_lastAngle, s_lastPos);
         s_lastErr = errByte;
         fresh = true;
@@ -708,7 +852,7 @@ void modeLineFollowRun(camera_fb_t* fb, YacheEncodedSerial& teensy) {
                       arcBlackCount, arcBlackSaturated);
     // Viewer-only sensor state. Silver and green write each side independently;
     // red, gap/no-line and plain line write both sides at their own priority.
-    if (colorBlack > GAP_BLACK_MAX) {
+    if (!gapDetected) {
         xs_setSensorBoth(XS_BLACK, XS_PRIO_LINE);
     }
     if (gapDetected) {
@@ -737,7 +881,7 @@ void modeLineFollowRun(camera_fb_t* fb, YacheEncodedSerial& teensy) {
     if (steerOut >= 0 && lc.crossings[steerOut].pixelY >= TIGHT_SLOW_OUT_Y) {
         xiaoFlags |= XIAO_FLAG_TIGHT_SLOW;
     }
-    digitalWrite(LED_BUILTIN, (featureId == FEAT_LINE_LOST) ? LOW : HIGH);  // ESP32 LED active-LOW
+    digitalWrite(LED_BUILTIN, HIGH);  // saturation LED disabled; ESP32 LED active-LOW
     teensy.send(XIAO_REG_FLAG, xiaoFlags);
 
     SPRINTF(SPRINT_RESULTS, "[RES]",

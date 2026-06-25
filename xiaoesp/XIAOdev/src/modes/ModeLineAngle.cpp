@@ -14,12 +14,12 @@
 // =============================================================================
 
 // Scan rows
-static constexpr uint8_t LA_ROW_BOTTOM      = 85;   // near robot  (= ARC_BOTTOM_Y in line follow)
+static constexpr uint8_t LA_ROW_BOTTOM      = LF_ARC_BOTTOM_Y;   // near robot
 static constexpr uint8_t LA_ROW_MID         = 40;   // look-ahead row
 
 // Scan columns (= ARC_BOTTOM_LEFT_X .. ARC_BOTTOM_RIGHT_X in line follow)
-static constexpr uint8_t LA_COL_MIN         = 40;
-static constexpr uint8_t LA_COL_MAX         = 120;
+static constexpr uint8_t LA_COL_MIN         = LF_ARC_BOTTOM_LEFT_X;
+static constexpr uint8_t LA_COL_MAX         = LF_ARC_BOTTOM_RIGHT_X;
 
 // Minimum contiguous black pixels to register as a line (= LC_RUN_MIN_LEN)
 static constexpr uint8_t LA_MIN_CHUNK_PX    = 3;
