@@ -38,12 +38,14 @@ constexpr uint8_t ARC_BOUNDARY_BAND_HALF_W = 5;  // x +/- 5 = 11 px wide
 constexpr uint8_t ARC_BOUNDARY_BAND_HALF_H = 2;  // y +/- 2 = 5 px tall
 constexpr uint8_t ARC_BOUNDARY_BLACK_HITS = 20; //11(5+5+1) * 5(2+2+1) =  55px can be black at max
 constexpr uint8_t ARC_UPPER_SIDE_BLACK_HITS = 5;
-constexpr uint8_t ARC_UPPER_SIDE_Y_MAX = 55;
-constexpr uint8_t ARC_UPPER_SIDE_INNER_W = 6;
-constexpr uint8_t ARC_UPPER_SIDE_HALF_H = 1;
+constexpr uint8_t ARC_UPPER_SIDE_Y_MAX = 70;
+constexpr uint8_t ARC_UPPER_SIDE_INNER_W = 12;
+constexpr uint8_t ARC_UPPER_SIDE_HALF_H = 2;
 constexpr uint8_t ARC_RUN_MIN_LEN = 14;
 constexpr uint8_t ARC_CLOSE_GAP_MAX = 3;          // BB + up to 3 white + BB => one black run
 constexpr uint8_t ARC_CLOSE_GAP_SIDE_BLACK = 2;
+constexpr uint8_t ARC_UPPER_SIDE_CLOSE_GAP_MAX = 45;
+constexpr uint8_t ARC_UPPER_SIDE_CLOSE_SIDE_BLACK = 1;
 
 // Error = 127 + signed angle + line-center offset + a smaller in-point offset.
 // The center term uses the average of in/out X so the robot body rides on the line.
@@ -305,6 +307,66 @@ void closeSmallArcGaps() {
     for (int i = 0; i < P; i++) s_black[i] = closed[i];
 }
 
+bool upperTiltedSideSample(int idx) {
+    return upperTiltedSide(s_edge[idx], s_py[idx]);
+}
+
+void closeUpperSideArcGaps() {
+    const int P = s_sampleCount;
+    if (P <= 0) return;
+
+    int start = -1;
+    for (int i = 0; i < P; i++) {
+        if (!s_black[i]) {
+            start = i;
+            break;
+        }
+    }
+    if (start < 0) return;
+
+    uint8_t closed[ARC_MAX_SAMPLES];
+    for (int i = 0; i < P; i++) closed[i] = s_black[i];
+
+    int k = 0;
+    while (k < P) {
+        const int idx = (start + k) % P;
+        if (s_black[idx]) {
+            k++;
+            continue;
+        }
+
+        const int runStartK = k;
+        const int firstGapIdx = (start + runStartK) % P;
+        const uint8_t gapEdge = s_edge[firstGapIdx];
+        int len = 0;
+        bool allUpperSide = upperTiltedSideSample(firstGapIdx);
+        while (k < P && !s_black[(start + k) % P]) {
+            const int gapIdx = (start + k) % P;
+            if (!upperTiltedSideSample(gapIdx) || s_edge[gapIdx] != gapEdge) allUpperSide = false;
+            len++;
+            k++;
+        }
+
+        if (!allUpperSide || len > ARC_UPPER_SIDE_CLOSE_GAP_MAX) continue;
+
+        bool leftOk = true;
+        bool rightOk = true;
+        for (int j = 1; j <= ARC_UPPER_SIDE_CLOSE_SIDE_BLACK; j++) {
+            const int leftIdx = (start + runStartK - j + P) % P;
+            const int rightIdx = (start + runStartK + len + j - 1) % P;
+            if (!s_black[leftIdx] || s_edge[leftIdx] != gapEdge || !upperTiltedSideSample(leftIdx)) leftOk = false;
+            if (!s_black[rightIdx] || s_edge[rightIdx] != gapEdge || !upperTiltedSideSample(rightIdx)) rightOk = false;
+        }
+        if (!leftOk || !rightOk) continue;
+
+        for (int j = 0; j < len; j++) {
+            closed[(start + runStartK + j) % P] = 1;
+        }
+    }
+
+    for (int i = 0; i < P; i++) s_black[i] = closed[i];
+}
+
 uint16_t countArcBlackSamples() {
     uint16_t count = 0;
     for (int i = 0; i < s_sampleCount; i++) {
@@ -430,6 +492,7 @@ void detectArcCrossings(camera_fb_t* fb, LineCounts& out) {
     buildArcGeometry();
     sampleArcLoop(fb);
     closeSmallArcGaps();
+    closeUpperSideArcGaps();
 
     const int P = s_sampleCount;
     out.perimeter = (float)P;
@@ -463,6 +526,10 @@ bool forwardEdge(uint8_t edge) {
     return edge == LC_EDGE_TOP || edge == LC_EDGE_LEFT || edge == LC_EDGE_RIGHT;
 }
 
+bool tightSlowOut(const Crossing& out) {
+    return out.pixelY >= TIGHT_SLOW_OUT_Y;
+}
+
 void mergeTwoForwardOuts(LineCounts& lc, LineClass& cls) {
     int aIndex = -1;
     int bIndex = -1;
@@ -478,6 +545,8 @@ void mergeTwoForwardOuts(LineCounts& lc, LineClass& cls) {
 
     const Crossing a = lc.crossings[aIndex];
     const Crossing b = lc.crossings[bIndex];
+    if (tightSlowOut(a) || tightSlowOut(b)) return;
+
     float aPos = a.pos;
     float bPos = b.pos;
     if (lc.perimeter > 0.0f && fabsf(aPos - bPos) > lc.perimeter * 0.5f) {
@@ -678,7 +747,7 @@ void updateCurveRelease(bool fresh, float angleDeg, int steerOut) {
     }
 }
 
-uint8_t vectorError(const Crossing& in, const Crossing& out, float sideMult,
+uint8_t vectorError(const Crossing& in, const Crossing& out, float sideMult, bool angleOnly,
                     float& angleOut, float& posOut) {
     const float dx = (float)out.pixelX - (float)in.pixelX;
     float dy = (float)in.pixelY - (float)out.pixelY;
@@ -687,10 +756,11 @@ uint8_t vectorError(const Crossing& in, const Crossing& out, float sideMult,
     float angleDeg = atan2f(dx, dy) * 57.2957795f;
     const float inOffset = (float)in.pixelX - LF_CENTER_X;
     const float centerOffset = (((float)in.pixelX + (float)out.pixelX) * 0.5f) - LF_CENTER_X;
-    float err = (float)LF_ERROR_CENTER +
-        angleDeg * ARC_ANGLE_SCALE * sideMult +
-        centerOffset * ARC_CENTER_PX_SCALE +
-        inOffset * ARC_IN_PX_SCALE;
+    float err = (float)LF_ERROR_CENTER + angleDeg * ARC_ANGLE_SCALE * sideMult;
+    if (!angleOnly) {
+        err += centerOffset * ARC_CENTER_PX_SCALE +
+               inOffset * ARC_IN_PX_SCALE;
+    }
 
     if (err < 0.0f) err = 0.0f;
     if (err > 254.0f) err = 254.0f;
@@ -706,7 +776,7 @@ uint8_t arcAngleError(const LineCounts& lc, int inIndex, int outIndex, float& an
     if ((out.edge == LC_EDGE_LEFT || out.edge == LC_EDGE_RIGHT) && out.pixelY >= ARC_SIDE_GAIN_Y) {
         sideMult = ARC_SIDE_GAIN_MULT;
     }
-    return vectorError(lc.crossings[inIndex], out, sideMult, angleOut, posOut);
+    return vectorError(lc.crossings[inIndex], out, sideMult, tightSlowOut(out), angleOut, posOut);
 }
 
 bool singleFrontRowDirection(camera_fb_t* fb, const Crossing& p, Crossing& out) {
@@ -734,7 +804,7 @@ bool singleFrontRowDirection(camera_fb_t* fb, const Crossing& p, Crossing& out) 
 uint8_t singlePointError(camera_fb_t* fb, const Crossing& p, float& angleOut, float& posOut) {
     Crossing q;
     if (p.pixelY < COLOR_ROW && singleFrontRowDirection(fb, p, q)) {
-        return vectorError(q, p, 1.0f, angleOut, posOut);
+        return vectorError(q, p, 1.0f, false, angleOut, posOut);
     }
 
     angleOut = 0.0f;
@@ -809,7 +879,6 @@ void modeLineFollowRun(camera_fb_t* fb, YacheEncodedSerial& teensy) {
     else if (s_curveActive)      steerOut = curveCommittedOut(lc, cls.inIndex);
     // else if (arcBlackSaturated)  steerOut = selectWidestOut(lc, cls.inIndex);
     else                         steerOut = normalSteerOut;
-    lc_noteFocusPoint(lc, steerOut);
 
     // if (arcBlackSaturated) {
     //     errByte = LF_ERROR_CENTER;
@@ -824,13 +893,13 @@ void modeLineFollowRun(camera_fb_t* fb, YacheEncodedSerial& teensy) {
     } else if (cls.inIndex >= 0) {
         // One isolated crossing, especially near the front, is not enough to steer.
         // Wait for an in/out pair instead of line-following from a single point.
-        // errByte = singlePointError(fb, lc.crossings[cls.inIndex], s_lastAngle, s_lastPos);
-        // s_lastErr = errByte;
-        // fresh = true;
-        errByte = LF_ERROR_CENTER;
+        errByte = singlePointError(fb, lc.crossings[cls.inIndex], s_lastAngle, s_lastPos);
         s_lastErr = errByte;
-        s_lastAngle = 0.0f;
-        s_lastPos = 0.0f;
+        fresh = true;
+        // errByte = LF_ERROR_CENTER;
+        // s_lastErr = errByte;
+        // s_lastAngle = 0.0f;
+        // s_lastPos = 0.0f;
     } else if (lc.count == 0 || !cls.inHeld) {
         errByte = LF_ERROR_CENTER;
         s_lastErr = errByte;
@@ -878,16 +947,18 @@ void modeLineFollowRun(camera_fb_t* fb, YacheEncodedSerial& teensy) {
     teensy.send(XIAO_REG_COM, errByte);
     uint8_t xiaoFlags = 0;
     if (s_commitActive) xiaoFlags |= XIAO_FLAG_COMMIT;
-    if (steerOut >= 0 && lc.crossings[steerOut].pixelY >= TIGHT_SLOW_OUT_Y) {
+    if (steerOut >= 0 && tightSlowOut(lc.crossings[steerOut])) {
         xiaoFlags |= XIAO_FLAG_TIGHT_SLOW;
     }
     digitalWrite(LED_BUILTIN, HIGH);  // saturation LED disabled; ESP32 LED active-LOW
     teensy.send(XIAO_REG_FLAG, xiaoFlags);
 
     SPRINTF(SPRINT_RESULTS, "[RES]",
-        "mode=0 arc=1 feat=%d err=%d n=%d in=%d out=%d fresh=%d ang=%.1f pos=%.1f ccom=%.1f sL=%d sR=%d red=%d blk25=%d ablk=%d bot=%d gap=%d sat=%d asat=%d gL=%d gR=%d rawG=%d gc=%d cmt=%d cc=%d",
+        "mode=0 arc=1 feat=%d err=%d n=%d in=%d out=%d fresh=%d ang=%.1f pos=%.1f ccom=%.1f sL=%d sR=%d red=%d blk25=%d ablk=%d bot=%d gap=%d sat=%d asat=%d gL=%d gR=%d rawG=%d gc=%d cmt=%d cc=%d tslow=%d outY=%d",
         featureId, errByte, lc.count, cls.inIndex, steerOut, fresh ? 1 : 0,
         s_lastAngle, s_lastPos, colorCom, silverLeft, silverRight, redCount, colorBlack, arcBlackCount, bottomLinePoint ? 1 : 0,
         gapDetected ? 1 : 0, intersectionSaturated ? 1 : 0, arcBlackSaturated ? 1 : 0, greenLeft, greenRight,
-        rawGreen, greenCmd, s_commitActive ? 1 : 0, s_curveActive ? 1 : 0);
+        rawGreen, greenCmd, s_commitActive ? 1 : 0, s_curveActive ? 1 : 0,
+        (xiaoFlags & XIAO_FLAG_TIGHT_SLOW) ? 1 : 0,
+        steerOut >= 0 ? (int)lc.crossings[steerOut].pixelY : -1);
 }

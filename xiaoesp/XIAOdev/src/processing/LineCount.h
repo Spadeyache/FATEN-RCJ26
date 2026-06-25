@@ -75,11 +75,6 @@ int lc_lowestPixel(const LineCounts& lc);
 // transient miss (gate reject) instead of jumping to a branch.
 LineClass lc_updateIn(const LineCounts& lc);
 
-// Remember the steering/focus target used this frame. If the next frame cannot
-// match the old in-point, lc_updateIn() may use this previous focus point as
-// the new in-point after the robot has driven over it.
-void lc_noteFocusPoint(const LineCounts& lc, int focusIndex);
-
 // Forget the tracked in-point (e.g. on a mode/state change) so the next frame
 // re-seeds from the base case.
 void lc_resetTracking();

@@ -140,9 +140,9 @@ constexpr float PID_KD_SLOPE = 0.65f;
 // Binary steep-turn speed drop. When the PID correction is this large, the
 // robot slows its forward base so tight turns do not outrun the camera line.
 constexpr float STEEP_TURN_CORR_THRESHOLD = 120.0f;
-constexpr float STEEP_TURN_BASE_SPEED     = 30.0f;  
+constexpr float STEEP_TURN_BASE_SPEED     = 10.0f;  
 constexpr float TIGHT_SLOW_BASE_SPEED     = 10.0f;
-constexpr float TIGHT_SLOW_REVERSE_GAIN   = 1.35f;
+constexpr float TIGHT_SLOW_REVERSE_GAIN   = 1.05f;
 
 // Flat-surface PID tuning switch. When true, the line PID ignores IMU tilt for
 // gain scheduling, gravity compensation, pitch adjustment, and rear-wheel
@@ -168,7 +168,7 @@ constexpr float ROTAXIS_DOWN_MIN  = 0.60f;  // gain: downhill-rear scale at full
 
 // --- frictionCircAdj tuning --------------------------------------------------
 constexpr float FRIC_TILT_DEG   = 8.0f;   // |pitch| or |roll| past this counts as "on a slope"
-constexpr float FRIC_SPEED_FLAT = 30.0f;  // 70 base speed on flat ground
+constexpr float FRIC_SPEED_FLAT = 45.0f;  // 70 base speed on flat ground
 constexpr float FRIC_SPEED_TILT = 40.0f;  // 55 base speed once tilted
 
 inline float rollGainFactor(float aRoll) {       // 1.0 → GRAV_GAIN_MIN as |roll| grows
@@ -244,8 +244,8 @@ float frictionCircAdj() {
     const float roll  = linePidRoll();    // + = left down
     if (fabsf(pitch) > FRIC_TILT_DEG || fabsf(roll) > FRIC_TILT_DEG)
         return FRIC_SPEED_TILT;
-        digitalWrite(LED_PIN, HIGH);    
-    digitalWrite(LED_PIN, LOW);
+        // digitalWrite(LED_PIN, HIGH);    // LED now shows TIGHT_SLOW flag (see runLinePID)
+    // digitalWrite(LED_PIN, LOW);
     return FRIC_SPEED_FLAT;
 }
 
@@ -296,11 +296,12 @@ void runLinePID() {
     const float kd = slope ? PID_KD_SLOPE : PID_KD_FLAT;
 
     const bool tightSlow = Processing::XiaoDecode::tightSlowFlag();
+    digitalWrite(LED_PIN, tightSlow ? HIGH : LOW);   // LED on = XIAO TIGHT_SLOW flag set
     const float correction = (kp * rawError + ki * integral + kd * derivative);
-    const bool  steepTurn = fabsf(correction) >= STEEP_TURN_CORR_THRESHOLD;
+    // const bool  steepTurn = fabsf(correction) >= STEEP_TURN_CORR_THRESHOLD;
     const float base = tightSlow
         ? TIGHT_SLOW_BASE_SPEED
-        : (steepTurn ? STEEP_TURN_BASE_SPEED : frictionBase);
+        : frictionBase;
     const float pitchAdj   = linePidPitch() * IMU_PITCH_GAIN;   // + = nose up
 
 // Steering speeds come from gravAdj (roll-driven). Flat → symmetric smooth
@@ -334,7 +335,7 @@ void runLinePID() {
 
 #if PRINT_PID
     Serial.printf("PID err:%.1f drv:%.1f corr:%.1f base:%.0f steep:%d L:%.0f R:%.0f\n",
-                  rawError, derivative, correction, base, steepTurn ? 1 : 0,
+                  rawError, derivative, correction, base, 0,
                   leftSpeed, rightSpeed);
 #endif
 }
