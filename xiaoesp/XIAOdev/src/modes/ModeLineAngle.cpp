@@ -8,60 +8,84 @@
 // =============================================================================
 //  Mode 3 — Line Angle config
 //
-//  Two scan rows: BOTTOM (near robot) and MID (look-ahead).
-//  Column range matches the line-follow arc bottom edge.
-//  Black detection thresholds copied from LineCount / line-follow constants.
+//  Uses the shared border point detection (lc_detectCrossings). No in/out
+//  classification: it just reduces the raw crossings to a base->tip slope.
 // =============================================================================
-
-// Scan rows
-static constexpr uint8_t LA_ROW_BOTTOM      = LF_ARC_BOTTOM_Y;   // near robot
-static constexpr uint8_t LA_ROW_MID         = 40;   // look-ahead row
-
-// Scan columns (= ARC_BOTTOM_LEFT_X .. ARC_BOTTOM_RIGHT_X in line follow)
-static constexpr uint8_t LA_COL_MIN         = LF_ARC_BOTTOM_LEFT_X;
-static constexpr uint8_t LA_COL_MAX         = LF_ARC_BOTTOM_RIGHT_X;
-
-// Minimum contiguous black pixels to register as a line (= LC_RUN_MIN_LEN)
-static constexpr uint8_t LA_MIN_CHUNK_PX    = 3;
-
-// Minimum chunk width per row for the both-rows flag (10 px = ~10 mm line width)
-static constexpr uint8_t LA_FLAG_MIN_PX     = 10;
 
 // Angle encoding centre (0° = straight)
-static constexpr uint8_t LA_ANGLE_CENTER    = 127;
+static constexpr uint8_t LA_ANGLE_CENTER   = 127;
+
+// Single-point fallback: inner-circle search for a second point.
+static constexpr uint8_t LA_CIRCLE_RADIUS  = 25;   // px
+static constexpr uint8_t LA_CIRCLE_STEPS   = 48;   // samples around the circle
+static constexpr uint8_t LA_CIRCLE_MIN_RUN = 2;    // min contiguous black samples to qualify
+
+static constexpr float   LA_RAD2DEG        = 57.2957795f;
 
 // =============================================================================
-//  Row scan — find largest contiguous black chunk; return its CoM and width.
-//  Returns true when a qualifying chunk (≥ minPx) was found.
+//  Pick the two crossings with the largest width.
+//  Fills aOut/bOut (no particular order). Requires lc.count >= 2.
 // =============================================================================
-static bool scanRowChunk(camera_fb_t* fb, uint8_t row,
-                         uint8_t colMin, uint8_t colMax,
-                         uint8_t minPx,
-                         float& comOut, uint8_t& widthOut) {
-    uint8_t bestStart = colMin, bestLen = 0;
-    uint8_t runStart  = colMin, runLen  = 0;
-
-    for (uint8_t x = colMin; x <= colMax; x++) {
-        uint8_t r, g, b;
-        rgb565To888(unpackRGB565(fb->buf, (int)row * fb->width + x), r, g, b);
-        rgb888Calibration(r, g, b);
-        const bool black = (rgbToGray(r, g, b) <= BLACK_GRAY_MAX);
-
-        if (black) {
-            if (runLen == 0) runStart = x;
-            runLen++;
-        } else {
-            if (runLen > bestLen) { bestLen = runLen; bestStart = runStart; }
-            runLen = 0;
+static void twoWidest(const LineCounts& lc, Crossing& aOut, Crossing& bOut) {
+    int ia = -1, ib = -1;
+    for (int i = 0; i < lc.count; i++) {
+        if (ia < 0 || lc.crossings[i].width > lc.crossings[ia].width) {
+            ib = ia;
+            ia = i;
+        } else if (ib < 0 || lc.crossings[i].width > lc.crossings[ib].width) {
+            ib = i;
         }
     }
-    if (runLen > bestLen) { bestLen = runLen; bestStart = runStart; }
+    aOut = lc.crossings[ia];
+    bOut = lc.crossings[ib];
+}
 
-    if (bestLen < minPx) return false;
+// =============================================================================
+//  Inner-circle continuous point detection.
+//  Walks a circle of radius `radius` around (cx, cy), run-counts contiguous
+//  black samples, and returns the midpoint of the largest qualifying run.
+//  Returns true when a second point was found.
+// =============================================================================
+static bool scanCircleForPoint(camera_fb_t* fb, uint8_t cx, uint8_t cy,
+                               uint8_t radius, Crossing& qOut) {
+    bool black[LA_CIRCLE_STEPS];
+    uint8_t sx[LA_CIRCLE_STEPS], sy[LA_CIRCLE_STEPS];
 
-    // CoM = midpoint of the best run
-    comOut   = bestStart + (bestLen - 1) * 0.5f;
-    widthOut = bestLen;
+    for (uint8_t i = 0; i < LA_CIRCLE_STEPS; i++) {
+        const float a = (2.0f * (float)M_PI * (float)i) / (float)LA_CIRCLE_STEPS;
+        const int x = (int)lroundf((float)cx + (float)radius * cosf(a));
+        const int y = (int)lroundf((float)cy + (float)radius * sinf(a));
+        sx[i] = (uint8_t)constrain(x, 0, (int)fb->width - 1);
+        sy[i] = (uint8_t)constrain(y, 0, (int)fb->height - 1);
+        const bool inFrame = (x >= 0 && x < (int)fb->width && y >= 0 && y < (int)fb->height);
+        black[i] = inFrame && isBlack(updateRawGrayHSV(fb, sx[i], sy[i]));
+    }
+
+    // Largest circular black run.
+    int bestStart = -1, bestLen = 0;
+    int k = 0;
+    // Rotate so we start on a white sample (so no run wraps the array end).
+    int origin = 0;
+    while (origin < LA_CIRCLE_STEPS && black[origin]) origin++;
+    if (origin == LA_CIRCLE_STEPS) origin = 0;   // whole circle black → treat [0..] as one run
+
+    while (k < LA_CIRCLE_STEPS) {
+        const int idx = (origin + k) % LA_CIRCLE_STEPS;
+        if (!black[idx]) { k++; continue; }
+        const int runStartK = k;
+        int len = 0;
+        while (k < LA_CIRCLE_STEPS && black[(origin + k) % LA_CIRCLE_STEPS]) { len++; k++; }
+        if (len > bestLen) { bestLen = len; bestStart = runStartK; }
+    }
+
+    if (bestLen < LA_CIRCLE_MIN_RUN) return false;
+
+    const int midIdx = (origin + bestStart + bestLen / 2) % LA_CIRCLE_STEPS;
+    qOut.pixelX = sx[midIdx];
+    qOut.pixelY = sy[midIdx];
+    qOut.edge   = LC_EDGE_TOP;
+    qOut.pos    = 0.0f;
+    qOut.width  = (uint8_t)bestLen;
     return true;
 }
 
@@ -69,45 +93,66 @@ static bool scanRowChunk(camera_fb_t* fb, uint8_t row,
 //  modeLineAngleRun — called every frame while in MODE_LINE_ANGLE
 // =============================================================================
 void modeLineAngleRun(camera_fb_t* fb, YacheEncodedSerial& teensy) {
-    // ── Row scans ─────────────────────────────────────────────────────────────
-    float   botCom = (LA_COL_MIN + LA_COL_MAX) * 0.5f, midCom = botCom;
-    uint8_t botWidth = 0, midWidth = 0;
-
-    const bool botSeen = scanRowChunk(fb, LA_ROW_BOTTOM, LA_COL_MIN, LA_COL_MAX,
-                                      LA_MIN_CHUNK_PX, botCom, botWidth);
-    const bool midSeen = scanRowChunk(fb, LA_ROW_MID,    LA_COL_MIN, LA_COL_MAX,
-                                      LA_MIN_CHUNK_PX, midCom, midWidth);
-
-    // ── Slope angle ───────────────────────────────────────────────────────────
-    // Vector from mid-row focused point → bottom-row focused point.
-    // dy is always positive (bottom row has larger Y = closer to robot).
-    float angleDeg = 0.0f;
-    if (botSeen && midSeen) {
-        const float dx = botCom - midCom;
-        const float dy = (float)(LA_ROW_BOTTOM - LA_ROW_MID);  // = 45, always > 0
-        angleDeg = atan2f(dx, dy) * 57.2957795f;               // -90..+90
-    }
-    const uint8_t encodedAngle = (uint8_t)constrain(
-        (int)roundf((float)LA_ANGLE_CENTER + angleDeg), 0, 254);
-
-    // ── Both-rows flag ────────────────────────────────────────────────────────
-    const bool botQual = botWidth >= LA_FLAG_MIN_PX;
-    const bool midQual = midWidth >= LA_FLAG_MIN_PX;
-    const uint8_t bothFlag = (botQual && midQual) ? XIAO_FLAG_COMMIT : 0;
-
-    // ── Arc crossing count (same ROI as line follow) ──────────────────────────
+    // ── Point detection (no in/out classification) ─────────────────────────────
     LineCounts lc;
     lc_detectCrossings(fb, lc);
-    const uint8_t crossCount = (uint8_t)(lc.count < 254 ? lc.count : 254);
 
-    // ── Transmit ──────────────────────────────────────────────────────────────
-    teensy.send(XIAO_REG_ANGLE,   encodedAngle);
-    teensy.send(XIAO_REG_FLAG,    bothFlag);
-    teensy.send(XIAO_REG_COM,     crossCount);
+    const bool haveAny = (lc.count >= 1);
+
+    // ── Reduce to a base + tip pair ────────────────────────────────────────────
+    Crossing base = {}, tip = {};
+    bool haveTwo = false;
+
+    if (lc.count >= 2) {
+        Crossing a, b;
+        twoWidest(lc, a, b);
+        // Base = lower in the frame (larger pixelY = nearer the robot / lower power).
+        if (a.pixelY >= b.pixelY) { base = a; tip = b; }
+        else                      { base = b; tip = a; }
+        haveTwo = true;
+    } else if (lc.count == 1) {
+        const Crossing p = lc.crossings[0];
+        Crossing q;
+        if (scanCircleForPoint(fb, p.pixelX, p.pixelY, LA_CIRCLE_RADIUS, q)) {
+            if (p.pixelY >= q.pixelY) { base = p; tip = q; }
+            else                      { base = q; tip = p; }
+            haveTwo = true;
+        } else {
+            base = p;   // single point only — no slope available
+        }
+    }
+
+    // ── Slope angle (base -> tip) ──────────────────────────────────────────────
+    // dx/dy keep the existing mode-3 sign convention (base.x - tip.x over the
+    // positive vertical span), so the Teensy side is unchanged.
+    float angleDeg = 0.0f;
+    uint8_t avgY = 0;
+    if (haveTwo) {
+        const float dx = (float)base.pixelX - (float)tip.pixelX;
+        float dy = (float)base.pixelY - (float)tip.pixelY;
+        if (dy < 1.0f) dy = 1.0f;
+        angleDeg = atan2f(dx, dy) * LA_RAD2DEG;
+        avgY = (uint8_t)(((uint16_t)base.pixelY + (uint16_t)tip.pixelY) / 2);
+    } else if (haveAny) {
+        avgY = base.pixelY;
+    }
+
+    const uint8_t encodedAngle = (uint8_t)constrain(
+        (int)roundf((float)LA_ANGLE_CENTER + angleDeg), 0, 254);
+    const uint8_t avgYByte = (uint8_t)(avgY > 254 ? 254 : avgY);
+
+    // ── Flag: guaranteed at least one point ────────────────────────────────────
+    const uint8_t flag = haveAny ? XIAO_FLAG_COMMIT : 0;
+
+    // ── Transmit ───────────────────────────────────────────────────────────────
+    teensy.send(XIAO_REG_ANGLE, encodedAngle);
+    teensy.send(XIAO_REG_FLAG,  flag);
+    teensy.send(XIAO_REG_COM,   avgYByte);
 
     SPRINTF(SPRINT_RESULTS, "[LA]",
-        "mode=3 bot=%d(w=%d,com=%.1f) mid=%d(w=%d,com=%.1f) ang=%.1f enc=%d flag=%d cross=%d",
-        botSeen ? 1 : 0, botWidth, botCom,
-        midSeen ? 1 : 0, midWidth, midCom,
-        angleDeg, encodedAngle, bothFlag ? 1 : 0, crossCount);
+        "mode=3 n=%d two=%d base=(%d,%d) tip=(%d,%d) ang=%.1f enc=%d avgY=%d flag=%d",
+        lc.count, haveTwo ? 1 : 0,
+        haveAny ? base.pixelX : -1, haveAny ? base.pixelY : -1,
+        haveTwo ? tip.pixelX : -1,  haveTwo ? tip.pixelY : -1,
+        angleDeg, encodedAngle, avgYByte, flag ? 1 : 0);
 }
