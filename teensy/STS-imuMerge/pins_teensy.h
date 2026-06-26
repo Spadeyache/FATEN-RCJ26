@@ -51,7 +51,7 @@
 //  Lift arm — KRS3031 smart servo (half-duplex via 74HCT126 buffer)
 // =============================================================================
 #define KRS_SERIAL          Serial1  // direction/enable: KRS_EN_PIN (see above)
-#define KRS_ID               1       // KRS servo on-bus ID
+#define KRS_ID               4       // KRS servo on-bus ID
 
 // =============================================================================
 //  Grab arm — HS-45HB hobby servos (PWM)

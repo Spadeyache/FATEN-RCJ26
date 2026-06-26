@@ -27,6 +27,7 @@ from media.media import *
 
 import camera_vision
 import uart_victim
+import status_led
 
 
 # ============================================================================
@@ -277,6 +278,9 @@ def main():
             saved = camera_vision.maybe_save(img)
             if saved:
                 print("saved ->", saved)
+                status_led.set_status("found", force=True)
+                time.sleep_ms(1000)
+                status_led.set_status("evac", force=True)
 
             # Preprocess: gray -> 3ch CHW -> letterbox -> KPU.
             chw = _chw_from_grayscale(img)
