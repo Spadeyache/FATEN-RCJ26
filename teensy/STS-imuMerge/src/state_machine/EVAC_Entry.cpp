@@ -36,11 +36,12 @@ void onEnter() {
     // Fresh evac run: clear held counts (search timer starts in EVAC_SEARCH).
     EvacContext::reset();
 
+    Actions::Arm::attachGrabServos();
     // Actions::Arm::attachGrabServos();
     // Actions::Arm::lift(4050);
     // Actions::Arm::grab(true);
 
-    Actions::Forward::forward(100, 50);
+    Actions::Forward::forward(70, 50);
     // Actions::Turn::turn(-80.0f);
     // Actions::Forward::forward(100, 1150);
     // Actions::Drive::stop();

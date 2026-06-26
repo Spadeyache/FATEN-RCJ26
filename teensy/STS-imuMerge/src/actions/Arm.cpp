@@ -9,65 +9,102 @@ namespace Actions {
 namespace Arm {
 
 namespace {
-    Servo _grabServo0;
-    Servo _grabServo1;
+    Servo _hs45hb0;
+    Servo _hs45hb1;
     Servo _krs;            // KRS lift, PWM mode (pin = KRS_PWM_PIN)
 
     constexpr int KRS_PARK_US    = 1000;   // parked pose at boot — TODO tune
+    constexpr int KRS_GRAB_US    = 2000;
+    constexpr int KRS_AIR_US    = 1700;
+
+    constexpr int HS0_CLOSE_US = 2000;
+    constexpr int HS0_OPEN_US  = 1000;
+    constexpr int HS1_CLOSE_US = 1000;
+    constexpr int HS1_OPEN_US  = 2000;
 }
 
-void attachGrabServos() {
-    _grabServo0.attach(HS45HB0_PIN, 1000, 2000);
-    _grabServo1.attach(HS45HB1_PIN, 1000, 2000);
+void attachServos() {
+    _hs45hb0.attach(HS45HB0_PIN, 1000, 2000);
+    _hs45hb1.attach(HS45HB1_PIN, 1000, 2000);
+    
+    _krs.attach(KRS_PWM_PIN, 600, 2400);
 }
 
-void detachGrabServos() {
-    _grabServo0.detach();
-    _grabServo1.detach();
+void detachServos() {
+    _hs45hb0.detach();
+    _hs45hb1.detach();
+
+    _krs.detach();
 }
 
 void init() {
     pinMode(BUZZER_PIN, OUTPUT);
     analogWrite(BUZZER_PIN, 0);
 
-    attachGrabServos();
-    grab(true);                          // open gripper on boot
+    attachServos();
+    grabLeft(true, false);
+    grabRight(true, false);
 
-    _krs.attach(KRS_PWM_PIN, 600, 2400);
     lift(KRS_PARK_US);                    // parked (raised)
 
-    detachGrabServos();                   // silence the hobby servos
+}
+
+void grabLeft(bool closed, bool blocking) {
+    if (closed) {
+        _hs45hb0.writeMicroseconds(HS0_CLOSE_US);
+        if (blocking) delay(245);
+    } else {
+        _hs45hb0.writeMicroseconds(HS0_OPEN_US);
+        if (blocking) delay(245);
+    }
+}
+
+void grabRight(bool closed, bool blocking) {
+    if (closed) {
+        _hs45hb1.writeMicroseconds(HS1_CLOSE_US);
+        if (blocking) delay(245);
+    } else {
+        _hs45hb1.writeMicroseconds(HS1_OPEN_US);
+        if (blocking) delay(245);
+    }
 }
 
 void grab(bool closed) {
     if (closed) {
-        _grabServo0.writeMicroseconds(2000);
-        _grabServo1.writeMicroseconds(1000);
+        grabLeft(true, false);
+        grabRight(true);
     } else {
-        _grabServo0.writeMicroseconds(1000);
-        _grabServo1.writeMicroseconds(2000);
+        grabLeft(false, false);
+        grabRight(false);
     }
 }
 
-namespace {
-    // Close→reopen the gripper once to scoop a ball into storage. Blocking.
-    void scoopOnce() {
-        attachGrabServos();
-        grab(true);   delay(300);   // close: pull the ball into storage
-        grab(false);  delay(150);   // reopen: ready for the next ball
-        detachGrabServos();
-    }
+
+
+
+
+void captureDead()  {
+    grabLeft(false);
+    lift(KRS_GRAB_US);
+    delay(800);
+    grabLeft(true);
+    lift(KRS_AIR_US);
+    delay(400);
 }
 
-// Phase 1: both routes drive the single gripper. TODO: actuate the dedicated
-// black (dead) and silver (alive) arms separately once they are wired.
-void captureDead()  { scoopOnce(); }
-void captureAlive() { scoopOnce(); }
+void captureAlive() {
+    grabRight(false);
+    lift(KRS_GRAB_US);
+    delay(800);
+    grabRight(true);
+    lift(KRS_AIR_US);
+    delay(400);
+}
 
 void releaseAll() {
-    attachGrabServos();
+    attachServos();
     grab(false);  delay(300);       // open everything to drop held balls
-    detachGrabServos();
+    detachServos();
 }
 
 // Move the lift to a PWM pulse width (microseconds) and HOLD it there.
@@ -79,7 +116,6 @@ void lift(int us) {
 #if PRINT_ACTIONS
     Serial.print("KRS PWM lift -> "); Serial.println(us);
 #endif
-    delay(800);
 }
 
 }  // namespace Arm

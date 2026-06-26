@@ -401,9 +401,12 @@ bool hasBottomLinePoint(const LineCounts& lc) {
     return false;
 }
 
+// bool gapByCrossings(const LineCounts& lc) {
+//     if (lc.count == 0) return true;
+//     return lc.count == 1 && lc.crossings[0].edge != LC_EDGE_TOP;
+// }
 bool gapByCrossings(const LineCounts& lc) {
-    if (lc.count == 0) return true;
-    return lc.count == 1 && lc.crossings[0].edge != LC_EDGE_TOP;
+    return lc.count == 0;
 }
 
 uint8_t rawGreenOnColorRow(camera_fb_t* fb, float lineCom, uint8_t& greenLeft, uint8_t& greenRight,

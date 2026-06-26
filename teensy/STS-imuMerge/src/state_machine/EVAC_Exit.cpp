@@ -3,7 +3,7 @@
 #include "../../config.h"
 
 #include "../actions/Drive.h"
-#include "../processing/Mapping.h"
+// #include "../processing/Mapping.h"   // DISABLED — mapping off
 #include "../processing/K230Decode.h"
 #include "../processing/XiaoDecode.h"
 
@@ -25,7 +25,7 @@ void onEnter() {
 #if PRINT_STATE
     Serial.println("State: EVAC_EXIT (stub)");
 #endif
-    Processing::Mapping::persist();
+    // Processing::Mapping::persist();   // DISABLED — mapping off
     // Teensy-side K230 run/idle control disabled for now.
     // Processing::K230Decode::setRunning(false);
     Processing::XiaoDecode::setMode(XIAO_MODE_LINE);

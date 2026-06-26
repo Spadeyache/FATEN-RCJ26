@@ -22,6 +22,8 @@ namespace Arm {
 void init();
 
 void grab(bool closed);
+void grabLeft(bool closed, bool blocking = true);    // black/dead arm
+void grabRight(bool closed, bool blocking = true);   // silver/alive arm
 void lift(int us);   // KRS PWM pulse width (microseconds)
 
 // Evacuation-zone victim handling.
@@ -36,8 +38,8 @@ void releaseAll();
 
 // Manual servo attach/detach — used when re-engaging the gripper inside
 // long sequences after init() detached it.
-void attachGrabServos();
-void detachGrabServos();
+void attachServos();
+void detachServos();
 
 }  // namespace Arm
 }  // namespace Actions

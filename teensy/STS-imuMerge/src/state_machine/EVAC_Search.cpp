@@ -6,7 +6,7 @@
 
 #include "../actions/Drive.h"
 #include "../actions/Arm.h"
-#include "../processing/Mapping.h"
+// #include "../processing/Mapping.h"   // DISABLED — mapping off
 #include "../processing/K230Decode.h"
 
 #include <Arduino.h>
@@ -204,7 +204,7 @@ void update() {
         return;
     }
 
-    Processing::Mapping::tick();
+    // Processing::Mapping::tick();   // DISABLED — mapping off
 
     // Leave-collection decision: storage full, or the 2-minute window expired.
     if (EvacContext::full() || EvacContext::searchTimedOut()) {

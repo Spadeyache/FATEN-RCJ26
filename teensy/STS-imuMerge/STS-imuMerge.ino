@@ -1,3 +1,4 @@
+
 // =============================================================================
 //  STS-imuMerge.ino — Arduino entry point
 
@@ -22,7 +23,7 @@
 #include "src/sensors/ToF.h"
 #include "src/processing/XiaoDecode.h"
 #include "src/processing/K230Decode.h"
-#include "src/processing/Mapping.h"
+// #include "src/processing/Mapping.h"   // DISABLED — see Mapping.*.disabled
 #include "src/state_machine/StateMachine.h"
 
 FLASHMEM void setup() {
@@ -32,20 +33,23 @@ FLASHMEM void setup() {
     pinMode(STS_EN_PIN, OUTPUT);
     digitalWrite(STS_EN_PIN, HIGH);
     pinMode(BUZZER_PIN, OUTPUT);
-    tone(BUZZER_PIN, 4000, 300);
+    // tone(BUZZER_PIN, 4000, 300);
 
     Actions::Drive::init();
     Actions::Arm::init();           // servos + KRS, sets initial pose
     // Sensors::IMU::init();
     // Sensors::Touch::init();
     Sensors::XIAO_link::init();
-    // Sensors::K230_link::init();
+    Sensors::K230_link::init();
     // Sensors::ToF::init();  // Slow VL53L7CX firmware init; defer until mapping/evac needs it.
 
     StateMachine::init();
 
     // Avoid blocking startup here; the robot should enter loop() and start driving immediately.
     // Use a non-blocking status indicator if we need boot confirmation later.
+
+    delay(250);
+    Actions::Arm::detachServos(); // sorry i wanted to save 16mAh and 225ms of time. i need to add this..
 }
 
 void loop() {
@@ -71,7 +75,7 @@ void loop() {
 
     // 1. Pump sensor I/O (raw bytes in/out).
     Sensors::XIAO_link::tick();
-    // Sensors::K230_link::tick();
+    Sensors::K230_link::tick();
     // Sensors::IMU::tick();
     // Sensors::ToF::tick();       // updates global tofFL[8][8]
     // Sensors::ToF::printFL(); // optional debug dump
@@ -79,11 +83,11 @@ void loop() {
 
     // 2. Run processing layer (decode, filter, fuse).
     Processing::XiaoDecode::tick();
-    // Processing::K230Decode::tick();
+    Processing::K230Decode::tick();
     // Mapping::tick() is called by EVAC_* states only.
 
-    // 3. Debug Serial commands ('m' = map dump, 'p' = pose print).
-    while (Serial.available()) Processing::Mapping::handleSerial((char)Serial.read());
+    // 3. Debug Serial commands ('m' = map dump, 'p' = pose print). DISABLED (mapping off).
+    // while (Serial.available()) Processing::Mapping::handleSerial((char)Serial.read());
 
     // 4. Run the active state.
     StateMachine::tick();
