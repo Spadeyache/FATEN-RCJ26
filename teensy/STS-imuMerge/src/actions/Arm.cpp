@@ -4,15 +4,16 @@
 
 #include <Arduino.h>
 #include <Servo.h>
-#include "IcsHardSerialClass.h"
 
 namespace Actions {
 namespace Arm {
 
 namespace {
-    Servo              _grabServo0;
-    Servo              _grabServo1;
-    IcsHardSerialClass _krs(&KRS_SERIAL, KRS_EN_PIN, KRS_BAUD, KRS_TIMEOUT);
+    Servo _grabServo0;
+    Servo _grabServo1;
+    Servo _krs;            // KRS lift, PWM mode (pin = KRS_PWM_PIN)
+
+    constexpr int KRS_PARK_US    = 1000;   // parked pose at boot — TODO tune
 }
 
 void attachGrabServos() {
@@ -30,20 +31,18 @@ void init() {
     analogWrite(BUZZER_PIN, 0);
 
     attachGrabServos();
-    grab(false);                          // open gripper on boot
+    grab(true);                          // open gripper on boot
 
-    _krs.begin();
-    delay(200);                           // let the KRS bus / servo settle
-    _krs.setSpd(KRS_ID, KRS_SPD);
-    lift(11050);                          // parked
+    _krs.attach(KRS_PWM_PIN, 600, 2400);
+    lift(KRS_PARK_US);                    // parked (raised)
 
     detachGrabServos();                   // silence the hobby servos
 }
 
 void grab(bool closed) {
     if (closed) {
-        _grabServo0.writeMicroseconds(1700);
-        _grabServo1.writeMicroseconds(1300);
+        _grabServo0.writeMicroseconds(2000);
+        _grabServo1.writeMicroseconds(1000);
     } else {
         _grabServo0.writeMicroseconds(1000);
         _grabServo1.writeMicroseconds(2000);
@@ -71,15 +70,16 @@ void releaseAll() {
     detachGrabServos();
 }
 
-// Blocking. Only call from setup() or controlled-stop sequences.
-void lift(int pos) {
-    int rd = _krs.setPos(KRS_ID, pos);
+// Move the lift to a PWM pulse width (microseconds) and HOLD it there.
+// Blocking ~800 ms settle; the Servo library keeps refreshing the pulse after,
+// so the lift holds its load (PWM mode has no "free" — detach to release).
+void lift(int us) {
+    us = constrain(us, 600, 2400);
+    _krs.writeMicroseconds(us);
 #if PRINT_ACTIONS
-    Serial.print("KRS setPos("); Serial.print(pos);
-    Serial.print(") -> readback="); Serial.println(rd);   // -1 == no reply on bus
+    Serial.print("KRS PWM lift -> "); Serial.println(us);
 #endif
     delay(800);
-    _krs.setFree(KRS_ID);
 }
 
 }  // namespace Arm

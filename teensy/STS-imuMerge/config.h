@@ -64,11 +64,6 @@ enum XiaoMode : uint8_t {
     XIAO_MODE_SILVER_ALIGN= 5,   // evac entry: silver-tape tilt angle for perpendicular align
 };
 
-#define KRS_BAUD            115200UL
-#define KRS_TIMEOUT         400      // ms
-#define KRS_SPD             43       // 1-127
-//   KRS_ID and serial port live in pins_teensy.h (hardware map)
-
 // =============================================================================
 //  Motor
 // =============================================================================

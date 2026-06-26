@@ -4,14 +4,16 @@
 //  Actions::Arm — grip (hobby servos) + lift (KRS smart servo) control.
 //
 //  init():
-//    Attaches both HS-45HB hobby servos, opens the gripper, initialises the
-//    KRS bus, parks the lift, then DETACHES the hobby servos to silence
-//    them. Re-attach happens automatically on the first grab()/lift() call
-//    via attach() inside those functions if needed (see Arm.cpp).
+//    Attaches both HS-45HB hobby servos, opens the gripper, attaches the KRS
+//    lift (PWM mode) and parks it, then DETACHES the hobby servos to silence
+//    them. Re-attach happens automatically on the first grab() call via
+//    attach() inside those functions if needed (see Arm.cpp). The KRS stays
+//    attached so it holds its parked pose.
 //
 //  grab(closed):  closed=true → grip closed (1700/1300 µs)
 //                 closed=false → grip open  (1000/2000 µs)
-//  lift(pos):     KRS position 3500..11500. Blocking 800 ms then setFree().
+//  lift(us):      KRS PWM pulse width in microseconds (clamped to
+//                 KRS_PWM_MIN_US..KRS_PWM_MAX_US). Blocking ~800 ms, then holds.
 // =============================================================================
 
 namespace Actions {
@@ -20,7 +22,7 @@ namespace Arm {
 void init();
 
 void grab(bool closed);
-void lift(int pos);
+void lift(int us);   // KRS PWM pulse width (microseconds)
 
 // Evacuation-zone victim handling.
 //   captureDead()/captureAlive(): take one ball into storage via the matching

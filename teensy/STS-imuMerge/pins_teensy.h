@@ -16,15 +16,12 @@
 // =============================================================================
 
 // =============================================================================
-//  74HCT126 half-duplex buffer enables — ONE per bus (separate chips/channels)
+//  74HCT126 half-duplex buffer enable — STS drive bus
 // =============================================================================
-//   Each half-duplex smart-servo bus has its own 74HCT126 output-enable line.
 //     STS_EN_PIN : enables the STS drive-bus buffer. Held HIGH at boot (the
 //                  yacheSTS driver does not touch it — Drive/sketch sets it).
-//     KRS_EN_PIN : enables/directs the KRS arm-bus buffer. Driven by
-//                  IcsHardSerialClass (HIGH = transmit, LOW = receive).
+//   (The KRS arm no longer uses a buffer — it runs in PWM mode, see below.)
 #define STS_EN_PIN           9       // 74HCT126 OE for STS bus
-#define KRS_EN_PIN           2       // 74HCT126 OE / direction for KRS bus
 
 // =============================================================================
 //  Drive motors — Feetech STS3032 smart servos (4WD)
@@ -48,10 +45,12 @@
 #define STS_INVERT_BR      (+1)
 
 // =============================================================================
-//  Lift arm — KRS3031 smart servo (half-duplex via 74HCT126 buffer)
+//  Lift arm — KRS smart servo, driven in PWM mode (NOT ICS serial)
 // =============================================================================
-#define KRS_SERIAL          Serial1  // direction/enable: KRS_EN_PIN (see above)
-#define KRS_ID               4       // KRS servo on-bus ID
+//   The servo is set to PWM mode in ICS Manager (the "Serial" option flag is
+//   unchecked). Teensy drives the signal line directly from a PWM pin — no
+//   74HCT126 buffer, no half-duplex bus. Pulse-width endpoints live in config.h.
+#define KRS_PWM_PIN         37       // PWM output → KRS signal line
 
 // =============================================================================
 //  Grab arm — HS-45HB hobby servos (PWM)

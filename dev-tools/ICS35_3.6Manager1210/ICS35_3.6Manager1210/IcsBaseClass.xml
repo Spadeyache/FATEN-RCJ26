@@ -1,0 +1,608 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>IcsBaseClass</name>
+    </assembly>
+    <members>
+        <member name="T:IcsBaseClass.Ics2Command">
+            <summary>
+            ICS2.0のコマンド郡です
+            </summary>
+        </member>
+        <member name="M:IcsBaseClass.Ics2Command.#ctor">
+            <summary>
+            コンストラクタ
+            </summary>
+        </member>
+        <member name="P:IcsBaseClass.Ics2Command.ics2BackUpChar">
+            <summary>
+            バックアップキャラクタ　5A　固定です
+            </summary>
+        </member>
+        <member name="P:IcsBaseClass.Ics2Command.ics2StretchGain1">
+            <summary>
+            ストレッチゲイン１の設定
+            </summary>
+        </member>
+        <member name="P:IcsBaseClass.Ics2Command.ics2Speed1">
+            <summary>
+            スピード１の設定
+            </summary>
+        </member>
+        <member name="P:IcsBaseClass.Ics2Command.ics2Punch">
+            <summary>
+            パンチの設定
+            </summary>
+        </member>
+        <member name="P:IcsBaseClass.Ics2Command.ics2DeadBand">
+            <summary>
+            デッドバンドの設定
+            </summary>
+        </member>
+        <member name="P:IcsBaseClass.Ics2Command.ics2Dumping">
+            <summary>
+            ダンピングの設定
+            </summary>
+        </member>
+        <member name="P:IcsBaseClass.Ics2Command.ics2ProtectionTimer">
+            <summary>
+            プロテクションタイマーの設定
+            </summary>
+        </member>
+        <member name="P:IcsBaseClass.Ics2Command.ics2Flag">
+            <summary>
+            フラグの設定
+            </summary>
+        </member>
+        <member name="P:IcsBaseClass.Ics2Command.ics2PulseLimitUpper">
+            <summary>
+            シリアルモード　可動範囲上限
+            </summary>
+        </member>
+        <member name="P:IcsBaseClass.Ics2Command.ics2PulseLimitLower">
+            <summary>
+            シリアルモード　可動範囲下限
+            </summary>
+        </member>
+        <member name="P:IcsBaseClass.Ics2Command.ics2RelaxTimer">
+            <summary>
+            脱力タイマーの設定
+            </summary>
+        </member>
+        <member name="P:IcsBaseClass.Ics2Command.ics2StretchGain2">
+            <summary>
+            ストレッチゲイン２の設定
+            </summary>
+        </member>
+        <member name="P:IcsBaseClass.Ics2Command.ics2Speed2">
+            <summary>
+            スピード２の設定
+            </summary>
+        </member>
+        <member name="P:IcsBaseClass.Ics2Command.ics2StretchGain3">
+            <summary>
+            ストレッチゲイン３の設定
+            </summary>
+        </member>
+        <member name="P:IcsBaseClass.Ics2Command.ics2Speed3">
+            <summary>
+            スピード３の設定
+            </summary>
+        </member>
+        <member name="P:IcsBaseClass.Ics2Command.ics2SpeedSIO">
+            <summary>
+            スピードSIOの設定
+            </summary>
+        </member>
+        <member name="P:IcsBaseClass.Ics2Command.ics2StretchGainSIO">
+            <summary>
+            ストレッチゲインSIOの設定
+            </summary>
+        </member>
+        <member name="P:IcsBaseClass.Ics2Command.ics2OffSet">
+            <summary>
+            オフセットの設定
+            </summary>
+        </member>
+        <member name="P:IcsBaseClass.Ics2Command.ics2ID">
+            <summary>
+            IDの設定
+            </summary>
+        </member>
+        <member name="T:IcsBaseClass.Ics3Command">
+            <summary>
+            ICS3.0のコマンド郡
+            </summary>
+        </member>
+        <member name="M:IcsBaseClass.Ics3Command.#ctor">
+            <summary>
+            コンストラクタ
+            </summary>
+        </member>
+        <member name="T:IcsBaseClass.Ics3Command.Ics3SubCommands">
+            <summary>
+            列挙型でサブコマンドを定義
+            </summary>
+        </member>
+        <member name="F:IcsBaseClass.Ics3Command.Ics3SubCommands.Current">
+            <summary>
+            電流のコマンド
+            </summary>
+        </member>
+        <member name="P:IcsBaseClass.Ics3Command.Current">
+            <summary>
+            電流値のプロパティ
+            </summary>
+        </member>
+        <member name="M:IcsBaseClass.Ics3Command.setCommand(System.Byte,IcsBaseClass.Ics3Command.Ics3SubCommands,System.Byte[])">
+            <summary>
+            セットコマンドのオーバーロード
+            </summary>
+            <param name="ID"></param>
+            <param name="sc"></param>
+            <param name="data"></param>
+            <returns></returns>
+        </member>
+        <member name="M:IcsBaseClass.Ics3Command.getCommand(System.Byte,IcsBaseClass.Ics3Command.Ics3SubCommands)">
+            <summary>
+            ゲットコマンドのオーバーロード
+            </summary>
+            <param name="ID"></param>
+            <param name="sc"></param>
+            <returns></returns>
+        </member>
+        <member name="M:IcsBaseClass.Ics3Command.SetCurrent(System.Byte,System.Byte)">
+            <summary>
+            電流制限値を設定します
+            </summary>
+            <param name="ID">ターゲットID</param>
+            <param name="data">書き込みデータ</param>
+            <returns>送信するデータ</returns>
+        </member>
+        <member name="M:IcsBaseClass.Ics3Command.GetCurrent(System.Byte)">
+            <summary>
+            電流値を取得するコマンドを発行します
+            </summary>
+            <param name="ID"></param>
+            <returns></returns>
+        </member>
+        <member name="P:IcsBaseClass.Ics3Command.ics3BackUpChar">
+            <summary>
+            バックアップキャラクタ　5A　固定です
+            </summary>
+        </member>
+        <member name="P:IcsBaseClass.Ics3Command.ics3StretchGain">
+            <summary>
+            ストレッチゲインの設定
+            </summary>
+        </member>
+        <member name="P:IcsBaseClass.Ics3Command.ics3Speed">
+            <summary>
+            スピードの設定
+            </summary>
+        </member>
+        <member name="P:IcsBaseClass.Ics3Command.ics3Punch">
+            <summary>
+            パンチの設定
+            </summary>
+        </member>
+        <member name="P:IcsBaseClass.Ics3Command.ics3DeadBand">
+            <summary>
+            デッドバンドの設定
+            </summary>
+        </member>
+        <member name="P:IcsBaseClass.Ics3Command.ics3Dumping">
+            <summary>
+            ダンピングの設定
+            </summary>
+        </member>
+        <member name="P:IcsBaseClass.Ics3Command.ics3SafeTimer">
+            <summary>
+            セーフタイマーの設定
+            </summary>
+        </member>
+        <member name="P:IcsBaseClass.Ics3Command.ics3Flag">
+            <summary>
+            フラグの設定
+            </summary>
+        </member>
+        <member name="P:IcsBaseClass.Ics3Command.ics3PulseLimitUpper">
+            <summary>
+            可動範囲上限設定
+            </summary>
+        </member>
+        <member name="P:IcsBaseClass.Ics3Command.ics3PulseLimitLower">
+            <summary>
+            可動範囲下限設定
+            </summary>
+        </member>
+        <member name="P:IcsBaseClass.Ics3Command.ics3ComSpeed">
+            <summary>
+            通信速度の設定
+            </summary>
+        </member>
+        <member name="P:IcsBaseClass.Ics3Command.ics3TemperatureLimit">
+            <summary>
+            温度リミッタの設定
+            </summary>
+        </member>
+        <member name="P:IcsBaseClass.Ics3Command.ics3CurrentLimit">
+            <summary>
+            電流制限の設定
+            </summary>
+        </member>
+        <member name="P:IcsBaseClass.Ics3Command.ics3Version">
+            <summary>
+            サーボ内バージョン情報
+            </summary>
+        </member>
+        <member name="P:IcsBaseClass.Ics3Command.ics3OffSet">
+            <summary>
+            オフセットの設定
+            </summary>
+        </member>
+        <member name="P:IcsBaseClass.Ics3Command.ics3ID">
+            <summary>
+            IDの設定
+            </summary>
+        </member>
+        <member name="P:IcsBaseClass.Ics3_5Command.ics3_5backUpChar">
+            <summary>
+            バックアップキャラクタ
+            </summary>
+        </member>
+        <member name="P:IcsBaseClass.Ics3_5Command.ics3_5stretchGain">
+            <summary>
+            ストレッチ
+            </summary>
+        </member>
+        <member name="P:IcsBaseClass.Ics3_5Command.ics3_5speed">
+            <summary>
+            スピード
+            </summary>
+        </member>
+        <member name="P:IcsBaseClass.Ics3_5Command.ics3_5punch">
+            <summary>
+            パンチ
+            </summary>
+        </member>
+        <member name="P:IcsBaseClass.Ics3_5Command.ics3_5deadBand">
+            <summary>
+            デッドバンド
+            </summary>
+        </member>
+        <member name="P:IcsBaseClass.Ics3_5Command.ics3_5dumping">
+            <summary>
+            ダンピング
+            </summary>
+        </member>
+        <member name="P:IcsBaseClass.Ics3_5Command.ics3_5safeTimer">
+            <summary>
+            セーフタイマー
+            </summary>
+        </member>
+        <member name="P:IcsBaseClass.Ics3_5Command.ics3_5flag">
+            <summary>
+            フラグ
+            </summary>
+        </member>
+        <member name="P:IcsBaseClass.Ics3_5Command.ics3_5pulseLimitH">
+            <summary>
+            パルスリミット上限
+            </summary>
+        </member>
+        <member name="P:IcsBaseClass.Ics3_5Command.ics3_5pulseLimitL">
+            <summary>
+            パルスリミット下限
+            </summary>
+        </member>
+        <member name="P:IcsBaseClass.Ics3_5Command.ics3_5fixFlag">
+            <summary>
+            固定
+            </summary>
+        </member>
+        <member name="P:IcsBaseClass.Ics3_5Command.ics3_5comSpeed">
+            <summary>
+            通信スピード
+            </summary>
+        </member>
+        <member name="P:IcsBaseClass.Ics3_5Command.ics3_5temperatureLimit">
+            <summary>
+            温度リミット
+            </summary>
+        </member>
+        <member name="P:IcsBaseClass.Ics3_5Command.ics3_5currentLimit">
+            <summary>
+            カレントリミット
+            </summary>
+        </member>
+        <member name="P:IcsBaseClass.Ics3_5Command.ics3_5versionInfo">
+            <summary>
+            バージョン情報
+            </summary>
+        </member>
+        <member name="P:IcsBaseClass.Ics3_5Command.ics3_5response">
+            <summary>
+            レスポンス
+            </summary>
+        </member>
+        <member name="P:IcsBaseClass.Ics3_5Command.ics3_5userOffset">
+            <summary>
+            ユーザオフセット
+            </summary>
+        </member>
+        <member name="P:IcsBaseClass.Ics3_5Command.ics3_5insideOffset">
+            <summary>
+            内部オフセット
+            </summary>
+        </member>
+        <member name="P:IcsBaseClass.Ics3_5Command.ics3_5ID">
+            <summary>
+            ID
+            </summary>
+        </member>
+        <member name="P:IcsBaseClass.Ics3_5Command.ics3_5changeStretch1">
+            <summary>
+            ストレッチ１
+            </summary>
+        </member>
+        <member name="P:IcsBaseClass.Ics3_5Command.ics3_5changeStretch2">
+            <summary>
+            ストレッチ２
+            </summary>
+        </member>
+        <member name="P:IcsBaseClass.Ics3_5Command.ics3_5changeStretch3">
+            <summary>
+            ストレッチ３
+            </summary>
+        </member>
+        <member name="F:IcsBaseClass.Ics3_5Command.basis">
+            <summary>
+            各オブジェクト規定値
+            </summary>
+        </member>
+        <member name="T:IcsBaseClass.IcsBaseCommand">
+            <summary>
+            ICS基本命令
+            </summary>
+        </member>
+        <member name="M:IcsBaseClass.IcsBaseCommand.#ctor">
+            <summary>
+            コンストラクタ
+            </summary>
+        </member>
+        <member name="P:IcsBaseClass.IcsBaseCommand.Name">
+            <summary>
+            サーボ識別のための名前
+            </summary>
+        </member>
+        <member name="P:IcsBaseClass.IcsBaseCommand.IcsVersion">
+            <summary>
+            ICSの規格
+            </summary>
+        </member>
+        <member name="P:IcsBaseClass.IcsBaseCommand.Baudrate">
+            <summary>
+            ボーレート
+            </summary>
+        </member>
+        <member name="P:IcsBaseClass.IcsBaseCommand.ID">
+            <summary>
+            ID
+            </summary>
+        </member>
+        <member name="F:IcsBaseClass.IcsBaseCommand.eepromData">
+            <summary>
+            eepromのデータ（設定値）
+            </summary>
+        </member>
+        <member name="T:IcsBaseClass.IcsBaseCommand.MainCommands">
+            <summary>
+            ICSメインコマンド
+            </summary>
+        </member>
+        <member name="F:IcsBaseClass.IcsBaseCommand.MainCommands.ID">
+            <summary>
+            ID設定コマンド
+            </summary>
+        </member>
+        <member name="F:IcsBaseClass.IcsBaseCommand.MainCommands.POSITION">
+            <summary>
+            ポジション設定コマンド
+            </summary>
+        </member>
+        <member name="F:IcsBaseClass.IcsBaseCommand.MainCommands.READ">
+            <summary>
+            読み込みコマンド
+            </summary>
+        </member>
+        <member name="F:IcsBaseClass.IcsBaseCommand.MainCommands.WRITE">
+            <summary>
+            書き込みコマンド
+            </summary>
+        </member>
+        <member name="T:IcsBaseClass.IcsBaseCommand.SubCommands">
+            <summary>
+            ICSサブコマンド
+            </summary>
+        </member>
+        <member name="F:IcsBaseClass.IcsBaseCommand.SubCommands.EEPROM">
+            <summary>
+            EEPROMのデータ
+            </summary>
+        </member>
+        <member name="F:IcsBaseClass.IcsBaseCommand.SubCommands.Stretch">
+            <summary>
+            ストレッチのデータ
+            </summary>
+        </member>
+        <member name="F:IcsBaseClass.IcsBaseCommand.SubCommands.Speed">
+            <summary>
+            スピードのデータ
+            </summary>
+        </member>
+        <member name="F:IcsBaseClass.IcsBaseCommand.SubCommands.IdRead">
+            <summary>
+            ID読み取りコマンド
+            </summary>
+        </member>
+        <member name="F:IcsBaseClass.IcsBaseCommand.SubCommands.IdWrite">
+            <summary>
+            ID書き込みコマンド
+            </summary>
+        </member>
+        <member name="T:IcsBaseClass.IcsBaseCommand.Baudrates">
+            <summary>
+            ボーレートを定義
+            </summary>
+        </member>
+        <member name="F:IcsBaseClass.IcsBaseCommand.Baudrates.Slow">
+            <summary>
+            通信速度　低
+            </summary>
+        </member>
+        <member name="F:IcsBaseClass.IcsBaseCommand.Baudrates.Normal">
+            <summary>
+            通信速度　中
+            </summary>
+        </member>
+        <member name="F:IcsBaseClass.IcsBaseCommand.Baudrates.Fast">
+            <summary>
+            通信速度　速
+            </summary>
+        </member>
+        <member name="M:IcsBaseClass.IcsBaseCommand.SetPosition(System.Byte,System.Int32)">
+            <summary>
+            ポジションデータを書き込むコマンドを生成します
+            </summary>
+            <param name="ID"></param>
+            <param name="pos"></param>
+            <returns></returns>
+        </member>
+        <member name="M:IcsBaseClass.IcsBaseCommand.GetPositionCommand(System.Byte)">
+            <summary>
+            ポジションデータを取り込むコマンドを生成します
+            </summary>
+            <param name="ID"></param>
+            <returns></returns>
+        </member>
+        <member name="M:IcsBaseClass.IcsBaseCommand.setBaseCommand(System.Byte,System.Byte,System.Byte[])">
+            <summary>
+            各種パラメータ設定用コマンド
+            </summary>
+            <param name="ID"></param>
+            <param name="sc"></param>
+            <param name="data"></param>
+            <returns></returns>
+        </member>
+        <member name="M:IcsBaseClass.IcsBaseCommand.getBaseCommand(System.Byte,System.Byte)">
+            <summary>
+            各種パラメータ取得用ベースコマンド
+            </summary>
+            <param name="ID"></param>
+            <param name="sc"></param>
+            <returns></returns>
+        </member>
+        <member name="M:IcsBaseClass.IcsBaseCommand.SetSpeed(System.Byte,System.Byte[])">
+            <summary>
+            スピードを書き込むコマンドを生成します
+            </summary>
+            <param name="ID"></param>
+            <param name="data"></param>
+            <returns></returns>
+        </member>
+        <member name="M:IcsBaseClass.IcsBaseCommand.SetStretch(System.Byte,System.Byte)">
+            <summary>
+            ストレッチを書き込むコマンドを生成します
+            </summary>
+            <param name="ID"></param>
+            <param name="data"></param>
+            <returns></returns>
+        </member>
+        <member name="M:IcsBaseClass.IcsBaseCommand.SetEeprom(System.Byte,System.Byte[])">
+            <summary>
+            EEPROMに書き込むコマンドを生成します
+            </summary>
+            <param name="ID"></param>
+            <param name="data"></param>
+            <returns></returns>
+        </member>
+        <member name="M:IcsBaseClass.IcsBaseCommand.GetSpeed(System.Byte)">
+            <summary>
+            スピードを取得するコマンドを生成します
+            </summary>
+            <param name="ID"></param>
+            <returns></returns>
+        </member>
+        <member name="M:IcsBaseClass.IcsBaseCommand.GetStretch(System.Byte)">
+            <summary>
+            ストレッチを取得するコマンドを生成します
+            </summary>
+            <param name="ID"></param>
+            <returns></returns>
+        </member>
+        <member name="M:IcsBaseClass.IcsBaseCommand.GetEeprom(System.Byte)">
+            <summary>
+            EEPROMの内容を取得するコマンドを生成します
+            </summary>
+            <param name="ID">読み取り先のID</param>
+            <returns>取得コマンド</returns>
+        </member>
+        <member name="M:IcsBaseClass.IcsBaseCommand.GetId">
+            <summary>
+            IDを取得するコマンドを生成します
+            </summary>
+            <returns>取得コマンド</returns>
+        </member>
+        <member name="M:IcsBaseClass.IcsBaseCommand.SetId(System.Byte)">
+            <summary>
+            IDを設定するコマンドを生成します
+            </summary>
+            <param name="ID"></param>
+            <returns></returns>
+        </member>
+        <member name="M:IcsBaseClass.IcsBaseCommand.byteJoint(System.Byte,System.Byte,System.Byte)">
+            <summary>
+            任意のビット数シフトして結合します
+            </summary>
+            <param name="data1">シフトするデータ</param>
+            <param name="data2">足すデータ</param>
+            <param name="sf">シフトする数</param>
+            <returns>結合結果(int)</returns>
+        </member>
+        <member name="M:IcsBaseClass.IcsBaseCommand.intJoint(System.Byte,System.Byte,System.Byte,System.Byte)">
+            <summary>
+            byteデータを結合します
+            </summary>
+            <param name="data1"></param>
+            <param name="data2"></param>
+            <param name="data3"></param>
+            <param name="data4"></param>
+            <returns></returns>
+        </member>
+        <member name="M:IcsBaseClass.IcsBaseCommand.dataInitialize(System.Int32)">
+            <summary>
+            プロパティデータを初期化する
+            </summary>
+        </member>
+        <member name="M:IcsBaseClass.IcsBaseCommand.initialCheck">
+            <summary>
+            プロパティが空かどうかのチェックを行う
+            </summary>
+        </member>
+        <member name="M:IcsBaseClass.IcsBaseCommand.dCopyWtoP(System.Byte[],System.Int32,System.Int32)">
+            <summary>
+            ワーク用データからプロパティにデータをコピーする
+            </summary>
+            <param name="data"></param>
+            <param name="offset"></param>
+            <param name="count"></param>
+        </member>
+        <member name="M:IcsBaseClass.IcsBaseCommand.dCopyPtoW(System.Int32)">
+            <summary>
+            プロパティからデータを吸い出します
+            </summary>
+            <returns>byte data[58]</returns>
+        </member>
+    </members>
+</doc>
