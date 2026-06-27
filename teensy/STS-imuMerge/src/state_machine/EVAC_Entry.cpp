@@ -38,7 +38,7 @@ void onEnter() {
 
     Actions::Arm::attachServos();
 
-    Actions::Forward::forward(70, 50);
+    Actions::Forward::forward(70, 170);
 
     Actions::Drive::stop();
 }

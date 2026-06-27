@@ -96,6 +96,11 @@ bool checkPoint();
 // class is present.
 int16_t largestCenterX(uint8_t cls);
 
+// Block for `ms` while continuously draining the K230 RX buffer, so it never
+// overflows and the next read sees the newest frame. Use instead of delay()
+// in any blocking sequence that runs while the K230 is streaming.
+void drainDelay(uint32_t ms);
+
 void setRunning(bool run);        // true -> send DETECT command, false -> IDLE
 bool isRunning();
 

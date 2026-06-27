@@ -104,7 +104,8 @@ void update() {
 
     if (corner == nullptr) {
         _stopCount = 0;
-        Actions::Drive::motor(EVAC_SEARCH_SPIN_LEFT, EVAC_SEARCH_SPIN_RIGHT);
+        Actions::Drive::spinDecay(60, 400);
+        delay(100);
         return;
     }
 

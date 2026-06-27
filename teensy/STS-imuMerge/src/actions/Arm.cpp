@@ -96,20 +96,25 @@ void captureAlive()  {
     // Discretised proportional alignment: the closer to centre, the slower the
     // motors AND the shorter the pulse. Stop, then wait 100ms for the next
     // K230 frame (~10 FPS) before re-checking.
-    while (centerX >= 0 && abs(delta) > 14) {
+    while (centerX >= 0 && abs(delta) > 25) {
         int absD = abs(delta);
         int speed  = constrain(map(absD, 8, 320, 30, 50), 30, 50);   // px -> motor speed (linear)
         int moveMs = constrain(20 + (int)((130L * absD * absD) / 102400L), 20, 150);  // pulse length: quadratic in delta -> 20 + 180*(absD/320)^2, clamped 10..200
         int dir = (delta < 0) ? -1 : 1;
 
         Drive::motor(dir * speed, -dir * speed);
-        delay(moveMs);
+        Processing::K230Decode::drainDelay(moveMs);
         Drive::stop();
 
-        delay(100);   // wait for next K230 frame (~10 FPS)
+        Processing::K230Decode::drainDelay(100);   // wait for next frame, keep draining
 
-        Processing::K230Decode::tick();
         centerX = Processing::K230Decode::largestCenterX(K230_CLASS_ALIVE);
+        // Tolerate brief detection dropouts (motion blur / ball at frame edge):
+        // re-poll a few fresh frames before giving up instead of aborting.
+        for (uint8_t r = 0; r < 4 && centerX < 0; r++) {
+            Processing::K230Decode::drainDelay(100);
+            centerX = Processing::K230Decode::largestCenterX(K230_CLASS_ALIVE);
+        }
         if (centerX < 0) {
             break;
         }
@@ -122,18 +127,18 @@ void captureAlive()  {
 
     Drive::stop();
 
-    Serial.println("[captureAlive] grabLeft open");
+    Serial.println("[captureAlive] grabRight open");
     grabRight(false);
     Serial.printf("[captureAlive] lift down  us=%d\n", KRS_GRAB_US);
-    
+
     Drive::motor(-15,-15);
     lift(KRS_GRAB_US);
-    delay(800);
+    Processing::K230Decode::drainDelay(800);
     Drive::motor(35,35);
-    delay(1000);
+    Processing::K230Decode::drainDelay(1000);
     grabRight(true);
     lift(KRS_AIR_US);
-    delay(800);
+    Processing::K230Decode::drainDelay(800);
     Drive::stop();
 
 }
@@ -145,22 +150,25 @@ void captureDead() {
     int16_t centerX = Processing::K230Decode::largestCenterX(K230_CLASS_DEAD);
     int16_t delta = (centerX >= 0) ? (centerX - (int16_t)K230_FRAME_CENTER_X - 120) : 0;
 
-    Serial.printf("[captureDead] initial centerX=%d  delta=%d\n", centerX, delta);
-
-    while (centerX >= 0 && abs(delta) > 8) {
+    while (centerX >= 0 && abs(delta) > 25) {
         int absD = abs(delta);
         int speed  = constrain(map(absD, 8, 320, 30, 50), 30, 50);   // px -> motor speed (linear)
         int moveMs = constrain(20 + (int)((130L * absD * absD) / 102400L), 20, 150);  // pulse length: quadratic in delta -> 20 + 180*(absD/320)^2, clamped 10..200
         int dir = (delta < 0) ? -1 : 1;
 
         Drive::motor(dir * speed, -dir * speed);
-        delay(moveMs);
+        Processing::K230Decode::drainDelay(moveMs);
         Drive::stop();
 
-        delay(100);   // wait for next K230 frame (~10 FPS)
+        Processing::K230Decode::drainDelay(100);   // wait for next frame, keep draining
 
-        Processing::K230Decode::tick();
         centerX = Processing::K230Decode::largestCenterX(K230_CLASS_DEAD);
+        // Tolerate brief detection dropouts (motion blur / ball at frame edge):
+        // re-poll a few fresh frames before giving up instead of aborting.
+        for (uint8_t r = 0; r < 4 && centerX < 0; r++) {
+            Processing::K230Decode::drainDelay(100);
+            centerX = Processing::K230Decode::largestCenterX(K230_CLASS_DEAD);
+        }
         if (centerX < 0) {
             break;
         }
@@ -173,18 +181,18 @@ void captureDead() {
 
     Drive::stop();
 
-    Serial.println("[captureDead] grab open");
+    Serial.println("[captureDead] grabLeft open");
     grabLeft(false);
     Serial.printf("[captureDead] lift down  us=%d\n", KRS_GRAB_US);
 
     Drive::motor(-15,-15);
     lift(KRS_GRAB_US);
-    delay(800);
+    Processing::K230Decode::drainDelay(800);
     Drive::motor(35,35);
-    delay(1000);
+    Processing::K230Decode::drainDelay(1000);
     grabLeft(true);
     lift(KRS_AIR_US);
-    delay(800);
+    Processing::K230Decode::drainDelay(800);
     Drive::stop();
 }
 

@@ -121,6 +121,7 @@ namespace {
         const float32_t right = EVAC_GRAB_BASE_SPEED - turn;
         Actions::Drive::motor(left, right);
     }
+
 }
 
 void onEnter() {
@@ -222,7 +223,7 @@ void update() {
     //         StateMachine::transitionTo(StateMachine::EVAC_EXIT);
     //     }
     //     return;
-    // }
+    // } 
 
     // Searching / collecting balls.
     if (Processing::K230Decode::checkVictim()) {

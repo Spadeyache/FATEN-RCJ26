@@ -113,6 +113,17 @@ void tick() {
     }
 }
 
+// Block for `ms`, draining the K230 RX buffer the whole time so it never
+// overflows and boxes() always reflects the newest frame. Use this instead of
+// delay() anywhere you must wait while the K230 is streaming.
+void drainDelay(uint32_t ms) {
+    const uint32_t t0 = millis();
+    do {
+        tick();
+        delay(2);
+    } while (millis() - t0 < ms);
+}
+
 const Detection* detections()   { return _detections; }
 uint8_t          count()        { return _k230d.boxCount(); }
 const Box*       boxes()        { return _k230d.boxCount() ? &_k230d.box(0) : nullptr; }
