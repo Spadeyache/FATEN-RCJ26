@@ -218,7 +218,9 @@ void update() {
         return;
     }
 
-    if (!_grabbing) {
+
+    //searching / collecting balls
+    if (!_grabbing) {   // see if robot is running at the ball.
         if (Processing::K230Decode::checkVictim()) {
             _grabbing = true;
             resetGrabFilter(Processing::K230Decode::goalPOS::direction);
@@ -239,13 +241,7 @@ void update() {
         }
     }
 
-    // const unsigned long now = millis();
-    // if (now - _lastBeep >= 1000) {
-    //     // Longer beep so it's actually audible while debugging. Revert
-    //     // to (160, 20ms) for the production short tick.
-    //     analogWrite(BUZZER_PIN, 160); delay(120); analogWrite(BUZZER_PIN, 0);
-    //     _lastBeep = now;
-    // }
+  
 }
 
 }  // namespace EVAC_Search

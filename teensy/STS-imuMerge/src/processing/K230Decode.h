@@ -91,6 +91,11 @@ bool checkVictim();
 bool checkPoint(const K230DBox *msgs, uint8_t msgCount);
 bool checkPoint();
 
+// Returns the center X pixel (0..639) of the largest (by box area) detection
+// of the given class in the most recent frame. Returns -1 if no box of that
+// class is present.
+int16_t largestCenterX(uint8_t cls);
+
 void setRunning(bool run);        // true -> send DETECT command, false -> IDLE
 bool isRunning();
 

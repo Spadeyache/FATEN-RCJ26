@@ -33,7 +33,7 @@ FLASHMEM void setup() {
     pinMode(STS_EN_PIN, OUTPUT);
     digitalWrite(STS_EN_PIN, HIGH);
     pinMode(BUZZER_PIN, OUTPUT);
-    // tone(BUZZER_PIN, 4000, 300);
+    tone(BUZZER_PIN, 4000, 300);
 
     Actions::Drive::init();
     Actions::Arm::init();           // servos + KRS, sets initial pose
@@ -48,23 +48,13 @@ FLASHMEM void setup() {
     // Avoid blocking startup here; the robot should enter loop() and start driving immediately.
     // Use a non-blocking status indicator if we need boot confirmation later.
 
+    delay(2500);
     delay(250);
     Actions::Arm::detachServos(); // sorry i wanted to save 16mAh and 225ms of time. i need to add this..
 }
 
 void loop() {
-    // === Pivot-axis bench test ===============================================
-    // Hold four fixed wheel gains FOREVER (FL, FR, BL, BR), range ±100.
-    // Sweep the numbers one at a time and watch where the robot pivots.
-    //   (+,-,+,-) = in-place spin   (+,-,0,0) = front-only   (0,0,+,-) = rear-only
-    // Comment this block out to return to normal line following.
-    // Actions::Drive::motorRaw(30, -30, 100, -100);
-    // Actions::Drive::motorRaw(0, 60, -70, 80);
-    // Actions::Drive::motorRaw(-100, 100,0,0);
-    // delay(1000);
-    // Actions::Drive::motorRaw(40, -40,70,-70);
-    // delay(1000);
-    // Actions::Drive::vibrateMotor(2, 100.0f, 6, 100);
+    
     // Actions::Drive::motorRaw(-40, 40,40,40);
     // Actions::Forward::forward(100, 80);
     // Actions::Turn::turn(90, 40);
@@ -88,6 +78,11 @@ void loop() {
 
     // 3. Debug Serial commands ('m' = map dump, 'p' = pose print). DISABLED (mapping off).
     // while (Serial.available()) Processing::Mapping::handleSerial((char)Serial.read());
+
+
+    Actions::Arm::attachServos();
+    Actions::Arm::captureAlive();
+    return;
 
     // 4. Run the active state.
     StateMachine::tick();

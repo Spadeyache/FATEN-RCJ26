@@ -36,48 +36,9 @@ void onEnter() {
     // Fresh evac run: clear held counts (search timer starts in EVAC_SEARCH).
     EvacContext::reset();
 
-    Actions::Arm::attachGrabServos();
-    // Actions::Arm::attachGrabServos();
-    // Actions::Arm::lift(4050);
-    // Actions::Arm::grab(true);
+    Actions::Arm::attachServos();
 
     Actions::Forward::forward(70, 50);
-    // Actions::Turn::turn(-80.0f);
-    // Actions::Forward::forward(100, 1150);
-    // Actions::Drive::stop();
-
-    // Actions::Arm::grab(false);
-    // Actions::Arm::lift(10050);
-    // Actions::Arm::lift(10050);   // intentional duplicate â€” KRS needs the resend
-
-    // Actions::Turn::turn(82.0f);
-    // Actions::Forward::forward(-100, 450);
-    // Actions::Turn::turn(120.0f);
-
-    // // Crawl forward until front bumper hits the wall.
-    // Sensors::IMU::tick();
-    // Actions::Drive::motor(70, 70);
-    // while (!Sensors::Touch::front()) {
-    //     delay(10);
-    //     Sensors::IMU::tick();
-    //     Sensors::Touch::tick();
-    // }
-
-    // Actions::Arm::lift(7050);
-
-    // analogWrite(BUZZER_PIN, 160);
-    // Actions::Forward::forward(-50, 50);
-
-    // Actions::Drive::motor(70, 70);
-    // while (!Sensors::Touch::front()) {
-    //     delay(10);
-    //     Sensors::Touch::tick();
-    // }
-    // Actions::Drive::stop();
-
-    // Actions::Turn::turn(-45.0f);
-    // Actions::Forward::forward(50, 40);
-    // Actions::Arm::grab(true);
 
     Actions::Drive::stop();
 }

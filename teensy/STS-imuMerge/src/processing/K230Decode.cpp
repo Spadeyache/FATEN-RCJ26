@@ -203,6 +203,27 @@ bool checkPoint() {
     return checkPoint(boxes(), boxCount());
 }
 
+// Returns the center X pixel (0..639) of the largest (by box area) detection
+// of the given class in the most recent frame. Returns -1 if none found.
+int16_t largestCenterX(uint8_t cls) {
+    const K230DBox *b     = boxes();
+    const uint8_t   n     = boxCount();
+    const K230DBox *best  = nullptr;
+    int32_t         bestArea = -1;
+
+    for (uint8_t i = 0; i < n; i++) {
+        if (b[i].cls != cls) continue;
+        const int32_t area = (int32_t)(b[i].x2 - b[i].x1) * (int32_t)(b[i].y2 - b[i].y1);
+        if (area > bestArea) {
+            bestArea = area;
+            best = &b[i];
+        }
+    }
+
+    if (best == nullptr) return -1;
+    return (int16_t)(((int32_t)best->x1 + (int32_t)best->x2) / 2);
+}
+
 void setRunning(bool run) {
     if (_running == run) return;
     _running = run;
