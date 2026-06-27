@@ -27,6 +27,10 @@ void init();
 void motor(float32_t left, float32_t right, bool imuCompensation = false) FASTRUN;
 void stop() FASTRUN;
 
+// Blocking spin-in-place that decays from |power| down to 35 over durationMs.
+// left = +power, right = -power (so positive power spins one way). Stops at end.
+void spinDecay(float32_t power, uint32_t durationMs);
+
 // Debug/test only — drives the four wheels independently, no IMU comp,
 // no L/R replication. Used for bench-testing individual motor wiring.
 void motorRaw(float32_t fl, float32_t fr, float32_t bl, float32_t br) FASTRUN;

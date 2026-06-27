@@ -16,7 +16,7 @@ namespace {
     Servo _krs;            // KRS lift, PWM mode (pin = KRS_PWM_PIN)
 
     constexpr int KRS_PARK_US    = 1000;   // parked pose at boot — TODO tune
-    constexpr int KRS_GRAB_US    = 2100;
+    constexpr int KRS_GRAB_US    = 2040;
     constexpr int KRS_AIR_US    = 1450;
 
     constexpr int HS0_CLOSE_US = 2000;
@@ -91,14 +91,12 @@ void captureAlive()  {
 
     Processing::K230Decode::tick();
     int16_t centerX = Processing::K230Decode::largestCenterX(K230_CLASS_ALIVE);
-    int16_t delta = (centerX >= 0) ? (centerX - (int16_t)K230_FRAME_CENTER_X - 100) : 0;
-
-    Serial.printf("[captureAlive] initial centerX=%d  delta=%d\n", centerX, delta);
+    int16_t delta = (centerX >= 0) ? (centerX - (int16_t)K230_FRAME_CENTER_X + 120) : 0;
 
     // Discretised proportional alignment: the closer to centre, the slower the
     // motors AND the shorter the pulse. Stop, then wait 100ms for the next
     // K230 frame (~10 FPS) before re-checking.
-    while (centerX >= 0 && abs(delta) > 8) {
+    while (centerX >= 0 && abs(delta) > 14) {
         int absD = abs(delta);
         int speed  = constrain(map(absD, 8, 320, 30, 50), 30, 50);   // px -> motor speed (linear)
         int moveMs = constrain(20 + (int)((130L * absD * absD) / 102400L), 20, 150);  // pulse length: quadratic in delta -> 20 + 180*(absD/320)^2, clamped 10..200
@@ -115,7 +113,7 @@ void captureAlive()  {
         if (centerX < 0) {
             break;
         }
-        delta = centerX - (int16_t)K230_FRAME_CENTER_X - 100;
+        delta = centerX - (int16_t)K230_FRAME_CENTER_X + 120;
     }
 
     if (centerX < 0) {
@@ -125,32 +123,34 @@ void captureAlive()  {
     Drive::stop();
 
     Serial.println("[captureAlive] grabLeft open");
-    grabLeft(false);
+    grabRight(false);
     Serial.printf("[captureAlive] lift down  us=%d\n", KRS_GRAB_US);
+    
+    Drive::motor(-15,-15);
     lift(KRS_GRAB_US);
+    delay(800);
+    Drive::motor(35,35);
     delay(1000);
-    Serial.println("[captureAlive] grabLeft close");
-    grabLeft(true);
-    Serial.printf("[captureAlive] lift up  us=%d\n", KRS_AIR_US);
+    grabRight(true);
     lift(KRS_AIR_US);
-    delay(1000);
+    delay(800);
+    Drive::stop();
 
-    Serial.println("[captureAlive] done");
 }
 
 void captureDead() {
-    Serial.println("[captureAlive] start");
+    Serial.println("[captureDead] start");
 
     Processing::K230Decode::tick();
-    int16_t centerX = Processing::K230Decode::largestCenterX(K230_CLASS_ALIVE);
-    int16_t delta = (centerX >= 0) ? (centerX - (int16_t)K230_FRAME_CENTER_X + 100) : 0;
+    int16_t centerX = Processing::K230Decode::largestCenterX(K230_CLASS_DEAD);
+    int16_t delta = (centerX >= 0) ? (centerX - (int16_t)K230_FRAME_CENTER_X - 120) : 0;
 
-    Serial.printf("[captureAlive] initial centerX=%d  delta=%d\n", centerX, delta);
+    Serial.printf("[captureDead] initial centerX=%d  delta=%d\n", centerX, delta);
 
     while (centerX >= 0 && abs(delta) > 8) {
         int absD = abs(delta);
-        int speed  = constrain(map(absD, 8, 320, 30, 65), 30, 65);   // px -> motor speed (linear)
-        int moveMs = constrain(20 + (int)((120L * absD * absD) / 102400L), 20, 140);  // pulse length: quadratic in delta -> 20 + 180*(absD/320)^2, clamped 10..200
+        int speed  = constrain(map(absD, 8, 320, 30, 50), 30, 50);   // px -> motor speed (linear)
+        int moveMs = constrain(20 + (int)((130L * absD * absD) / 102400L), 20, 150);  // pulse length: quadratic in delta -> 20 + 180*(absD/320)^2, clamped 10..200
         int dir = (delta < 0) ? -1 : 1;
 
         Drive::motor(dir * speed, -dir * speed);
@@ -160,22 +160,32 @@ void captureDead() {
         delay(100);   // wait for next K230 frame (~10 FPS)
 
         Processing::K230Decode::tick();
-        centerX = Processing::K230Decode::largestCenterX(K230_CLASS_ALIVE);
+        centerX = Processing::K230Decode::largestCenterX(K230_CLASS_DEAD);
         if (centerX < 0) {
             break;
         }
-        delta = centerX - (int16_t)K230_FRAME_CENTER_X + 100;
+        delta = centerX - (int16_t)K230_FRAME_CENTER_X - 120;
     }
 
     if (centerX < 0) {
         return;
     }
-    grabRight(false);
+
+    Drive::stop();
+
+    Serial.println("[captureDead] grab open");
+    grabLeft(false);
+    Serial.printf("[captureDead] lift down  us=%d\n", KRS_GRAB_US);
+
+    Drive::motor(-15,-15);
     lift(KRS_GRAB_US);
-    delay(1400);
-    grabRight(true);
+    delay(800);
+    Drive::motor(35,35);
+    delay(1000);
+    grabLeft(true);
     lift(KRS_AIR_US);
-    delay(1400);
+    delay(800);
+    Drive::stop();
 }
 
 void releaseAll() {

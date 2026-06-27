@@ -120,13 +120,11 @@ enum XiaoMode : uint8_t {
 // =============================================================================
 
 // EVAC search victim sweep
-#define EVAC_SEARCH_SPIN_LEFT       -40.0f
-#define EVAC_SEARCH_SPIN_RIGHT       40.0f
 #define EVAC_GRAB_BASE_SPEED        45.0f
 #define EVAC_GRAB_TURN_GAIN         35.0f
 #define EVAC_GRAB_AVG_FRAMES          3
 #define EVAC_GRAB_LOST_HOLD_FRAMES    3
-#define EVAC_GRAB_STOP_HEIGHT_PX     120.0f
+#define EVAC_GRAB_STOP_HEIGHT_PX     150.0f
 #define EVAC_GRAB_STOP_WINDOW          4
 #define EVAC_GRAB_STOP_REQUIRED        3
 

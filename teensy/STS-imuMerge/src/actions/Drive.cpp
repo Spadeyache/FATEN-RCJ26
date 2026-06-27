@@ -87,6 +87,20 @@ FASTRUN void motor(float32_t left, float32_t right, bool imuCompensation) {
 
 FASTRUN void stop() { motor(0.0f, 0.0f); }
 
+// Spin in place, decaying linearly from |power| to 35 over durationMs, then stop.
+void spinDecay(float32_t power, uint32_t durationMs) {
+    const float32_t endSpd = 35.0f;
+    const float32_t start  = fabsf(power);
+    const uint32_t  stepMs = 20;
+
+    for (uint32_t t = 0; t <= durationMs; t += stepMs) {
+        float32_t spd = start + (endSpd - start) * (float32_t)t / (float32_t)durationMs;
+        motor(spd, -spd);
+        delay(stepMs);
+    }
+    stop();
+}
+
 FASTRUN void motorRaw(float32_t fl, float32_t fr, float32_t bl, float32_t br) {
     cli();
     _flGain = constrain(fl, -MAX_MOTOR_SPEED, MAX_MOTOR_SPEED);

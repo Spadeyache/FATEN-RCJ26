@@ -26,7 +26,6 @@ namespace EVAC_Search {
 
 namespace {
     bool          _initialised = false;
-    bool          _grabbing = false;
     uint8_t       _grabType = K230_CLASS_ALIVE;   // class of the ball being grabbed
     uint8_t       _grabLostFrames = 0;
     uint8_t       _grabDirCount = 0;
@@ -132,7 +131,6 @@ void onEnter() {
     // Teensy-side K230 run/idle control disabled for now.
     // Processing::K230Decode::setRunning(true);
     _initialised = true;
-    _grabbing = false;
     resetGrabFilter(0.0f);
     resetGrabStopFilter();
     _lastBeep    = 0;
@@ -158,40 +156,48 @@ static void captureVictim(uint8_t cls) {
 #endif
 }
 
+// Blocking: drive toward the nearest victim until close enough, then capture it.
+// Returns true if a ball was captured, false if the victim was lost.
 bool grabBall() {
-    const K230DBox *target = closestCenterVictim();
+    resetGrabFilter(0.0f);
+    resetGrabStopFilter();
+    _grabLostFrames = 0;
 
-    if (target != nullptr) {
-        Processing::K230Decode::updateGoalFromVictim(*target);
+    while (true) {
+        Processing::K230Decode::tick();
+        const K230DBox *target = closestCenterVictim();
+
+        // --- Ball not visible this frame ---
+        if (target == nullptr) {
+            if (_grabLostFrames++ >= EVAC_GRAB_LOST_HOLD_FRAMES) {
+                Actions::Drive::stop();
+                Processing::K230Decode::goalPOS::valid = false;
+                Serial.println("[grabBall] lost target");
+                return false;
+            }
+            driveTowardDirection(_grabSmoothedDir);   // coast on last direction
+            delay(20);
+            continue;
+        }
+        _grabLostFrames = 0;
         _grabType = target->cls;
+        Processing::K230Decode::updateGoalFromVictim(*target);
+
         const float32_t height = boxHeightPx(*target);
+
+        // --- Close enough -> capture (captureVictim does fine-align + grab) ---
         if (pushGrabStopSample(height >= EVAC_GRAB_STOP_HEIGHT_PX)) {
-            // Reached the ball — grab it, then signal "done" so update() goes
-            // back to spinning for the next victim.
             captureVictim(_grabType);
-            resetGrabStopFilter();
-            return false;
+            return true;
         }
 
-        const float32_t smoothedDir = pushGrabDirection(directionFor(*target));
-
-        Processing::K230Decode::goalPOS::direction = smoothedDir;
-        Processing::K230Decode::goalPOS::updatedMs = millis();
-        _grabLostFrames = 0;
-
-        driveTowardDirection(smoothedDir);
-        return true;
+        // --- Still chasing ---
+        const float32_t dir = pushGrabDirection(directionFor(*target));
+        Serial.printf("[grabBall] chasing cls=%u dir=%.2f height=%.0f\n",
+                      _grabType, dir, height);
+        driveTowardDirection(dir);
+        delay(20);
     }
-
-    if (_grabDirCount > 0 && _grabLostFrames < EVAC_GRAB_LOST_HOLD_FRAMES) {
-        _grabLostFrames++;
-        driveTowardDirection(_grabSmoothedDir);
-        return true;
-    }
-
-    Processing::K230Decode::goalPOS::valid = false;
-    Actions::Drive::stop();
-    return false;
 }
 
 void update() {
@@ -206,42 +212,34 @@ void update() {
 
     // Processing::Mapping::tick();   // DISABLED — mapping off
 
-    // Leave-collection decision: storage full, or the 2-minute window expired.
-    if (EvacContext::full() || EvacContext::searchTimedOut()) {
-        Actions::Drive::stop();
-        if (EvacContext::heldTotal() > 0) {
-            StateMachine::transitionTo(StateMachine::EVAC_DEPLOY);
-        } else {
-            // Timed out with nothing aboard — give up and leave the zone.
-            StateMachine::transitionTo(StateMachine::EVAC_EXIT);
-        }
-        return;
-    }
+    // // Leave-collection decision: storage full, or the 2-minute window expired.
+    // if (EvacContext::full() || EvacContext::searchTimedOut()) {
+    //     Actions::Drive::stop();
+    //     if (EvacContext::heldTotal() > 0) {
+    //         StateMachine::transitionTo(StateMachine::EVAC_DEPLOY);
+    //     } else {
+    //         // Timed out with nothing aboard — give up and leave the zone.
+    //         StateMachine::transitionTo(StateMachine::EVAC_EXIT);
+    //     }
+    //     return;
+    // }
 
-
-    //searching / collecting balls
-    if (!_grabbing) {   // see if robot is running at the ball.
-        if (Processing::K230Decode::checkVictim()) {
-            _grabbing = true;
-            resetGrabFilter(Processing::K230Decode::goalPOS::direction);
-            resetGrabStopFilter();
+    // Searching / collecting balls.
+    if (Processing::K230Decode::checkVictim()) {
 #if PRINT_STATE
-            Serial.printf("EVAC_SEARCH victim found dir=%.3f cls=%u score=%u\n",
-                          Processing::K230Decode::goalPOS::direction,
-                          Processing::K230Decode::goalPOS::cls,
-                          Processing::K230Decode::goalPOS::score);
+        Serial.printf("EVAC_SEARCH victim found dir=%.3f cls=%u score=%u\n",
+                      Processing::K230Decode::goalPOS::direction,
+                      Processing::K230Decode::goalPOS::cls,
+                      Processing::K230Decode::goalPOS::score);
 #endif
-            _grabbing = grabBall();
-        } else {
-            Actions::Drive::motor(EVAC_SEARCH_SPIN_LEFT, EVAC_SEARCH_SPIN_RIGHT);
-        }
+        grabBall();   // blocking until the ball is captured or lost
+        Actions::Drive::stop();
+        tone(BUZZER_PIN, 9000, 1000);
     } else {
-        if (!grabBall()) {
-            _grabbing = false;
-        }
+        // Spin sweep: start at 60 and decay to 35 over 400 ms, then pause.
+        Actions::Drive::spinDecay(60, 400);
+        delay(100);
     }
-
-  
 }
 
 }  // namespace EVAC_Search

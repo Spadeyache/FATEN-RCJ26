@@ -108,6 +108,7 @@ void update() {
             #if PRINT_ACTIONS
                         Serial.println("Action: Green-Left");
             #endif
+            tone(BUZZER_PIN, 9000, 300);
             Actions::Forward::forward(50.0f, 52.0f);
             Actions::Turn::turn(-90.0f, 60.0f);   // for left
             Actions::Drive::stop();
@@ -120,6 +121,7 @@ void update() {
             #if PRINT_ACTIONS
                         Serial.println("Action: Green-Right");
             #endif
+            tone(BUZZER_PIN, 9000, 300);
             Actions::Forward::forward(50.0f, 52.0f);
             Actions::Turn::turn(90.0f, 60.0f);  // for right
             Actions::Drive::stop();

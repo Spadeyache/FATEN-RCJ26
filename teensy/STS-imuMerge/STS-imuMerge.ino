@@ -33,7 +33,7 @@ FLASHMEM void setup() {
     pinMode(STS_EN_PIN, OUTPUT);
     digitalWrite(STS_EN_PIN, HIGH);
     pinMode(BUZZER_PIN, OUTPUT);
-    tone(BUZZER_PIN, 4000, 300);
+    tone(BUZZER_PIN, 9000, 300);
 
     Actions::Drive::init();
     Actions::Arm::init();           // servos + KRS, sets initial pose
@@ -48,7 +48,7 @@ FLASHMEM void setup() {
     // Avoid blocking startup here; the robot should enter loop() and start driving immediately.
     // Use a non-blocking status indicator if we need boot confirmation later.
 
-    delay(2500);
+    delay(1000);
     delay(250);
     Actions::Arm::detachServos(); // sorry i wanted to save 16mAh and 225ms of time. i need to add this..
 }
@@ -80,9 +80,9 @@ void loop() {
     // while (Serial.available()) Processing::Mapping::handleSerial((char)Serial.read());
 
 
-    Actions::Arm::attachServos();
-    Actions::Arm::captureAlive();
-    return;
+    // Actions::Arm::attachServos();
+    // Actions::Arm::captureAlive();
+    // return;
 
     // 4. Run the active state.
     StateMachine::tick();
