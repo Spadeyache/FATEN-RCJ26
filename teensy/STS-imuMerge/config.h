@@ -51,6 +51,7 @@
 #define FEAT_RED            2   // raw red on the scan row (Teensy filters)
 #define FEAT_SILVER         3   // raw silver on the scan row (Teensy filters)
 #define FEAT_LINE_LOST      4   // raw "no line" on the scan row (Teensy filters)
+#define FEAT_BLACK_INTERSECT 6   // saturated black row in LINE mode; suppress green rereads
 #define FEAT_GREEN_LEFT     7   // XIAO GreenFilter-confirmed left turn  (hardcoded fwd+turn)
 #define FEAT_GREEN_RIGHT    8   // XIAO GreenFilter-confirmed right turn (hardcoded fwd+turn)
 
@@ -135,6 +136,7 @@ enum XiaoMode : uint8_t {
 #define EVAC_MAX_BALLS                 3          // stop collecting at this many
 #define EVAC_SEARCH_TIMEOUT_MS         120000UL   // 2-min collection window (from search start)
 #define EVAC_POINT_STOP_HEIGHT_PX      120.0f     // deploy: stop approaching the corner at this box height
+#define EVAC_POINT_STOP_REQUIRED        5         // deploy: consecutive close frames before classifying colour
 #define EVAC_DEPLOY_TIMEOUT_MS         30000UL    // safety: give up hunting the corner after this
 
 // =============================================================================
@@ -145,11 +147,15 @@ enum XiaoMode : uint8_t {
 #define FILTER_THRESHOLD_RED      5   // red line
 #define FILTER_THRESHOLD_SILVER   4   // silver (evac entry)
 #define FILTER_THRESHOLD_LINELOST  3   // sustained line loss → gap
+#define FILTER_THRESHOLD_BLACK_INTERSECT 4  // saturated black row before/through an intersection
 // #define FILTER_THRESHOLD_GREEN    4   // green left/right (matches main); u-turn = both sides build up
 
 // After firing any green turn (u-turn / left / right), ignore all green for this
 // long so the same intersection isn't re-read on the way out.
 #define DISABLE_GREEN_MS         1000
+#define BLACK_INTERSECT_DISABLE_GREEN_BASE_MS 1100
+#define BLACK_INTERSECT_DISABLE_GREEN_MIN_MS   700
+#define BLACK_INTERSECT_DISABLE_GREEN_MAX_MS  2000
 
 // =============================================================================
 //  K230D AI processor
@@ -172,6 +178,11 @@ enum XiaoMode : uint8_t {
 
 #define K230_FRAME_WIDTH    640.0f
 #define K230_FRAME_CENTER_X (K230_FRAME_WIDTH * 0.5f)
+
+// points.kmodel class IDs — when the K230 is in POINTS mode, box cls = corner
+// colour. Confirmed order: 0=green, 1=red.
+#define K230_POINT_GREEN    0   // live-victim corner
+#define K230_POINT_RED      1   // dead-victim corner
 
 // =============================================================================
 //  Evacuation-zone mapping

@@ -99,115 +99,61 @@ void grab(bool closed) {
 
 //
 
-void captureAlive()  {
-    Serial.println("[captureAlive] start");
+// Align `alignCls` to the given arm's offset, then grab with that arm. Blocking.
+// Offset & grab timing are per physical side; the ball type only drives which
+// detections we align to, so either arm can grab either type (overflow case).
+//   LEFT  arm: offset +120, grab timing 800/1000
+//   RIGHT arm: offset -120, grab timing 600/700
+void grabArm(Side side, uint8_t alignCls) {
+    const int offset = (side == LEFT) ? +120 : -120;
+    Serial.printf("[grabArm] side=%s cls=%u\n", side == LEFT ? "LEFT" : "RIGHT", alignCls);
 
     Processing::K230Decode::tick();
-    int16_t centerX = Processing::K230Decode::largestCenterX(K230_CLASS_ALIVE);
-    int16_t delta = (centerX >= 0) ? (centerX - (int16_t)K230_FRAME_CENTER_X + 120) : 0;
+    int16_t centerX = Processing::K230Decode::largestCenterX(alignCls);
+    int16_t delta = (centerX >= 0) ? (centerX - (int16_t)K230_FRAME_CENTER_X + offset) : 0;
 
-    // Discretised proportional alignment: the closer to centre, the slower the
-    // motors AND the shorter the pulse. Stop, then wait 100ms for the next
-    // K230 frame (~10 FPS) before re-checking.
+    // Discretised proportional alignment, tolerant of brief detection dropouts.
     while (centerX >= 0 && abs(delta) > 25) {
         int absD = abs(delta);
-        int speed  = constrain(map(absD, 8, 320, 30, 50), 30, 50);   // px -> motor speed (linear)
-        int moveMs = constrain(20 + (int)((130L * absD * absD) / 102400L), 20, 150);  // pulse length: quadratic in delta -> 20 + 180*(absD/320)^2, clamped 10..200
+        int speed  = constrain(map(absD, 8, 320, 30, 50), 30, 50);
+        int moveMs = constrain(20 + (int)((130L * absD * absD) / 102400L), 20, 150);
         int dir = (delta < 0) ? -1 : 1;
 
         Drive::motor(dir * speed, -dir * speed);
         Processing::K230Decode::drainDelay(moveMs);
         Drive::stop();
+        Processing::K230Decode::drainDelay(100);
 
-        Processing::K230Decode::drainDelay(100);   // wait for next frame, keep draining
-
-        centerX = Processing::K230Decode::largestCenterX(K230_CLASS_ALIVE);
-        // Tolerate brief detection dropouts (motion blur / ball at frame edge):
-        // re-poll a few fresh frames before giving up instead of aborting.
+        centerX = Processing::K230Decode::largestCenterX(alignCls);
         for (uint8_t r = 0; r < 4 && centerX < 0; r++) {
             Processing::K230Decode::drainDelay(100);
-            centerX = Processing::K230Decode::largestCenterX(K230_CLASS_ALIVE);
+            centerX = Processing::K230Decode::largestCenterX(alignCls);
         }
-        if (centerX < 0) {
-            break;
-        }
-        delta = centerX - (int16_t)K230_FRAME_CENTER_X + 120;
+        if (centerX < 0) break;
+        delta = centerX - (int16_t)K230_FRAME_CENTER_X + offset;
     }
-
-    if (centerX < 0) {
-        return;
-    }
+    if (centerX < 0) return;   // lost during align; the caller's confirm won't count it
 
     Drive::stop();
 
-    Serial.println("[captureAlive] grabRight open");
-    grabLeft(false);
-    Serial.printf("[captureAlive] lift down  us=%d\n", KRS_GRAB_US);
+    const int tDown = (side == LEFT) ? 800  : 600;
+    const int tFwd  = (side == LEFT) ? 1000 : 700;
 
+    if (side == LEFT) grabLeft(false); else grabRight(false);
     Drive::motor(-15,-15);
     lift(KRS_GRAB_US);
-    Processing::K230Decode::drainDelay(800);
+    Processing::K230Decode::drainDelay(tDown);
     Drive::motor(35,35);
-    Processing::K230Decode::drainDelay(1000);
-    grabLeft(true);
-    lift(KRS_AIR_US);
-    Processing::K230Decode::drainDelay(800);
-    Drive::stop();
-
-}
-
-void captureDead() {
-    Serial.println("[captureDead] start");
-
-    Processing::K230Decode::tick();
-    int16_t centerX = Processing::K230Decode::largestCenterX(K230_CLASS_DEAD);
-    int16_t delta = (centerX >= 0) ? (centerX - (int16_t)K230_FRAME_CENTER_X - 120) : 0;
-
-    while (centerX >= 0 && abs(delta) > 25) {
-        int absD = abs(delta);
-        int speed  = constrain(map(absD, 8, 320, 30, 50), 30, 50);   // px -> motor speed (linear)
-        int moveMs = constrain(20 + (int)((130L * absD * absD) / 102400L), 20, 150);  // pulse length: quadratic in delta -> 20 + 180*(absD/320)^2, clamped 10..200
-        int dir = (delta < 0) ? -1 : 1;
-
-        Drive::motor(dir * speed, -dir * speed);
-        Processing::K230Decode::drainDelay(moveMs);
-        Drive::stop();
-
-        Processing::K230Decode::drainDelay(100);   // wait for next frame, keep draining
-
-        centerX = Processing::K230Decode::largestCenterX(K230_CLASS_DEAD);
-        // Tolerate brief detection dropouts (motion blur / ball at frame edge):
-        // re-poll a few fresh frames before giving up instead of aborting.
-        for (uint8_t r = 0; r < 4 && centerX < 0; r++) {
-            Processing::K230Decode::drainDelay(100);
-            centerX = Processing::K230Decode::largestCenterX(K230_CLASS_DEAD);
-        }
-        if (centerX < 0) {
-            break;
-        }
-        delta = centerX - (int16_t)K230_FRAME_CENTER_X - 120;
-    }
-
-    if (centerX < 0) {
-        return;
-    }
-
-    Drive::stop();
-
-    Serial.println("[captureDead] grabLeft open");
-    grabRight(false);
-    Serial.printf("[captureDead] lift down  us=%d\n", KRS_GRAB_US);
-
-    Drive::motor(-15,-15);
-    lift(KRS_GRAB_US);
-    Processing::K230Decode::drainDelay(600);
-    Drive::motor(35,35);
-    Processing::K230Decode::drainDelay(700);
-    grabRight(true);
+    Processing::K230Decode::drainDelay(tFwd);
+    if (side == LEFT) grabLeft(true); else grabRight(true);
     lift(KRS_AIR_US);
     Processing::K230Decode::drainDelay(800);
     Drive::stop();
 }
+
+// Natural-arm convenience wrappers (silver/alive -> LEFT, dead/black -> RIGHT).
+void captureAlive() { grabArm(LEFT,  K230_CLASS_ALIVE); }
+void captureDead()  { grabArm(RIGHT, K230_CLASS_DEAD);  }
 
 void releaseAll() {
     attachServos();

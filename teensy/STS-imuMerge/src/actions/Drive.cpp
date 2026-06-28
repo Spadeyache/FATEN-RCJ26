@@ -209,7 +209,19 @@ float frictionCircAdj() {
     return FRIC_SPEED_FLAT;
 }
 
+float currentLinePidBase() {
+    if (Processing::XiaoDecode::tightSlowFlag())
+        return TIGHT_SLOW_BASE_SPEED;
+    return frictionCircAdj();
+}
+
 }  // namespace
+
+uint32_t scaledLinePidMs(uint32_t flatMs, uint32_t minMs, uint32_t maxMs) {
+    const float base = fmaxf(currentLinePidBase(), 1.0f);
+    const uint32_t scaled = (uint32_t)((float)flatMs * FRIC_SPEED_FLAT / base + 0.5f);
+    return constrain(scaled, minMs, maxMs);
+}
 
 void runLinePID() {
     static float integral  = 0.0f;
@@ -240,9 +252,8 @@ void runLinePID() {
     const float correction = kp * rawError + ki * integral + kd * derivative;
 
     const bool tightSlow = Processing::XiaoDecode::tightSlowFlag();
-    digitalWrite(LED_PIN, tightSlow ? HIGH : LOW);   // LED on = XIAO TIGHT_SLOW flag set
-
     const float base = tightSlow ? TIGHT_SLOW_BASE_SPEED : frictionBase;
+    digitalWrite(LED_PIN, base == FRIC_SPEED_FLAT ? HIGH : LOW);   // LED on = flat-ground base speed
 
     // Fore/aft pitch bias — gated like the rest of the slope layer (and inert
     // while PID_PITCH_GAIN is 0).

@@ -35,6 +35,7 @@ void spinDecay(float32_t power, uint32_t durationMs);
 void motorRaw(float32_t fl, float32_t fr, float32_t bl, float32_t br) FASTRUN;
 
 void runLinePID();
+uint32_t scaledLinePidMs(uint32_t flatMs, uint32_t minMs, uint32_t maxMs);
 
 // Per-wheel gain accessors (read by Processing::Mapping for unicycle model).
 float32_t frontLeftGain();

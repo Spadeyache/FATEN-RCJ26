@@ -1,5 +1,7 @@
 #pragma once
 
+#include <stdint.h>
+
 // =============================================================================
 //  Actions::Arm — grip (hobby servos) + lift (KRS smart servo) control.
 //
@@ -22,16 +24,19 @@ namespace Arm {
 void init();
 
 void grab(bool closed);
-void grabLeft(bool closed, bool blocking = true);    // black/dead arm
-void grabRight(bool closed, bool blocking = true);   // silver/alive arm
+void grabLeft(bool closed, bool blocking = true);    // silver/alive arm (offset +120)
+void grabRight(bool closed, bool blocking = true);   // black/dead arm  (offset -120)
 void lift(int us);   // KRS PWM pulse width (microseconds)
 
 // Evacuation-zone victim handling.
-//   captureDead()/captureAlive(): take one ball into storage via the matching
-//     arm (black=dead, silver=alive). Blocking, open-loop.
+enum Side : uint8_t { LEFT, RIGHT };
+
+//   grabArm(side, alignCls): vision-align the given ball class to that arm's
+//     offset, then run the grab motion with that arm. Blocking. The arm is
+//     chosen by the caller (VictimManager) — type only drives the alignment.
+//   captureAlive()/captureDead(): convenience wrappers (natural arm).
 //   releaseAll(): open everything to drop all held balls at the corner.
-// NOTE: Phase 1 placeholders — both capture calls currently drive the single
-// existing gripper. TODO: wire the dedicated black/silver arms in Arm.cpp.
+void grabArm(Side side, uint8_t alignCls);
 void captureDead();
 void captureAlive();
 void releaseAll();

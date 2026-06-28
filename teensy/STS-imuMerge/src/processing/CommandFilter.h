@@ -23,6 +23,7 @@ public:
     uint8_t votesRed    = 0;
     uint8_t votesSilver = 0;
     uint8_t votesNoLine = 0;
+    uint8_t votesBlack  = 0;   // LINE-mode saturated black intersection row
     uint8_t votesSearchLineBlack = 0;  // SEARCH_LINE-mode black return line — used by uturn recovery / LINE_Obstacle
 
     CommandFilter() { clear(); }

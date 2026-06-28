@@ -210,6 +210,8 @@ def cmd_organize(args):
         img_dir, lbl_dir = src / "images", src / "labels"
         src_classes = class_lists[src]
         for img_path in sorted(img_dir.iterdir()):
+            if img_path.name.startswith("._") or img_path.name == ".DS_Store":
+                continue
             if not img_path.is_file() or img_path.suffix.lower() not in IMAGE_EXTS:
                 continue
             lbl_path = lbl_dir / f"{img_path.stem}.txt"
@@ -303,7 +305,8 @@ def cmd_organize(args):
     # classes from classes.txt (preserve order = class id order)
     names = []
     if classes_src and classes_src.is_file():
-        shutil.copy2(classes_src, out / "classes.txt")
+        if classes_src.resolve() != (out / "classes.txt").resolve():
+            shutil.copy2(classes_src, out / "classes.txt")
         names = [ln.strip() for ln in classes_src.read_text(
             encoding="utf-8").splitlines() if ln.strip()]
 

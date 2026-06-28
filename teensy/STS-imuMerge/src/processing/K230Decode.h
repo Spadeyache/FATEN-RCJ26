@@ -96,6 +96,19 @@ bool checkPoint();
 // class is present.
 int16_t largestCenterX(uint8_t cls);
 
+// Returns the tallest box height (y2-y1) among detections of the given class in
+// the most recent frame, or -1 if none. Used to confirm a grab succeeded (a
+// same-type ball still tall in view = still on the floor = grab failed).
+int16_t largestHeight(uint8_t cls);
+
+// Returns the class id of the largest-area box in the most recent frame (any
+// class), or -1 if none. In POINTS mode this is the corner colour.
+int16_t dominantClass();
+
+// Which model the K230 should run. Sends the matching command byte.
+enum Model : uint8_t { MODEL_VICTIMS, MODEL_POINTS };
+void setModel(Model m);
+
 // Block for `ms` while continuously draining the K230 RX buffer, so it never
 // overflows and the next read sees the newest frame. Use instead of delay()
 // in any blocking sequence that runs while the K230 is streaming.

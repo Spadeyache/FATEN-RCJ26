@@ -186,7 +186,7 @@ void update() {
         
         Serial.println(savedAngle);
         Actions::Drive::stop();
-        delay(2500);
+        delay(1500);
 
 
         Processing::XiaoDecode::clearFilter();

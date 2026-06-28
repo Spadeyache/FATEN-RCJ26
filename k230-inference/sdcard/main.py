@@ -50,8 +50,9 @@ def main():
     time.sleep_ms(config.SETTLE_MS)
     status_led.set_status("rest", force=True)
 
-    # Model + ai2d.
+    # Model + ai2d. Starts on the victims model; Teensy can swap to points.
     det = detmod.Detector(sensor)
+    current_model = "victims"
 
     # UART link.
     u = robot_io.open_link()
@@ -65,6 +66,22 @@ def main():
     try:
         while True:
             run_state = robot_io.read_command(u, run_state)
+
+            # Model swap request from Teensy (victims <-> points). Releasing the
+            # current KPU before loading the new one keeps only one model in RAM.
+            model_req = robot_io.take_model_request()
+            if model_req is not None and model_req != current_model:
+                cfg_path = (config.POINTS_DEPLOY_CONFIG if model_req == "points"
+                            else config.DEPLOY_CONFIG_PATH)
+                print("-> swap model:", current_model, "->", model_req)
+                status_led.set_status("rest", force=True)
+                try:
+                    det.release()
+                    det = detmod.Detector(sensor, cfg_path)
+                    current_model = model_req
+                except Exception as e:
+                    print("model swap FAILED:", e)
+                status_led.set_status("evac", force=True)
 
             # IDLE -> RUN edge: re-apply camera config.
             if run_state and not prev_state:

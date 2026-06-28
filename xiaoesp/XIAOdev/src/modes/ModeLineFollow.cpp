@@ -821,8 +821,8 @@ void modeLineFollowRun(camera_fb_t* fb, YacheEncodedSerial& teensy) {
     scanColorRow(fb, colorCom, colorBlack, redCount);
     const bool bottomLinePoint = hasBottomLinePoint(lc);
     const bool gapDetected = gapByCrossings(lc);
-    const bool intersectionSaturated = false;
-    // const bool intersectionSaturated = colorBlack > INTERSECTION_BLACK_SAT_THRESHOLD;
+    const bool blackIntersect = colorBlack > INTERSECTION_BLACK_SAT_THRESHOLD;
+    const bool intersectionSaturated = blackIntersect;
 
     uint8_t greenLeft = 0, greenRight = 0, blackLeft = 0, blackRight = 0;
     uint8_t rawGreen = rawGreenOnColorRow(fb, colorCom, greenLeft, greenRight, blackLeft, blackRight);
@@ -874,10 +874,11 @@ void modeLineFollowRun(camera_fb_t* fb, YacheEncodedSerial& teensy) {
         s_lastPos = 0.0f;
     }
 
-    // Priority: silver > red > white-white gap > green.
+    // Priority: silver > red > white-white gap > black-intersect > green.
     if (greenCmd == 1) featureId = FEAT_UTURN;
     if (greenCmd == 2) featureId = FEAT_GREEN_LEFT;
     if (greenCmd == 3) featureId = FEAT_GREEN_RIGHT;
+    if (blackIntersect && greenCmd == 0) featureId = FEAT_BLACK_INTERSECT;
     if (gapDetected) featureId = FEAT_LINE_LOST;
     if (redCount > RED_THRESHOLD) featureId = FEAT_RED;
     if (silverDetected) featureId = FEAT_SILVER;

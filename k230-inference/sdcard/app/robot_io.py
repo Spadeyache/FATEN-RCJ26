@@ -14,11 +14,12 @@
 # checksum = XOR of every byte from 0xAA through the last box byte
 #
 # Teensy -> K230 (1 byte):
-#   0x00 = idle, 0x01 = run
+#   0x00 = idle, 0x01 = run, 0x02 = load victims model, 0x03 = load points model
 #
 # Public API:
 #   open_link()                          -> uart handle
 #   read_command(u, current_state)       drain RX, return run/idle flag
+#   take_model_request()                 -> None | "victims" | "points" (then clears)
 #   send_boxes(u, boxes)                 send a frame's worth of boxes
 #   send_empty(u)                        send a zero-count frame (heartbeat)
 
@@ -31,8 +32,11 @@ SYNC0    = 0xAA
 SYNC1    = 0x55
 CMD_IDLE = 0x00
 CMD_RUN  = 0x01
+CMD_MODEL_VICTIMS = 0x02
+CMD_MODEL_POINTS  = 0x03
 
 _last_cmd_seen = None
+_pending_model = None      # set by read_command, consumed by take_model_request
 
 
 def open_link():
@@ -58,7 +62,7 @@ def read_command(u, current_state):
 
     0x01 -> True (run), 0x00 -> False (idle). Other bytes ignored.
     """
-    global _last_cmd_seen
+    global _last_cmd_seen, _pending_model
     state = current_state
     n = u.any()
     if not n:
@@ -78,7 +82,21 @@ def read_command(u, current_state):
                 print("robot_io: RX CMD_IDLE")
             _last_cmd_seen = CMD_IDLE
             state = False
+        elif b == CMD_MODEL_VICTIMS:
+            print("robot_io: RX CMD_MODEL_VICTIMS")
+            _pending_model = "victims"
+        elif b == CMD_MODEL_POINTS:
+            print("robot_io: RX CMD_MODEL_POINTS")
+            _pending_model = "points"
     return state
+
+
+def take_model_request():
+    """Return the last-requested model ('victims'/'points') and clear it, or None."""
+    global _pending_model
+    m = _pending_model
+    _pending_model = None
+    return m
 
 
 def send_boxes(u, boxes):

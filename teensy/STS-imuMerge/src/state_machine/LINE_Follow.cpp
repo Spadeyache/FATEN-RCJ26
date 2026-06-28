@@ -38,14 +38,24 @@ namespace {
     // re-read on the way out.
     bool          _disableGreen      = false;
     unsigned long _disableGreenStart = 0;
+    unsigned long _disableGreenMs    = DISABLE_GREEN_MS;
 
     void armGreenCooldown() {
         _disableGreen      = true;
         _disableGreenStart = millis();
+        _disableGreenMs    = DISABLE_GREEN_MS;
+    }
+
+    void armBlackIntersectCooldown() {
+        _disableGreen      = true;
+        _disableGreenStart = millis();
+        _disableGreenMs    = Actions::Drive::scaledLinePidMs(BLACK_INTERSECT_DISABLE_GREEN_BASE_MS,
+                                                             BLACK_INTERSECT_DISABLE_GREEN_MIN_MS,
+                                                             BLACK_INTERSECT_DISABLE_GREEN_MAX_MS);
     }
 
     void clearGreenIfElapsed() {
-        if (_disableGreen && millis() - _disableGreenStart >= DISABLE_GREEN_MS) {
+        if (_disableGreen && millis() - _disableGreenStart >= _disableGreenMs) {
             _disableGreen = false;
 #if PRINT_STATE
             Serial.println("Green re-enabled");
@@ -136,6 +146,14 @@ void update() {
         case FEAT_SILVER:
             Actions::Drive::stop();
             StateMachine::transitionTo(StateMachine::EVAC_ENTRY);
+            return;
+
+        case FEAT_BLACK_INTERSECT:
+        
+            tone(BUZZER_PIN, 3000, 300);
+            armBlackIntersectCooldown();
+            Processing::XiaoDecode::clearFilter();
+            Actions::Drive::runLinePID();
             return;
 
         case FEAT_LINE_LOST:

@@ -40,8 +40,10 @@
 #define K230D_MAX_BOXES_RX     16
 
 enum K230DCommand : uint8_t {
-    K230D_CMD_IDLE = 0x00,
-    K230D_CMD_RUN  = 0x01,
+    K230D_CMD_IDLE          = 0x00,
+    K230D_CMD_RUN           = 0x01,
+    K230D_CMD_MODEL_VICTIMS = 0x02,   // K230: load victims.kmodel (Dead/Live/Point)
+    K230D_CMD_MODEL_POINTS  = 0x03,   // K230: load points.kmodel  (corner colour)
 };
 
 enum K230DClass : uint8_t {

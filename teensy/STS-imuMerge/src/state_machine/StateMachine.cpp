@@ -3,8 +3,7 @@
 #include "LINE_Obstacle.h"
 #include "LINE_Gap.h"
 #include "EVAC_Entry.h"
-#include "EVAC_Search.h"
-#include "EVAC_Deploy.h"
+#include "EVAC_SearchDeploy.h"
 #include "EVAC_Exit.h"
 
 #include "../../config.h"
@@ -39,10 +38,9 @@ static void runOnEnter(RobotState s) {
         case LINE_FOLLOW:   LINE_Follow::onEnter();   break;
         case LINE_OBSTACLE: LINE_Obstacle::onEnter(); break;
         case LINE_GAP:      LINE_Gap::onEnter();      break;
-        case EVAC_ENTRY:    EVAC_Entry::onEnter();    break;
-        case EVAC_SEARCH:   EVAC_Search::onEnter();   break;
-        case EVAC_DEPLOY:   EVAC_Deploy::onEnter();   break;
-        case EVAC_EXIT:     EVAC_Exit::onEnter();     break;
+        case EVAC_ENTRY:        EVAC_Entry::onEnter();        break;
+        case EVAC_SEARCH_DEPLOY: EVAC_SearchDeploy::onEnter(); break;
+        case EVAC_EXIT:         EVAC_Exit::onEnter();         break;
         case STALLED_RED:
 #if PRINT_STATE
             Serial.println("State: STALLED_RED");
@@ -63,10 +61,9 @@ void tick() {
         case LINE_FOLLOW:   LINE_Follow::update();   break;
         case LINE_OBSTACLE: LINE_Obstacle::update(); break;
         case LINE_GAP:      LINE_Gap::update();      break;
-        case EVAC_ENTRY:    EVAC_Entry::update();    break;
-        case EVAC_SEARCH:   EVAC_Search::update();   break;
-        case EVAC_DEPLOY:   EVAC_Deploy::update();   break;
-        case EVAC_EXIT:     EVAC_Exit::update();     break;
+        case EVAC_ENTRY:        EVAC_Entry::update();        break;
+        case EVAC_SEARCH_DEPLOY: EVAC_SearchDeploy::update(); break;
+        case EVAC_EXIT:         EVAC_Exit::update();         break;
 
         case STALLED_RED:
             // Idle until XIAO clears the red signal.

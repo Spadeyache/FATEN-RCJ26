@@ -235,6 +235,42 @@ int16_t largestCenterX(uint8_t cls) {
     return (int16_t)(((int32_t)best->x1 + (int32_t)best->x2) / 2);
 }
 
+// Tallest box height among detections of the given class (-1 if none).
+int16_t largestHeight(uint8_t cls) {
+    const K230DBox *b = boxes();
+    const uint8_t   n = boxCount();
+    int16_t maxH = -1;
+    for (uint8_t i = 0; i < n; i++) {
+        if (b[i].cls != cls) continue;
+        const int16_t h = (int16_t)(b[i].y2 - b[i].y1);
+        if (h > maxH) maxH = h;
+    }
+    return maxH;
+}
+
+// Class id of the largest-area box in the latest frame (-1 if none).
+int16_t dominantClass() {
+    const K230DBox *b = boxes();
+    const uint8_t   n = boxCount();
+    int16_t  bestCls  = -1;
+    int32_t  bestArea = -1;
+    for (uint8_t i = 0; i < n; i++) {
+        const int32_t area = (int32_t)(b[i].x2 - b[i].x1) * (int32_t)(b[i].y2 - b[i].y1);
+        if (area > bestArea) { bestArea = area; bestCls = b[i].cls; }
+    }
+    return bestCls;
+}
+
+void setModel(Model m) {
+    beginOnce();
+    _k230d.sendCommand(m == MODEL_POINTS ? K230D_CMD_MODEL_POINTS
+                                         : K230D_CMD_MODEL_VICTIMS);
+#if PRINT_K230
+    Serial.print(F("K230D MODEL "));
+    Serial.println(m == MODEL_POINTS ? F("POINTS") : F("VICTIMS"));
+#endif
+}
+
 void setRunning(bool run) {
     if (_running == run) return;
     _running = run;

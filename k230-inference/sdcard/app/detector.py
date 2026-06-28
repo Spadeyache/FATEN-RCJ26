@@ -20,8 +20,8 @@ import yolov8_decode as yd
 
 
 class Detector:
-    def __init__(self, sensor):
-        cfg = self._load_deploy_config()
+    def __init__(self, sensor, cfg_path=None):
+        cfg = self._load_deploy_config(cfg_path)
         self._cfg          = cfg
         self.labels        = cfg["categories"]
         self.num_classes   = cfg["num_classes"]
@@ -132,15 +132,21 @@ class Detector:
 
     # ------------------------------------------------------------------
     @staticmethod
-    def _load_deploy_config():
-        path = config.DEPLOY_CONFIG_PATH
+    def _load_deploy_config(path=None):
+        if path is None:
+            path = config.DEPLOY_CONFIG_PATH
         with open(path, "r") as f:
             cfg = ujson.load(f)
         # Resolve kmodel_path relative to the deploy_config's directory.
         if not cfg["kmodel_path"].startswith("/"):
             cfg["kmodel_path"] = path.rsplit("/", 1)[0] + "/" + cfg["kmodel_path"]
         cfg["kmodel_path"] = Detector._resolve_kmodel_path(cfg["kmodel_path"])
-        cfg["categories"] = Detector._load_labels(cfg)
+        # Only the default (victims) config uses the shared labels.txt; any other
+        # config (e.g. points) carries its own categories in the JSON.
+        if path == config.DEPLOY_CONFIG_PATH:
+            cfg["categories"] = Detector._load_labels(cfg)
+        else:
+            cfg["categories"] = cfg.get("categories", [])
         cfg["num_classes"] = len(cfg["categories"])
         cfg["_preprocess_mode"] = Detector._preprocess_mode(cfg)
         print("detector: loaded deploy_config", path)
