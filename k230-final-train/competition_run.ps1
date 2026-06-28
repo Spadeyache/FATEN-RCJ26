@@ -2,7 +2,7 @@
 # competition_run.ps1  --  ONE command: the whole pipeline end to end.
 #
 # Composes the three step-scripts:
-#   add_data.ps1     raw_export/ -> datasets/<Name>   (class-match checked)
+#   add_data.ps1     raw_export/ -> datasets/<Name>   (class-name remap checked)
 #   train_model.ps1  train YOLOv8n + export ONNX      [GPU]
 #   convert_model.ps1 ONNX -> kmodel (best) + report + deploy   [nncase 2.11]
 #

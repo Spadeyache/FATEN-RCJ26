@@ -12,13 +12,31 @@ const uint8_t R_D = 0;
 const uint8_t G_D = 0;
 const uint8_t B_D = 0;
 #else
+
 const float R_Gain = 1.98598130841;     // 1.98598130841
-const float G_Gain = 2.25265017668;     // 2.25265017668
+const float G_Gain = 1.55265017668;     // 2.25265017668
 const float B_Gain = 3.1;     // 4.0
 
 const uint8_t R_D = 12.4 * 0.8;       // avgR_Black : 0.8 is the safety margin
 const uint8_t G_D = 25.2 * 0.8;       // 
 const uint8_t B_D = 17.4 * 0.8;        // 
+
+// const float R_Gain = 1.417;   // 255/180  ← 観測した最低白Rで割る
+// const float G_Gain = 1.036;   // 255/(255-8.8)
+// const float B_Gain = 1.028;   // 255/(255-6.9)
+
+// const uint8_t R_D = 0;          // 黒R=0
+// const uint8_t G_D = 11  * 0.8;  // = 8.8  ← 高いほうの黒G
+// const uint8_t B_D = 8.6 * 0.8;  // = 6.9  ← 高いほうの黒B
+
+
+// const float R_Gain = 1.98598130841;     // 1.98598130841
+// const float G_Gain = 2.25265017668;     // 2.25265017668
+// const float B_Gain = 3.1;     // 4.0
+
+// const uint8_t R_D = 12.4 * 0.8;       // avgR_Black : 0.8 is the safety margin
+// const uint8_t G_D = 25.2 * 0.8;       // 
+// const uint8_t B_D = 17.4 * 0.8;        // 
 #endif
 
 void rgb888Calibration(uint8_t& r8, uint8_t& g8, uint8_t& b8) {

@@ -22,9 +22,8 @@ namespace Drive {
 
 void init();
 
-// imuCompensation: when true, applies pitch/roll-based per-wheel gain from
-// WeightDistribution.h. Defaults to false (current behaviour).
-void motor(float32_t left, float32_t right, bool imuCompensation = false) FASTRUN;
+// Set both sides; replicated L→FL/BL, R→FR/BR and clamped to ±MAX_MOTOR_SPEED.
+void motor(float32_t left, float32_t right) FASTRUN;
 void stop() FASTRUN;
 
 // Blocking spin-in-place that decays from |power| down to 35 over durationMs.

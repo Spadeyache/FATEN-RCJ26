@@ -38,9 +38,12 @@
 #define XIAO_REG_MODE       0x03
 #define XIAO_REG_ANGLE      0x04
 #define XIAO_REG_FLAG       0x05
+#define XIAO_REG_FINE_ANGLE 0x06
 
 #define XIAO_FLAG_COMMIT      0x01
 #define XIAO_FLAG_TIGHT_SLOW  0x02
+#define XIAO_FLAG_BOTTOM_LINE 0x04
+#define XIAO_FLAG_FINE_ANGLE  0x08
 
 // FEATURE byte — LINE-follow events (the clean contract; keep in sync with XIAO):
 #define FEAT_NONE           0
@@ -59,7 +62,7 @@ enum XiaoMode : uint8_t {
     XIAO_MODE_LINE        = 0,
     XIAO_MODE_SEARCH_LINE = 1,
     XIAO_MODE_NOGI        = 2,
-    XIAO_MODE_LINE_ANGLE  = 3,   // line slope + crossing count during gap traversal
+    XIAO_MODE_LINE_ANGLE  = 3,   // line slope + point flags/Y during gap traversal
     XIAO_MODE_OBSTACLE    = 4,   // obstacle re-acquire: arc see-line flag + line tilt angle
     XIAO_MODE_SILVER_ALIGN= 5,   // evac entry: silver-tape tilt angle for perpendicular align
 };
@@ -78,8 +81,8 @@ enum XiaoMode : uint8_t {
 // =============================================================================
 #define CALIBRATE_IMU       0   // 1 = calibrate at boot + save to EEPROM; 0 = load saved EEPROM offsets
 #define IMU_SAMPLE_RATE     200.0f
-#define IMU_PITCH_GAIN      0.0f
 #define IMU_EMA_ALPHA       0.25f
+// (line-follow pitch→speed gain moved to PID_PITCH_GAIN in src/actions/Drive.cpp)
 
 // MPU6050 calibration offsets — fallback / initial-guess values (from IMU-01).
 // At boot they are overwritten by either the auto-calibration (CALIBRATE_IMU==1)

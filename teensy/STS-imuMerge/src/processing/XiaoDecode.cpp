@@ -10,23 +10,28 @@ namespace {
     uint8_t       _command    = 0;
     float         _lineError  = 127.0f;
     float         _gapAngle   = 127.0f;
+    float         _gapFineAngle = 127.0f;
     bool          _commitFlag = false;
     bool          _tightSlowFlag = false;
+    bool          _bottomLineFlag = false;
+    bool          _fineAngleFlag = false;
 }
 
 void tick(bool instantRun) {
-    // Line error, gap angle and commit flag are time-critical — update every loop.
-    _lineError  = (float)Sensors::XIAO_link::get(XIAO_REG_COM);
-    _gapAngle   = (float)Sensors::XIAO_link::get(XIAO_REG_ANGLE);
+    _lineError = (float)Sensors::XIAO_link::get(XIAO_REG_COM);
+    _gapAngle = (float)Sensors::XIAO_link::get(XIAO_REG_ANGLE);
+    _gapFineAngle = (float)Sensors::XIAO_link::get(XIAO_REG_FINE_ANGLE);
+
     const uint8_t flags = Sensors::XIAO_link::get(XIAO_REG_FLAG);
     _commitFlag = (flags & XIAO_FLAG_COMMIT) != 0;
     _tightSlowFlag = (flags & XIAO_FLAG_TIGHT_SLOW) != 0;
+    _bottomLineFlag = (flags & XIAO_FLAG_BOTTOM_LINE) != 0;
+    _fineAngleFlag = (flags & XIAO_FLAG_FINE_ANGLE) != 0;
 
-    // Filter at 50 Hz unless caller requested an immediate update.
     static unsigned long lastFilter = 0;
     if (millis() - lastFilter >= 20 || instantRun) {
         const uint8_t raw = Sensors::XIAO_link::get(XIAO_REG_FEATURE);
-        _command   = _filter.update(raw);
+        _command = _filter.update(raw);
         lastFilter = millis();
     }
 }
@@ -34,14 +39,19 @@ void tick(bool instantRun) {
 uint8_t command()          { return _command; }
 float   lineError()        { return _lineError; }
 float   gapAngle()         { return _gapAngle; }
-uint8_t gapLineCount()     { return (uint8_t)(_lineError + 0.5f); }  // COM carries count in LINE_ANGLE mode
+float   gapFineAngle()     { return _gapFineAngle; }
+uint8_t gapLineY()         { return (uint8_t)(_lineError + 0.5f); }
+uint8_t gapLineCount()     { return gapLineY(); }
 bool    commitFlag()       { return _commitFlag; }
 bool    tightSlowFlag()    { return _tightSlowFlag; }
-bool    gapBothRowsFlag()  { return _commitFlag; }  // XIAO_FLAG_COMMIT bit reused for both-rows flag
-bool    obstacleSeeLine()  { return _commitFlag; }  // XIAO_FLAG_COMMIT bit reused for see-line flag
-float   obstacleAngle()    { return _gapAngle; }    // ANGLE register reused for line tilt
-bool    silverSeen()       { return _commitFlag; }  // XIAO_FLAG_COMMIT bit reused for silver-seen flag
-float   silverAlignAngle() { return _gapAngle; }    // ANGLE register reused for tape tilt
+bool    gapAnyPointFlag()  { return _commitFlag; }
+bool    gapBothRowsFlag()  { return _tightSlowFlag; }
+bool    gapBottomLineFlag(){ return _bottomLineFlag; }
+bool    gapFineAngleFlag() { return _fineAngleFlag; }
+bool    obstacleSeeLine()  { return _commitFlag; }
+float   obstacleAngle()    { return _gapAngle; }
+bool    silverSeen()       { return _commitFlag; }
+float   silverAlignAngle() { return _gapAngle; }
 
 void setMode(XiaoMode m) {
     Sensors::XIAO_link::send(XIAO_REG_MODE, (uint8_t)m);

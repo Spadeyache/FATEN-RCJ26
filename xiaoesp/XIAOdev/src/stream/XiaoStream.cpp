@@ -32,6 +32,31 @@ uint8_t    s_dbgGreen = 0;
 uint16_t   s_dbgArcBlackCount = 0;
 bool       s_dbgArcBlackSaturated = false;
 
+bool       s_laValid = false;
+uint8_t    s_laCount = 0;
+bool       s_laTwoDetected = false;
+bool       s_laBottomLine = false;
+bool       s_laCircleAngle = false;
+int        s_laBaseX = -1;
+int        s_laBaseY = -1;
+uint8_t    s_laBaseWidth = 0;
+int        s_laTipX = -1;
+int        s_laTipY = -1;
+uint8_t    s_laTipWidth = 0;
+float      s_laAngleDeg = 0.0f;
+uint8_t    s_laEncodedAngle = 127;
+uint8_t    s_laAvgY = 0;
+uint8_t    s_laFlag = 0;
+bool       s_laFineValid = false;
+float      s_laFineAngleDeg = 0.0f;
+uint8_t    s_laEncodedFineAngle = 127;
+int        s_laFineFarX = -1;
+int        s_laFineFarY = -1;
+uint8_t    s_laFineFarWidth = 0;
+int        s_laFineNearX = -1;
+int        s_laFineNearY = -1;
+uint8_t    s_laFineNearWidth = 0;
+
 SensorSlot s_sensor[2] = {
     { XS_WHITE, XS_PRIO_NONE },
     { XS_WHITE, XS_PRIO_NONE },
@@ -131,6 +156,41 @@ void xs_noteCommitEnd(const char* reason) {
     pushEvent("end", '-', 255, 255, reason);
 }
 
+void xs_storeLineAngleDebug(uint8_t count, bool twoDetected, bool bottomLine,
+                            bool circleAngle, int baseX, int baseY,
+                            uint8_t baseWidth, int tipX, int tipY,
+                            uint8_t tipWidth, float angleDeg,
+                            uint8_t encodedAngle, uint8_t avgY,
+                            uint8_t flag, bool fineValid,
+                            float fineAngleDeg, uint8_t encodedFineAngle,
+                            int fineFarX, int fineFarY, uint8_t fineFarWidth,
+                            int fineNearX, int fineNearY, uint8_t fineNearWidth) {
+    s_laValid = true;
+    s_laCount = count;
+    s_laTwoDetected = twoDetected;
+    s_laBottomLine = bottomLine;
+    s_laCircleAngle = circleAngle;
+    s_laBaseX = baseX;
+    s_laBaseY = baseY;
+    s_laBaseWidth = baseWidth;
+    s_laTipX = tipX;
+    s_laTipY = tipY;
+    s_laTipWidth = tipWidth;
+    s_laAngleDeg = angleDeg;
+    s_laEncodedAngle = encodedAngle;
+    s_laAvgY = avgY;
+    s_laFlag = flag;
+    s_laFineValid = fineValid;
+    s_laFineAngleDeg = fineAngleDeg;
+    s_laEncodedFineAngle = encodedFineAngle;
+    s_laFineFarX = fineFarX;
+    s_laFineFarY = fineFarY;
+    s_laFineFarWidth = fineFarWidth;
+    s_laFineNearX = fineNearX;
+    s_laFineNearY = fineNearY;
+    s_laFineNearWidth = fineNearWidth;
+}
+
 int xs_formatLineDebug(char* buf, int bufLen) {
     if (!s_dbgValid || bufLen < 48) return 0;
 
@@ -161,6 +221,36 @@ int xs_formatLineDebug(char* buf, int bufLen) {
         buf[o] = '\0';
     }
     return o;
+}
+
+int xs_formatLineAngleDebug(char* buf, int bufLen) {
+    if (!s_laValid || bufLen < 180) return 0;
+    return snprintf(buf, bufLen,
+        "[LA] n=%u one=%u two=%u bottom=%u circ=%u angle=%.1f enc=%u y=%u flag=%u base=%d,%d bw=%u tip=%d,%d tw=%u fine=%u fang=%.1f fenc=%u far=%d,%d fw=%u near=%d,%d nw=%u\n",
+        s_laCount,
+        (s_laCount >= 1) ? 1 : 0,
+        s_laTwoDetected ? 1 : 0,
+        s_laBottomLine ? 1 : 0,
+        s_laCircleAngle ? 1 : 0,
+        s_laAngleDeg,
+        s_laEncodedAngle,
+        s_laAvgY,
+        s_laFlag,
+        s_laBaseX,
+        s_laBaseY,
+        s_laBaseWidth,
+        s_laTipX,
+        s_laTipY,
+        s_laTipWidth,
+        s_laFineValid ? 1 : 0,
+        s_laFineAngleDeg,
+        s_laEncodedFineAngle,
+        s_laFineFarX,
+        s_laFineFarY,
+        s_laFineFarWidth,
+        s_laFineNearX,
+        s_laFineNearY,
+        s_laFineNearWidth);
 }
 
 int xs_formatSensorRow(char* buf, int bufLen) {

@@ -23,6 +23,29 @@ namespace {
     constexpr int HS0_OPEN_US  = 1000;
     constexpr int HS1_CLOSE_US = 1000;
     constexpr int HS1_OPEN_US  = 2000;
+
+    constexpr int GRAB_RAMP_STEP_US = 10;
+    constexpr int GRAB_RAMP_DELAY_MS = 5;
+
+    int _hs0CurrentUs = HS0_CLOSE_US;
+    int _hs1CurrentUs = HS1_CLOSE_US;
+
+    void writeServoSmooth(Servo& servo, int& currentUs, int targetUs, bool blocking) {
+        if (!blocking || currentUs == targetUs) {
+            servo.writeMicroseconds(targetUs);
+            currentUs = targetUs;
+            return;
+        }
+
+        int step = (targetUs > currentUs) ? GRAB_RAMP_STEP_US : -GRAB_RAMP_STEP_US;
+        for (int us = currentUs; (step > 0) ? (us < targetUs) : (us > targetUs); us += step) {
+            servo.writeMicroseconds(us);
+            delay(GRAB_RAMP_DELAY_MS);
+        }
+
+        servo.writeMicroseconds(targetUs);
+        currentUs = targetUs;
+    }
 }
 
 void attachServos() {
@@ -52,23 +75,13 @@ void init() {
 }
 
 void grabLeft(bool closed, bool blocking) {
-    if (closed) {
-        _hs45hb0.writeMicroseconds(HS0_CLOSE_US);
-        if (blocking) delay(245);
-    } else {
-        _hs45hb0.writeMicroseconds(HS0_OPEN_US);
-        if (blocking) delay(245);
-    }
+    int targetUs = closed ? HS1_CLOSE_US : HS1_OPEN_US;
+    writeServoSmooth(_hs45hb1, _hs0CurrentUs, targetUs, blocking);
 }
 
 void grabRight(bool closed, bool blocking) {
-    if (closed) {
-        _hs45hb1.writeMicroseconds(HS1_CLOSE_US);
-        if (blocking) delay(245);
-    } else {
-        _hs45hb1.writeMicroseconds(HS1_OPEN_US);
-        if (blocking) delay(245);
-    }
+    int targetUs = closed ? HS0_CLOSE_US : HS0_OPEN_US;
+    writeServoSmooth(_hs45hb0, _hs1CurrentUs, targetUs, blocking);
 }
 
 void grab(bool closed) {
@@ -128,7 +141,7 @@ void captureAlive()  {
     Drive::stop();
 
     Serial.println("[captureAlive] grabRight open");
-    grabRight(false);
+    grabLeft(false);
     Serial.printf("[captureAlive] lift down  us=%d\n", KRS_GRAB_US);
 
     Drive::motor(-15,-15);
@@ -136,7 +149,7 @@ void captureAlive()  {
     Processing::K230Decode::drainDelay(800);
     Drive::motor(35,35);
     Processing::K230Decode::drainDelay(1000);
-    grabRight(true);
+    grabLeft(true);
     lift(KRS_AIR_US);
     Processing::K230Decode::drainDelay(800);
     Drive::stop();
@@ -182,15 +195,15 @@ void captureDead() {
     Drive::stop();
 
     Serial.println("[captureDead] grabLeft open");
-    grabLeft(false);
+    grabRight(false);
     Serial.printf("[captureDead] lift down  us=%d\n", KRS_GRAB_US);
 
     Drive::motor(-15,-15);
     lift(KRS_GRAB_US);
-    Processing::K230Decode::drainDelay(800);
+    Processing::K230Decode::drainDelay(600);
     Drive::motor(35,35);
-    Processing::K230Decode::drainDelay(1000);
-    grabLeft(true);
+    Processing::K230Decode::drainDelay(700);
+    grabRight(true);
     lift(KRS_AIR_US);
     Processing::K230Decode::drainDelay(800);
     Drive::stop();

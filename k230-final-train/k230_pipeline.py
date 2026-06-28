@@ -156,18 +156,31 @@ def cmd_organize(args):
     if not (0.0 < args.train_ratio < 1.0):
         raise SystemExit("--train-ratio must be between 0 and 1 (exclusive).")
 
-    # CLASS-MATCH CHECK: every export's classes.txt must list the same classes
-    # in the same order. Class IDs in YOLO labels are positional, so combining
-    # exports with different orderings would silently mislabel everything.
+    # Class IDs in YOLO labels are positional. Use notes.json when available
+    # to recover the original category ID order, then remap labels by name.
     def _read_classes(p):
         f = p / "classes.txt"
-        if not f.is_file():
-            return None
-        return [ln.strip() for ln in f.read_text(encoding="utf-8").splitlines() if ln.strip()]
+        names = None
+        if f.is_file():
+            names = [ln.strip() for ln in f.read_text(encoding="utf-8").splitlines() if ln.strip()]
+        notes = p / "notes.json"
+        if notes.is_file():
+            try:
+                data = json.loads(notes.read_text(encoding="utf-8"))
+                cats = data.get("categories") or []
+                if cats:
+                    max_id = max(int(c["id"]) for c in cats)
+                    note_names = [None] * (max_id + 1)
+                    for c in cats:
+                        note_names[int(c["id"])] = str(c["name"])
+                    if all(note_names) and (names is None or len(note_names) > len(names)):
+                        return note_names
+            except Exception as exc:
+                print(f"WARNING: could not read {notes}: {exc}")
+        return names
 
-    class_lists = {src.name: _read_classes(src) for src in exports}
-    present = {name: cl for name, cl in class_lists.items() if cl is not None}
-    if len(exports) > 1 and len(present) > 1:
+    class_lists = {src: _read_classes(src) for src in exports}
+    if False:  # legacy exact-match check kept disabled; remap below is authoritative.
         uniq = {tuple(cl) for cl in present.values()}
         if len(uniq) > 1:
             msg = "\n".join(f"    {name}: {cl}" for name, cl in present.items())
@@ -178,13 +191,24 @@ def cmd_organize(args):
                 "into separate datasets with different --out names.")
         print(f"[organize] class-match OK across {len(present)} export(s): {next(iter(present.values()))}")
 
-    # pair images with labels across ALL export folders; dedup by filename stem
-    # (a later export re-supplying the same image/label overrides the earlier).
-    pairs_by_stem = {}
+    # Pair images with labels across ALL export folders. If two pairs have the
+    # same stem, rename the later pair so the image and label stay aligned.
+    pairs = []
+    used_stems = set()
     classes_src = next((src / "classes.txt" for src in exports
                         if (src / "classes.txt").is_file()), None)
+    out_classes = _read_classes(classes_src.parent) if classes_src else []
+    out_class_to_id = {name: i for i, name in enumerate(out_classes)}
+    class_lists = {src: (class_lists.get(src) or out_classes) for src in exports}
+    for src, classes in class_lists.items():
+        ignored = [name for name in classes if name not in out_class_to_id]
+        if ignored:
+            print(f"[organize] {src.name}: ignoring classes not in output set: {ignored}")
+    if out_classes:
+        print(f"[organize] output classes: {out_classes}")
     for src in exports:
         img_dir, lbl_dir = src / "images", src / "labels"
+        src_classes = class_lists[src]
         for img_path in sorted(img_dir.iterdir()):
             if not img_path.is_file() or img_path.suffix.lower() not in IMAGE_EXTS:
                 continue
@@ -192,8 +216,17 @@ def cmd_organize(args):
             if not lbl_path.is_file():
                 print(f"WARNING: no label for image: {img_path.name}")
                 continue
-            pairs_by_stem[img_path.stem] = (img_path, lbl_path)
-    pairs = list(pairs_by_stem.values())
+            dest_stem = img_path.stem
+            if dest_stem in used_stems:
+                base = f"{img_path.stem}__{src.name}"
+                dest_stem = base
+                i = 2
+                while dest_stem in used_stems:
+                    dest_stem = f"{base}_{i}"
+                    i += 1
+                print(f"[organize] renamed overlapping pair {img_path.stem} -> {dest_stem}")
+            used_stems.add(dest_stem)
+            pairs.append((img_path, lbl_path, dest_stem, src_classes))
     if not pairs:
         raise SystemExit("No image+label pairs found; aborting.")
     print(f"[organize] {len(pairs)} unique image+label pairs total")
@@ -216,15 +249,56 @@ def cmd_organize(args):
         train_pairs, val_pairs = pairs[:], []
         print("WARNING: only one pair found; val split will be empty.")
 
+    def remap_label_text(lbl_path, src_classes):
+        lines = []
+        for line_no, raw in enumerate(lbl_path.read_text(encoding="utf-8").splitlines(), 1):
+            if not raw.strip():
+                continue
+            parts = raw.split()
+            try:
+                src_id = int(parts[0])
+            except ValueError:
+                raise SystemExit(f"Bad class id in {lbl_path}:{line_no}: {raw}")
+            if src_id < 0 or src_id >= len(src_classes):
+                raise SystemExit(f"Class id {src_id} out of range in {lbl_path}:{line_no}")
+            name = src_classes[src_id]
+            if name not in out_class_to_id:
+                raise SystemExit(
+                    f"Annotation uses class '{name}' from {lbl_path}:{line_no}, "
+                    f"but output classes are {out_classes}")
+            parts[0] = str(out_class_to_id[name])
+            lines.append(" ".join(parts))
+        return "\n".join(lines) + ("\n" if lines else "")
+
     def copy_pairs(plist, dest_img, dest_lbl):
         dest_img.mkdir(parents=True, exist_ok=True)
         dest_lbl.mkdir(parents=True, exist_ok=True)
-        for ip, lp in plist:
-            shutil.copy2(ip, dest_img / ip.name)
-            shutil.copy2(lp, dest_lbl / lp.name)
+        for ip, lp, dest_stem, src_classes in plist:
+            shutil.copy2(ip, dest_img / f"{dest_stem}{ip.suffix}")
+            (dest_lbl / f"{dest_stem}.txt").write_text(
+                remap_label_text(lp, src_classes), encoding="utf-8")
 
     copy_pairs(train_pairs, out / "train" / "images", out / "train" / "labels")
     copy_pairs(val_pairs,   out / "val"   / "images", out / "val"   / "labels")
+
+    if getattr(args, "calib_count", 0):
+        calib_count = int(args.calib_count)
+        all_images = (sorted((out / "train" / "images").iterdir()) +
+                      sorted((out / "val" / "images").iterdir()))
+        if calib_count < 0:
+            raise SystemExit("--calib-count must be >= 0")
+        if calib_count > len(all_images):
+            raise SystemExit(f"--calib-count {calib_count} exceeds image count {len(all_images)}")
+        calib_dir = out / "calibration"
+        if calib_dir.exists():
+            shutil.rmtree(calib_dir)
+        calib_dir.mkdir(parents=True, exist_ok=True)
+        calib_rng = random.Random(args.seed + 1000)
+        calib_images = all_images[:]
+        calib_rng.shuffle(calib_images)
+        for ip in sorted(calib_images[:calib_count]):
+            shutil.copy2(ip, calib_dir / ip.name)
+        print(f"   calib : {calib_count} images")
 
     # classes from classes.txt (preserve order = class id order)
     names = []
@@ -308,6 +382,7 @@ def cmd_train(args):
         workers=args.workers,
         project=str(args.project),
         name=args.name,
+        exist_ok=True,
         cache=args.cache,
         amp=True,
         patience=50,
@@ -397,18 +472,18 @@ def cmd_export(args):
         print(f"  output {t.name}: {sh}")
     print(f"  size: {os.path.getsize(onnx_out)/1024/1024:.2f} MB")
 
-    gc.collect()
-    if torch.cuda.is_available():
-        torch.cuda.empty_cache()
     print(f"\nNext: convert-all  \"{onnx_out}\"  --calib-data <val/images>")
 
     # torch 2.1 + onnx/onnxruntime can segfault ("double free in tcache") during
     # interpreter teardown AFTER the ONNX is already saved. The file is complete
-    # at this point, so exit hard with code 0 to skip the buggy C++ destructors
-    # and keep the one-command flow's exit status clean.
+    # at this point, so exit hard before cleanup/destructors and keep the
+    # one-command flow's exit status clean.
     if getattr(_export_clean_exit, "enabled", True):
         sys.stdout.flush(); sys.stderr.flush()
         os._exit(0)
+    gc.collect()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
     return onnx_out
 
 
@@ -1199,9 +1274,10 @@ def _ns(**kw):
     return argparse.Namespace(**kw)
 
 
-def api_organize(out, src=None, train_ratio=0.85, seed=42, force=True):
+def api_organize(out, src=None, train_ratio=0.85, seed=42, force=True, calib_count=0):
     return cmd_organize(_ns(src=src or str(RAW_EXPORT_DIR), out=out,
-                            train_ratio=train_ratio, seed=seed, force=force))
+                            train_ratio=train_ratio, seed=seed, force=force,
+                            calib_count=calib_count))
 
 
 def api_convert_search(onnx, calib_data, eval_data=None, num_classes=None,
@@ -1258,6 +1334,8 @@ def build_parser():
     sp.add_argument("--out", default=None, help="Output dataset dir (default datasets/<srcname>)")
     sp.add_argument("--train-ratio", type=float, default=0.85)
     sp.add_argument("--seed", type=int, default=42)
+    sp.add_argument("--calib-count", type=int, default=0,
+                    help="Copy this many random train/val images into calibration/ (0 preserves existing)")
     sp.add_argument("--force", action="store_true", help="Replace existing --out")
     sp.set_defaults(func=cmd_organize)
 

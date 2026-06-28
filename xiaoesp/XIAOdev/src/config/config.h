@@ -22,6 +22,10 @@
 //   0 = send only [LC]/[ROW]/[EVT] text, no image payload
 #define STREAM_SEND_CAMERA_IMAGES 1
 
+// Debug: force XIAO to run MODE_LINE_ANGLE without Teensy/state-machine control.
+// Set back to 0 before normal robot runs.
+#define DEBUG_FORCE_LINE_ANGLE_MODE 0
+
 
 // ── Serial baud rates ────────────────────────────────────────────────────────
 

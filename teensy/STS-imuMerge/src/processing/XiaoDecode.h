@@ -1,16 +1,10 @@
 #pragma once
 
 // =============================================================================
-//  Processing::XiaoDecode â€” interprets the XIAO register cache.
+//  Processing::XiaoDecode - interprets the XIAO register cache.
 //
 //  Reads raw registers via Sensors::XIAO_link::get(reg), feeds the feature
-//  byte through CommandFilter at 50 Hz, and exposes typed getters:
-//      command()    â€” confirmed XIAO_FEAT_* code (see CommandFilter)
-//      lineError()  â€” line COM 0..254 (127 = centre)
-//      gapAngle()   â€” gap angle 0..254 (127 = 0Â°), mode 3 only
-//
-//  Also owns the active XIAO mode (XIAO_MODE_*) so callers can swap modes
-//  via setMode() without reaching into the link layer.
+//  byte through CommandFilter at 50 Hz, and exposes typed getters.
 // =============================================================================
 
 #include <stdint.h>
@@ -24,21 +18,26 @@ void tick(bool instantRun = false);  // re-runs filter every 20 ms (or instantly
 
 uint8_t command();        // confirmed FEAT_* event (FEAT_NONE if none)
 float   lineError();      // 0..254
-float   gapAngle();          // 0..254 — LINE_ANGLE mode slope (127 = 0°)
-uint8_t gapLineCount();      // LINE_ANGLE mode: arc crossing count (from XIAO_REG_COM)
-bool    commitFlag();        // XIAO green-turn commit in progress → freeze transitions
-bool    tightSlowFlag();     // XIAO tight-turn target is low in frame → drive slowly
-bool    gapBothRowsFlag();   // LINE_ANGLE mode: both scan rows see a qualifying black chunk
-bool    obstacleSeeLine();   // OBSTACLE mode: arc sees a black line (FLAG bit0)
-float   obstacleAngle();     // OBSTACLE mode: line tilt 0..254 (127 = 0°)
-bool    silverSeen();        // SILVER_ALIGN mode: silver tape in view (FLAG bit0)
-float   silverAlignAngle();  // SILVER_ALIGN mode: tape tilt 0..254 (127 = perpendicular)
+float   gapAngle();       // 0..254 rough LINE_ANGLE slope (127 = 0 deg)
+float   gapFineAngle();   // 0..254 precise two-row gap angle (127 = 0 deg)
+uint8_t gapLineY();       // LINE_ANGLE mode: point Y / average point Y
+uint8_t gapLineCount();   // Back-compat alias for gapLineY().
+bool    commitFlag();     // XIAO green-turn commit in progress
+bool    tightSlowFlag();  // XIAO tight-turn target is low in frame
+bool    gapAnyPointFlag();
+bool    gapBothRowsFlag();
+bool    gapBottomLineFlag();
+bool    gapFineAngleFlag();
+bool    obstacleSeeLine();
+float   obstacleAngle();
+bool    silverSeen();
+float   silverAlignAngle();
 
 void    setMode(XiaoMode m);
-void    clearFilter();    // forget votes after a mode change / state transition
-void    setCommand(uint8_t c);   // override (used to consume a command without re-firing)
+void    clearFilter();
+void    setCommand(uint8_t c);
 
-const CommandFilter& filter();    // for debug votes printing
+const CommandFilter& filter();
 
 }  // namespace XiaoDecode
 }  // namespace Processing

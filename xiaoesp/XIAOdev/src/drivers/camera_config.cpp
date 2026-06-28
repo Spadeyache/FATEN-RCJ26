@@ -93,7 +93,7 @@ bool Camera_Init() {
         s->set_lenc(s, 1);            // Lens correction ON — fixes vignetting
         s->set_bpc(s, 1);             // Bad pixel correction ON
         s->set_wpc(s, 1);             // White pixel correction ON
-        s->set_raw_gma(s, 0);         // Gamma OFF — linear response, better for measurement math
+        s->set_raw_gma(s, 0); //0        // Gamma OFF — linear response, better for measurement math
 
         // --- No effects ---
         s->set_special_effect(s, 0);
@@ -115,6 +115,28 @@ bool Camera_Init() {
         if (fb) esp_camera_fb_return(fb);
         delay(50);
     }
+
+    // Re-assert manual exposure/gain AFTER warmup. The OV2640 boots in auto
+    // (AEC/AGC); the first manual write above can latch whatever the auto loop
+    // had converged to mid-warmup, which differs run-to-run (white read drifts
+    // ~155-174 between clean boots). Writing the values again once the sensor
+    // has settled pins them deterministically.
+    sensor_t* s2 = esp_camera_sensor_get();
+    if (s2) {
+        s2->set_exposure_ctrl(s2, 0);
+        s2->set_aec_value(s2, 30);
+        s2->set_gain_ctrl(s2, 0);
+        s2->set_agc_gain(s2, 0);
+        // Diagnostic: log the latched registers (printed even in OUTPUT_CALIBRATE
+        // so it's visible while measuring R). If these differ across clean boots,
+        // the manual settings aren't deterministic (config issue). If they're
+        // identical but the white reading still varies, it's analog
+        // (temperature / light / low-exposure jitter), not config.
+        Serial.printf("CAM latched: aec=%d agc=%d gainceil=%d aec_ctrl=%d agc_ctrl=%d awb=%d\n",
+                      s2->status.aec_value, s2->status.agc_gain, s2->status.gainceiling,
+                      s2->status.aec, s2->status.agc, s2->status.awb);
+    }
+
 #ifndef OUTPUT_CALIBRATE
     Serial.println("Camera ready.");
 #endif

@@ -3,7 +3,8 @@ $ErrorActionPreference = 'Stop'
 $streamDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $modePath = Join-Path $streamDir '..\modes\ModeLineFollow.cpp'
 $hardwarePath = Join-Path $streamDir '..\config\hardware_config.h'
-$outPath = Join-Path $streamDir 'stream_guides.generated.js'
+$srcOutPath = Join-Path $streamDir 'stream_guides.generated.js'
+$htmlOutPath = Join-Path $streamDir '..\..\..\stream_guides.generated.js'
 
 $src = (Get-Content -Raw -Path $modePath) + "`n" + (Get-Content -Raw -Path $hardwarePath)
 
@@ -48,7 +49,7 @@ $values = @{
 }
 
 $js = @"
-// Generated from ../modes/ModeLineFollow.cpp by update_stream_guides.ps1.
+// Generated from ModeLineFollow.cpp and hardware_config.h by update_stream_guides.ps1.
 // Keep this file next to esp32_camera_viewer.html so the viewer can load it
 // without asking the XIAO to spend serial bandwidth on static geometry.
 window.XIAO_STREAM_GUIDES = {
@@ -61,5 +62,7 @@ window.XIAO_STREAM_GUIDES = {
 };
 "@
 
-Set-Content -Path $outPath -Value $js
-Write-Host "Wrote $outPath"
+Set-Content -Path $srcOutPath -Value $js
+Set-Content -Path $htmlOutPath -Value $js
+Write-Host "Wrote $srcOutPath"
+Write-Host "Wrote $htmlOutPath"

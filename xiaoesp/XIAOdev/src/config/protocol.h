@@ -9,10 +9,13 @@
 #define XIAO_REG_MODE      0x03  // Teensy -> XIAO: active vision mode
 #define XIAO_REG_ANGLE     0x04  // XIAO -> Teensy: mode-specific angle
 #define XIAO_REG_FLAG      0x05  // XIAO -> Teensy: mode-specific flags
+#define XIAO_REG_FINE_ANGLE 0x06 // XIAO -> Teensy: mode-specific precise angle
 
 // XIAO_REG_FLAG bits.
 #define XIAO_FLAG_COMMIT      0x01
 #define XIAO_FLAG_TIGHT_SLOW  0x02
+#define XIAO_FLAG_BOTTOM_LINE 0x04
+#define XIAO_FLAG_FINE_ANGLE  0x08
 
 // FEATURE byte: line-follow mode.
 #define FEAT_NONE          0

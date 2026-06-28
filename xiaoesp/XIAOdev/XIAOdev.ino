@@ -138,7 +138,13 @@ void loop() {
 
     // ── Receive current mode from Teensy ──────────────────────────────────────
     teensy.update();
+#if DEBUG_FORCE_LINE_ANGLE_MODE
+    // Debug only: comment out the Teensy/state-machine mode and force angle mode.
+    // uint8_t mode = teensy.get(XIAO_REG_MODE);
+    uint8_t mode = MODE_LINE_ANGLE;
+#else
     uint8_t mode = teensy.get(XIAO_REG_MODE);   // default 0 if Teensy hasn't sent yet
+#endif
     static uint8_t s_prevMode = 255;
     if (mode != s_prevMode) {
         if (mode == MODE_LINEFOLLOW) modeLineFollowReset();
@@ -189,9 +195,11 @@ static void sendStreamDebugOnly() {
     lastSent = now;
 
     char lcLine[384];
+    char laLine[256];
     char rowLine[48];
     char evtLine[96];
     int lcLen = xs_formatLineDebug(lcLine, sizeof(lcLine));
+    int laLen = xs_formatLineAngleDebug(laLine, sizeof(laLine));
     int rowLen = xs_formatSensorRow(rowLine, sizeof(rowLine));
 
     if (serialMutex) xSemaphoreTake(serialMutex, portMAX_DELAY);
@@ -199,6 +207,7 @@ static void sendStreamDebugOnly() {
     while ((evtLen = xs_formatEvent(evtLine, sizeof(evtLine))) > 0) {
         Serial.write((const uint8_t*)evtLine, evtLen);
     }
+    if (laLen > 0) Serial.write((const uint8_t*)laLine, laLen);
     if (lcLen > 0) Serial.write((const uint8_t*)lcLine, lcLen);
     if (rowLen > 0) Serial.write((const uint8_t*)rowLine, rowLen);
     if (serialMutex) xSemaphoreGive(serialMutex);
@@ -228,9 +237,11 @@ void streamTask(void* pvParameters) {
         // LineCount overlay line — ASCII, emitted under the mutex *before* the
         // frame so the viewer parses it as text (never inside the pixel bytes).
         char lcLine[384];
+        char laLine[256];
         char rowLine[48];
         char evtLine[96];
         int  lcLen = xs_formatLineDebug(lcLine, sizeof(lcLine));
+        int  laLen = xs_formatLineAngleDebug(laLine, sizeof(laLine));
         int  rowLen = xs_formatSensorRow(rowLine, sizeof(rowLine));
 
         // Frame integrity: send payload length + a Fletcher-16 checksum so the
@@ -243,6 +254,7 @@ void streamTask(void* pvParameters) {
         while ((evtLen = xs_formatEvent(evtLine, sizeof(evtLine))) > 0) {
             Serial.write((const uint8_t*)evtLine, evtLen);
         }
+        if (laLen > 0) Serial.write((const uint8_t*)laLine, laLen);
         if (lcLen > 0) Serial.write((const uint8_t*)lcLine, lcLen);
         if (rowLen > 0) Serial.write((const uint8_t*)rowLine, rowLen);
         Serial.write(MAGIC_IMAGE,      4);

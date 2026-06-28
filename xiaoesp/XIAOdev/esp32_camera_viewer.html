@@ -643,6 +643,7 @@ canvas { display: block; image-rendering: pixelated; }
       <span>Filter:</span>
       <button class="filter-btn active" data-tag="ALL">ALL</button>
       <button class="filter-btn" data-tag="[RES]">[RES]</button>
+      <button class="filter-btn" data-tag="[LA]">[LA]</button>
       <button class="filter-btn" data-tag="[LC]">[LC]</button>
       <button class="filter-btn" data-tag="[ROW]">[ROW]</button>
       <button class="filter-btn" data-tag="[EVT]">[EVT]</button>
@@ -970,29 +971,47 @@ function renderMarkerList() {
 //  LINECOUNT OVERLAY  — ROI box + in/out crossing points (from [LC] lines)
 // ═════════════════════════════════════════════════════════════════════════════
 let lcData = null;        // { arc:[tx,ty,lx,ly,rx,ry,blx,bly,brx,bry], box:[x0,y0,x1,y1], crossings:[{x,y,role}], inIdx, foIdx, held, out }
+let laData = null;        // { n, one, two, bottom, circ, angle, enc, y, flag, base:{x,y}, tip:{x,y}|null }
 let lcOverlayOn = true;
 const LC_IN_COLOR  = '#2ecc71';   // green  = the line the robot is on (in)
 const LC_OUT_COLOR = '#e8840a';   // orange = branches (out)
 const LC_FO_COLOR  = LC_OUT_COLOR; // orange line = focused out used for normal steering
 const LC_COMMIT_COLOR = LC_IN_COLOR; // green outer ring = committed green-turn goal
+const LA_BASE_COLOR = '#ff9d18';
+const LA_TIP_COLOR  = '#37d5ff';
 
 const FALLBACK_STREAM_GUIDES = {
-  arc: [80,5, 25,35, 135,35, 40,85, 120,85],
+  arc: [80,10, 28,40, 132,40, 40,91, 120,91],
   silverCols: [
     { x: 33, y0: 0, y1: 70 },
     { x: 127, y0: 0, y1: 70 },
   ],
-  colorLine: { x0: 25, x1: 135, y: 65 },
+  colorLine: { x0: 28, x1: 132, y: 45 },
 };
 let STREAM_GUIDES = window.XIAO_STREAM_GUIDES || FALLBACK_STREAM_GUIDES;
 let colorComX = null;
 
 function readCppConst(src, name) {
-  const re = new RegExp('constexpr\\s+(?:uint8_t|uint16_t|int)\\s+' + name + '\\s*=\\s*([A-Za-z0-9_]+)');
+  const re = new RegExp('constexpr\\s+(?:uint8_t|uint16_t|int|float)\\s+' + name + '\\s*=\\s*([^;]+);');
   const m = src.match(re);
-  if (!m) return null;
-  if (/^[0-9]+$/.test(m[1])) return +m[1];
-  return readCppConst(src, m[1]);
+  let expr = m ? m[1] : null;
+  if (!expr) {
+    const defineRe = new RegExp('^\\s*#define\\s+' + name + '\\s+(.+?)\\s*$', 'm');
+    const dm = src.match(defineRe);
+    if (!dm) return null;
+    expr = dm[1];
+  }
+  expr = expr.replace(/\/\/.*$/, '').replace(/f\b/g, '').trim();
+  const resolved = expr.replace(/[A-Za-z_][A-Za-z0-9_]*/g, token => {
+    const v = readCppConst(src, token);
+    return v === null ? token : String(v);
+  });
+  if (!/^[0-9+\-*/().\s]+$/.test(resolved)) return null;
+  try {
+    return Math.round(Function('"use strict"; return (' + resolved + ')')());
+  } catch {
+    return null;
+  }
 }
 
 function guidesFromModeSource(src) {
@@ -1023,12 +1042,15 @@ function guidesFromModeSource(src) {
 
 async function loadStreamGuidesFromSource() {
   try {
-    const res = await fetch('../modes/ModeLineFollow.cpp', { cache: 'no-store' });
-    if (!res.ok) return;
-    const guides = guidesFromModeSource(await res.text());
+    const [modeRes, hardwareRes] = await Promise.all([
+      fetch('src/modes/ModeLineFollow.cpp', { cache: 'no-store' }),
+      fetch('src/config/hardware_config.h', { cache: 'no-store' }),
+    ]);
+    if (!modeRes.ok || !hardwareRes.ok) return;
+    const guides = guidesFromModeSource((await modeRes.text()) + '\n' + (await hardwareRes.text()));
     if (!guides) return;
     STREAM_GUIDES = guides;
-    appendLine('[EVT] kind=viewer action=loaded-guides source=ModeLineFollow.cpp');
+    appendLine('[EVT] kind=viewer action=loaded-guides source=config');
   } catch {
     // file:// usually cannot fetch source; stream_guides.generated.js remains the fallback.
   }
@@ -1078,6 +1100,36 @@ function parseLC(text) {
     err:     errM ? +errM[1] : null,
     held:    held ? +held[1] : 0,
     out:     out  ? +out[1]  : 0,
+  };
+  markDirty();
+  drawOverlay();
+}
+
+function parseLA(text) {
+  const kv = {};
+  for (const [, k, v] of text.matchAll(/\b([a-z]+)=(-?\d+,-?\d+|-?\d+(?:\.\d+)?)/g)) {
+    kv[k] = v;
+  }
+  const parsePoint = s => {
+    if (!s) return null;
+    const m = s.match(/^(-?\d+),(-?\d+)$/);
+    if (!m) return null;
+    const x = +m[1], y = +m[2];
+    if (x < 0 || y < 0) return null;
+    return { x, y };
+  };
+  laData = {
+    n: +(kv.n || 0),
+    one: +(kv.one || 0),
+    two: +(kv.two || 0),
+    bottom: +(kv.bottom || 0),
+    circ: +(kv.circ || 0),
+    angle: +(kv.angle || 0),
+    enc: +(kv.enc || 127),
+    y: +(kv.y || 0),
+    flag: +(kv.flag || 0),
+    base: parsePoint(kv.base),
+    tip: parsePoint(kv.tip),
   };
   markDirty();
   drawOverlay();
@@ -1229,6 +1281,44 @@ function drawLcOverlay() {
   }
 }
 
+function drawLaOverlay() {
+  if (!lcOverlayOn || !laData || !laData.base) return;
+  const b = laData.base;
+  const t = laData.tip;
+
+  if (t) {
+    octx.beginPath();
+    octx.moveTo(b.x + .5, b.y + .5);
+    octx.lineTo(t.x + .5, t.y + .5);
+    octx.lineWidth = 1.6;
+    octx.strokeStyle = LA_TIP_COLOR;
+    octx.stroke();
+  }
+
+  octx.beginPath();
+  octx.arc(b.x + .5, b.y + .5, 5.0, 0, Math.PI * 2);
+  octx.fillStyle = LA_BASE_COLOR;
+  octx.fill();
+  octx.lineWidth = 1.1;
+  octx.strokeStyle = 'rgba(0,0,0,0.85)';
+  octx.stroke();
+
+  if (t) {
+    octx.beginPath();
+    octx.arc(t.x + .5, t.y + .5, 4.0, 0, Math.PI * 2);
+    octx.fillStyle = LA_TIP_COLOR;
+    octx.fill();
+    octx.lineWidth = 1.0;
+    octx.strokeStyle = 'rgba(0,0,0,0.85)';
+    octx.stroke();
+  }
+
+  octx.fillStyle = '#fff';
+  octx.font = '7px monospace';
+  octx.fillText('LA ' + laData.angle.toFixed(1) + ' y=' + laData.y + ' f=' + laData.flag,
+    Math.min(b.x + 7, overlay.width - 60), Math.max(b.y - 6, 8));
+}
+
 // ═════════════════════════════════════════════════════════════════════════════
 //  ROW-55 COLOR STRIP  — display-only classification from [ROW] lines
 // ═════════════════════════════════════════════════════════════════════════════
@@ -1270,6 +1360,7 @@ function drawOverlay() {
   octx.clearRect(0, 0, overlay.width, overlay.height);
   drawStreamGuides();
   drawLcOverlay();
+  drawLaOverlay();
   for (const { visible, x, y, w, h, color } of markers) {
     if (!visible) continue;
     octx.fillStyle = 'rgba(255,255,255,0.12)';
@@ -1317,7 +1408,7 @@ function classify(t) {
 }
 // ── Serial filter ─────────────────────────────────────────────────────────────
 // Known tag prefixes produced by serial_print.h on Xiao.
-const KNOWN_TAGS = ['[RES]', '[LC]', '[ROW]', '[EVT]', '[CAL]', '[CLS]', '[PIX]', '[SIN]', '[SOUT]'];
+const KNOWN_TAGS = ['[RES]', '[LA]', '[LC]', '[ROW]', '[EVT]', '[CAL]', '[CLS]', '[PIX]', '[SIN]', '[SOUT]'];
 let activeFilter = 'ALL';   // 'ALL' | '[RES]' | '[CLS]' | ... | 'UNTAGGED'
 
 function lineTag(text) {
@@ -1424,6 +1515,8 @@ function appendLine(text) {
   }
   // Update the line-detection overlay from [LC] lines
   if (text.startsWith('[LC]')) parseLC(text);
+  // Update the line-angle debug overlay from [LA] lines
+  if (text.startsWith('[LA]')) parseLA(text);
   // Update the row-55 color strip from [ROW] lines
   if (text.startsWith('[ROW]')) parseROW(text);
   // Store center 10x10 raw RGB calibration samples from [CAL] lines

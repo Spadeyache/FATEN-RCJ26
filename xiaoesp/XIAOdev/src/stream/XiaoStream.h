@@ -45,6 +45,17 @@ void xs_noteCommitStart(bool left);
 void xs_noteCommitLock(bool left, uint8_t x, uint8_t y);
 void xs_noteCommitEnd(const char* reason);
 
+void xs_storeLineAngleDebug(uint8_t count, bool twoDetected, bool bottomLine,
+                            bool circleAngle, int baseX, int baseY,
+                            uint8_t baseWidth, int tipX, int tipY,
+                            uint8_t tipWidth, float angleDeg,
+                            uint8_t encodedAngle, uint8_t avgY,
+                            uint8_t flag, bool fineValid,
+                            float fineAngleDeg, uint8_t encodedFineAngle,
+                            int fineFarX, int fineFarY, uint8_t fineFarWidth,
+                            int fineNearX, int fineNearY, uint8_t fineNearWidth);
+
 int xs_formatLineDebug(char* buf, int bufLen);
+int xs_formatLineAngleDebug(char* buf, int bufLen);
 int xs_formatSensorRow(char* buf, int bufLen);
 int xs_formatEvent(char* buf, int bufLen);

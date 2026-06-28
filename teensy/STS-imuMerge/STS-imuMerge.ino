@@ -37,7 +37,7 @@ FLASHMEM void setup() {
 
     Actions::Drive::init();
     Actions::Arm::init();           // servos + KRS, sets initial pose
-    // Sensors::IMU::init();
+    Sensors::IMU::init();
     // Sensors::Touch::init();
     Sensors::XIAO_link::init();
     Sensors::K230_link::init();
@@ -58,7 +58,7 @@ void loop() {
     // Actions::Drive::motorRaw(-40, 40,40,40);
     // Actions::Forward::forward(100, 80);
     // Actions::Turn::turn(90, 40);
-    // Actions::Drive::motorRaw(40, 40,0,0);
+    // Actions::Drive::motorRaw(60, -30,80,-50);
     // delay(1500);
     // return;
     // ========================================================================
@@ -66,7 +66,7 @@ void loop() {
     // 1. Pump sensor I/O (raw bytes in/out).
     Sensors::XIAO_link::tick();
     Sensors::K230_link::tick();
-    // Sensors::IMU::tick();
+    Sensors::IMU::tick();
     // Sensors::ToF::tick();       // updates global tofFL[8][8]
     // Sensors::ToF::printFL(); // optional debug dump
     // Sensors::Touch::tick();
