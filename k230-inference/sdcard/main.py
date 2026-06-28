@@ -63,6 +63,7 @@ def main():
 
     try:
         while True:
+            status_led.refresh()
             run_state = robot_io.read_command(u, run_state)
 
             # Model swap request from Teensy (victims <-> points). Releasing the

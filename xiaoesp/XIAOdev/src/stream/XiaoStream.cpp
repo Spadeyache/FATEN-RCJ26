@@ -17,6 +17,7 @@ struct StreamEvent {
 };
 
 constexpr uint8_t EVENT_QUEUE_SIZE = 8;
+constexpr uint8_t EVAC_MASK_MAX = 96;
 
 LineCounts s_dbgLc;
 LineClass  s_dbgCls;
@@ -56,6 +57,22 @@ uint8_t    s_laFineFarWidth = 0;
 int        s_laFineNearX = -1;
 int        s_laFineNearY = -1;
 uint8_t    s_laFineNearWidth = 0;
+
+bool       s_saValid = false;
+bool       s_saSeen = false;
+char       s_saCls[8] = "none";
+float      s_saAngleDeg = 0.0f;
+uint8_t    s_saEncodedAngle = 127;
+uint16_t   s_saCount = 0;
+uint16_t   s_saFlashCount = 0;
+uint16_t   s_saBlackCount = 0;
+uint8_t    s_saMinX = 0;
+uint8_t    s_saMinY = 0;
+uint8_t    s_saMaxX = 0;
+uint8_t    s_saMaxY = 0;
+uint8_t    s_saMaskX[EVAC_MASK_MAX] = {};
+uint8_t    s_saMaskY[EVAC_MASK_MAX] = {};
+uint8_t    s_saMaskCount = 0;
 
 SensorSlot s_sensor[2] = {
     { XS_WHITE, XS_PRIO_NONE },
@@ -191,6 +208,32 @@ void xs_storeLineAngleDebug(uint8_t count, bool twoDetected, bool bottomLine,
     s_laFineNearWidth = fineNearWidth;
 }
 
+void xs_storeEvacTapeDebug(bool seen, const char* cls, float angleDeg,
+                           uint8_t encodedAngle, uint16_t count,
+                           uint16_t flashCount, uint16_t blackCount,
+                           uint8_t minX, uint8_t minY,
+                           uint8_t maxX, uint8_t maxY,
+                           const uint8_t* maskX, const uint8_t* maskY,
+                           uint8_t maskCount) {
+    s_saValid = true;
+    s_saSeen = seen;
+    snprintf(s_saCls, sizeof(s_saCls), "%s", cls ? cls : "none");
+    s_saAngleDeg = angleDeg;
+    s_saEncodedAngle = encodedAngle;
+    s_saCount = count;
+    s_saFlashCount = flashCount;
+    s_saBlackCount = blackCount;
+    s_saMinX = minX;
+    s_saMinY = minY;
+    s_saMaxX = maxX;
+    s_saMaxY = maxY;
+    s_saMaskCount = maskCount > EVAC_MASK_MAX ? EVAC_MASK_MAX : maskCount;
+    for (uint8_t i = 0; i < s_saMaskCount; i++) {
+        s_saMaskX[i] = maskX ? maskX[i] : 0;
+        s_saMaskY[i] = maskY ? maskY[i] : 0;
+    }
+}
+
 int xs_formatLineDebug(char* buf, int bufLen) {
     if (!s_dbgValid || bufLen < 48) return 0;
 
@@ -251,6 +294,38 @@ int xs_formatLineAngleDebug(char* buf, int bufLen) {
         s_laFineNearX,
         s_laFineNearY,
         s_laFineNearWidth);
+}
+
+int xs_formatEvacTapeDebug(char* buf, int bufLen) {
+    if (!s_saValid || bufLen < 32) return 0;
+    if (!s_saSeen) {
+        return snprintf(buf, bufLen, "[SA] seen=0 cls=none angle=0.0 enc=127\n");
+    }
+
+    int o = snprintf(buf, bufLen,
+        "[SA] seen=1 cls=%s angle=%.1f enc=%u cnt=%u flash=%u black=%u box=%u,%u,%u,%u p=",
+        s_saCls,
+        s_saAngleDeg,
+        s_saEncodedAngle,
+        s_saCount,
+        s_saFlashCount,
+        s_saBlackCount,
+        s_saMinX,
+        s_saMinY,
+        s_saMaxX,
+        s_saMaxY);
+
+    for (uint8_t i = 0; i < s_saMaskCount && o < bufLen - 12; i++) {
+        o += snprintf(buf + o, bufLen - o, "%s%u,%u",
+            (i ? " " : ""),
+            s_saMaskX[i],
+            s_saMaskY[i]);
+    }
+    if (o < bufLen - 1) {
+        buf[o++] = '\n';
+        buf[o] = '\0';
+    }
+    return o;
 }
 
 int xs_formatSensorRow(char* buf, int bufLen) {

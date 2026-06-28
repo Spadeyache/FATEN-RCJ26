@@ -82,21 +82,15 @@ void grabRight(bool closed, bool blocking) {
     writeServoSmooth(_hs45hb0, _hs1CurrentUs, targetUs, blocking);
 }
 
-void grab(bool closed) {
-    if (closed) {
-        grabLeft(true, false);
-        grabRight(true);
-    } else {
-        grabLeft(false, false);
-        grabRight(false);
-    }
-}
+// --- left bucket mechanics (TODO: wire the servo macros) --------------------
+void store()        { /* TODO: push the left-gripper ball into the bucket */ }
+void releaseStore() { /* TODO: drop the ball held in the left bucket */ }
 
-void releaseAll() {
-    attachServos();
-    grab(false);  delay(300);       // open everything to drop held balls
-    detachServos();
-}
+// --- drops ------------------------------------------------------------------
+void releaseLeft()  { grabLeft(false); }
+void releaseRight() { grabRight(false); }
+void releaseBothLeft() { releaseLeft(); releaseStore(); }
+void releaseAll()      { releaseBothLeft(); releaseRight(); }
 
 // Move the lift to a raw PWM pulse width (microseconds) and HOLD it there.
 // PWM mode has no "free" — the Servo library keeps refreshing the pulse.

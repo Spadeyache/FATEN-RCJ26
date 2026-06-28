@@ -1,0 +1,281 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Robot API Reference</title>
+<style>
+  :root{
+    --bg:#faf6f0; --panel:#fffdf9; --ink:#262320; --mut:#7c736a;
+    --line:#e7ddcf; --acc:#e5601f; --acc-soft:#fbe7d8; --code:#3a342e;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font:15px/1.55 -apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  .wrap{max-width:980px; margin:0 auto; padding:0 22px 80px}
+  header{border-top:4px solid var(--acc); background:var(--panel);
+    border-bottom:1px solid var(--line); position:sticky; top:0; z-index:5}
+  .head-in{max-width:980px; margin:0 auto; padding:18px 22px}
+  h1{margin:0; font-size:20px; letter-spacing:.2px}
+  h1 b{color:var(--acc)}
+  .sub{color:var(--mut); font-size:13px; margin-top:3px}
+  .tools{display:flex; gap:10px; margin-top:13px; flex-wrap:wrap; align-items:center}
+  #q{flex:1; min-width:220px; padding:8px 11px; border:1px solid var(--line);
+    border-radius:6px; background:#fff; font-size:14px}
+  #q:focus{outline:none; border-color:var(--acc)}
+  .jump a{color:var(--mut); text-decoration:none; font-size:13px; margin-left:14px;
+    border-bottom:1px dotted var(--line); padding-bottom:1px}
+  .jump a:hover{color:var(--acc); border-color:var(--acc)}
+  .board{font-size:13px; text-transform:uppercase; letter-spacing:1.5px;
+    color:var(--acc); margin:42px 0 6px; font-weight:700}
+  .board .meta{color:var(--mut); text-transform:none; letter-spacing:0; font-weight:400; margin-left:8px}
+  .mod{background:var(--panel); border:1px solid var(--line); border-radius:8px;
+    margin:14px 0; overflow:hidden}
+  .mod h3{margin:0; padding:11px 16px; font-size:15px; border-bottom:1px solid var(--line);
+    background:#fff}
+  .mod h3 .ns{font:12px ui-monospace,Consolas,monospace; color:var(--mut); margin-left:8px}
+  .fn{padding:11px 16px; border-bottom:1px solid #f1ebe1}
+  .fn:last-child{border-bottom:0}
+  .sig{display:inline-block; font:13px/1.5 ui-monospace,"SF Mono",Consolas,monospace;
+    color:var(--code); background:var(--acc-soft); border:1px solid #f3d9c6;
+    padding:2px 7px; border-radius:5px; white-space:pre-wrap}
+  .desc{margin:6px 0 0; color:#4a443d; font-size:13.5px}
+  .tag{font:11px ui-monospace,monospace; color:var(--acc); border:1px solid #f0c9b2;
+    border-radius:4px; padding:0 5px; margin-left:6px; vertical-align:1px}
+  .none{display:none; color:var(--mut); padding:20px 4px}
+  footer{color:var(--mut); font-size:12px; margin-top:40px; border-top:1px solid var(--line); padding-top:14px}
+  mark{background:#ffe2c2; color:inherit; padding:0 1px}
+</style>
+</head>
+<body>
+<header>
+  <div class="head-in">
+    <h1>Robot <b>API</b> Reference</h1>
+    <div class="sub">RoboCupJunior Rescue Line &middot; Teensy (STS-imuMerge) + XIAO ESP32-S3 (XIAOdev) &middot; manually maintained</div>
+    <div class="tools">
+      <input id="q" type="search" placeholder="Filter functions… (e.g. grab, lift, line, tof)" autocomplete="off">
+      <span class="jump"><a href="#teensy">Teensy</a><a href="#xiao">XIAO</a></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+<p class="none" id="nomatch">No functions match that filter.</p>
+
+<!-- ===================== TEENSY ===================== -->
+<div class="board" id="teensy">Teensy &mdash; STS-imuMerge <span class="meta">main controller: drive, sensing, state machine</span></div>
+
+<section class="mod">
+  <h3>StateMachine <span class="ns">namespace StateMachine</span></h3>
+  <div class="fn"><code class="sig">void init()</code><p class="desc">Boots the FSM in LINE_FOLLOW. Call once from setup().</p></div>
+  <div class="fn"><code class="sig">void tick()</code><p class="desc">Runs onEnter() once on a transition, then the active state's update(). Called every main-loop iteration.</p></div>
+  <div class="fn"><code class="sig">void transitionTo(RobotState next)</code><p class="desc">Queues a state change; applied on the next tick(). States: LINE_FOLLOW / LINE_OBSTACLE / LINE_GAP / STALLED_RED / EVAC_ENTRY / EVAC_SEARCH_DEPLOY / EVAC_EXIT.</p></div>
+  <div class="fn"><code class="sig">RobotState current()</code><p class="desc">The currently active state.</p></div>
+</section>
+
+<section class="mod">
+  <h3>State handlers <span class="ns">LINE_* / EVAC_* namespaces</span></h3>
+  <div class="fn"><code class="sig">LINE_Follow::onEnter() / update()</code><p class="desc">Default driving. Dispatches on the XIAO feature byte: bumper→obstacle, U-turn, red→stall, silver→evac entry; otherwise runs the line PID.</p></div>
+  <div class="fn"><code class="sig">LINE_Obstacle::onEnter() / update()</code><p class="desc">Front bumper hit: drive a fixed arc around the obstacle, then wait for the XIAO to re-acquire the black line.</p></div>
+  <div class="fn"><code class="sig">LINE_Gap::onEnter() / update()</code><p class="desc">Line-gap traversal (gap/intersection crossing helper). Steers on the XIAO line-angle output.</p></div>
+  <div class="fn"><code class="sig">EVAC_Entry::onEnter() / update()</code><p class="desc">Fixed entry sequence into the evacuation zone (reset VictimManager, attach servos, drive in), then hands to search-deploy.</p></div>
+  <div class="fn"><code class="sig">EVAC_SearchDeploy::onEnter() / update()</code><p class="desc">The 2-minute collect↔deploy loop: spin-search victims, grab via VictimManager, deploy live at the green corner / dead at the red corner.</p></div>
+  <div class="fn"><code class="sig">EVAC_Exit::onEnter() / update()</code><p class="desc">Leave the zone: switch the XIAO back to line mode and return to LINE_FOLLOW.</p></div>
+</section>
+
+<section class="mod">
+  <h3>VictimManager <span class="ns">namespace VictimManager</span></h3>
+  <div class="fn"><code class="sig">void reset() / void clearAll()</code><p class="desc">Empty both arms — reset() at evac start, clearAll() after a deploy.</p></div>
+  <div class="fn"><code class="sig">uint8_t count() / liveHeld() / deadHeld()</code><p class="desc">How many balls are currently held, total and split by type.</p></div>
+  <div class="fn"><code class="sig">bool full()</code><p class="desc">Both arms at capacity (left 2 + right 1).</p></div>
+  <div class="fn"><code class="sig">bool acceptsType(uint8_t type)</code><p class="desc">Should the search keep chasing this victim type? DEAD only if none held and the right arm is free; ALIVE whenever any arm has space. Used to filter detections.</p></div>
+  <div class="fn"><code class="sig">bool readyToDeploy()</code><p class="desc">True once ≥2 live balls are held — the trigger to break off and deploy green.</p></div>
+  <div class="fn"><code class="sig">bool tryGrab(uint8_t type)</code><p class="desc">Pick an arm, run the align + grab + self-confirm, and book the ball only if confirmed captured. Returns false on a miss (nothing counted).</p></div>
+  <div class="fn"><code class="sig">void releaseLive() / void releaseDead()</code><p class="desc">Drop balls by type at the corner — live from the left arm (+right overflow), dead from the right.</p></div>
+</section>
+
+<section class="mod">
+  <h3>Drive <span class="ns">namespace Actions::Drive</span></h3>
+  <div class="fn"><code class="sig">void init()</code><p class="desc">Brings up the STS servo bus and starts the 9 ms control-timer ISR that pushes wheel gains.</p></div>
+  <div class="fn"><code class="sig">void motor(float L, float R, bool imuComp=false)</code><p class="desc">Set both drive sides (±MAX_MOTOR_SPEED, clamped). The ISR mirrors L→front/back-left, R→front/back-right. imuComp adds slope compensation.</p></div>
+  <div class="fn"><code class="sig">void stop()</code><p class="desc">motor(0,0).</p></div>
+  <div class="fn"><code class="sig">void spinDecay(float power, uint32_t durationMs)</code><p class="desc">Blocking in-place spin that ramps from |power| down to 35 over the duration. Used for search/deploy sweeps.</p></div>
+  <div class="fn"><code class="sig">void motorRaw(float fl, float fr, float bl, float br)</code><p class="desc">Bench-test only: drive each wheel independently (no L/R mirror, no IMU comp).</p></div>
+  <div class="fn"><code class="sig">void runLinePID()</code><p class="desc">One tick of the slope-aware line-follow PID off XiaoDecode::lineError(). Called every loop in LINE_FOLLOW.</p></div>
+  <div class="fn"><code class="sig">float frontLeftGain() / frontRightGain() / backLeftGain() / backRightGain()</code><p class="desc">Last commanded per-wheel gains — read by Mapping for the unicycle motion model.</p></div>
+</section>
+
+<section class="mod">
+  <h3>Arm <span class="ns">namespace Actions::Arm</span></h3>
+  <div class="fn"><code class="sig">void init()</code><p class="desc">Attach the two grippers + KRS lift, close the grippers, park the lift.</p></div>
+  <div class="fn"><code class="sig">void grabLeft(bool closed, bool blocking=true)</code><p class="desc">Open/close the left (alive/silver) gripper. Blocking ramps the servo smoothly.</p></div>
+  <div class="fn"><code class="sig">void grabRight(bool closed, bool blocking=true)</code><p class="desc">Open/close the right (dead/black) gripper.</p></div>
+  <div class="fn"><code class="sig">void store()</code><p class="desc">Move the ball in the left gripper into the bucket so the gripper is free for a second one (left = 2, LIFO). <span class="tag">TODO macro</span></p></div>
+  <div class="fn"><code class="sig">void releaseLeft() / releaseRight() / releaseStore()</code><p class="desc">Drop a single ball: the left gripper / the right gripper / the left bucket. releaseStore is the bucket primitive. <span class="tag">store/releaseStore TODO</span></p></div>
+  <div class="fn"><code class="sig">void releaseBothLeft()</code><p class="desc">Drop the left gripper ball then the bucket ball (LIFO order).</p></div>
+  <div class="fn"><code class="sig">void releaseAll()</code><p class="desc">Blocking: drop every held ball.</p></div>
+  <div class="fn"><code class="sig">void lift(int us)</code><p class="desc">Raw KRS lift pulse width (microseconds, clamped). Holds via PWM refresh.</p></div>
+  <div class="fn"><code class="sig">void liftDown() / liftCarry() / liftPark()</code><p class="desc">Named lift poses — reach-to-grab / carry-up / parked.</p></div>
+  <div class="fn"><code class="sig">void attachServos() / detachServos()</code><p class="desc">Manually (re)engage or silence the hobby servos inside long sequences.</p></div>
+</section>
+
+<section class="mod">
+  <h3>Turn / Forward / SilverAlign <span class="ns">namespace Actions</span></h3>
+  <div class="fn"><code class="sig">Turn::turn(float angle_deg, float speed=65)</code><p class="desc">Blocking in-place spin. +angle = right, −angle = left; duration is speed-scaled from one calibration constant.</p></div>
+  <div class="fn"><code class="sig">Forward::forward(float speed, float dist_mm, bool useIMU=false, bool pumpComms=false)</code><p class="desc">Blocking straight drive of a calibrated distance (negative speed reverses). useIMU holds heading; pumpComms services the XIAO link during the move.</p></div>
+  <div class="fn"><code class="sig">bool SilverAlign::align()</code><p class="desc">Spin to square the robot to the evac silver tape (drives reported tape tilt to ~0). Returns true on convergence, false on timeout.</p></div>
+</section>
+
+<section class="mod">
+  <h3>XiaoDecode <span class="ns">namespace Processing::XiaoDecode</span></h3>
+  <div class="fn"><code class="sig">void tick(bool instantRun=false)</code><p class="desc">Read the XIAO register cache and feed the feature byte through CommandFilter (~50 Hz). Call every loop.</p></div>
+  <div class="fn"><code class="sig">uint8_t command()</code><p class="desc">The confirmed FEAT_* event (FEAT_NONE if none) — the debounced line-follow signal the state machine acts on.</p></div>
+  <div class="fn"><code class="sig">float lineError()</code><p class="desc">Line position error 0..254 (127 = centred), fed into the drive PID.</p></div>
+  <div class="fn"><code class="sig">float gapAngle() / gapFineAngle() / uint8_t gapLineY()</code><p class="desc">Gap-crossing geometry: rough slope, precise two-row angle, and the point's Y — used by LINE_GAP.</p></div>
+  <div class="fn"><code class="sig">bool commitFlag() / tightSlowFlag()</code><p class="desc">XIAO is mid green-turn commit / the turn target is low in frame (drive slower).</p></div>
+  <div class="fn"><code class="sig">bool gapAnyPointFlag() / gapBothRowsFlag() / gapBottomLineFlag() / gapFineAngleFlag()</code><p class="desc">Per-frame gap detector flags (point seen, two rows, bottom edge, fine angle valid).</p></div>
+  <div class="fn"><code class="sig">bool obstacleSeeLine() / float obstacleAngle()</code><p class="desc">Obstacle-reacquire mode: line back in view + its tilt.</p></div>
+  <div class="fn"><code class="sig">bool silverSeen() / float silverAlignAngle()</code><p class="desc">Evac tape seen + its angle, used by SilverAlign.</p></div>
+  <div class="fn"><code class="sig">void setMode(XiaoMode m)</code><p class="desc">Tell the XIAO which vision mode to run (LINE / SEARCH_LINE / NOGI / LINE_ANGLE / OBSTACLE / SILVER_ALIGN).</p></div>
+  <div class="fn"><code class="sig">void clearFilter() / void setCommand(uint8_t c)</code><p class="desc">Reset the debounce votes / force the current command (used during scripted manoeuvres).</p></div>
+</section>
+
+<section class="mod">
+  <h3>K230Decode <span class="ns">namespace Processing::K230Decode</span></h3>
+  <div class="fn"><code class="sig">void tick()</code><p class="desc">Drain the K230 serial and parse the latest detection frame. (Pair long blocks with drainDelay so the buffer never overflows.)</p></div>
+  <div class="fn"><code class="sig">void drainDelay(uint32_t ms)</code><p class="desc">Block for ms while continuously ticking, so the next read sees the newest frame. Use instead of delay() near K230 reads.</p></div>
+  <div class="fn"><code class="sig">const Box* boxes() / uint8_t boxCount() / uint32_t lastPacketMs()</code><p class="desc">The most recent frame's detection boxes and its timestamp.</p></div>
+  <div class="fn"><code class="sig">bool isVictimClass(uint8_t cls) / bool isPointClass(uint8_t cls)</code><p class="desc">Class test: Dead/Alive ball vs. evac-point corner.</p></div>
+  <div class="fn"><code class="sig">bool checkVictim() / bool checkPoint()</code><p class="desc">Scan the latest frame for the best victim / corner and load goalPOS / pointPOS.</p></div>
+  <div class="fn"><code class="sig">int16_t largestCenterX(uint8_t cls)</code><p class="desc">Centre-X (px) of the largest box of a class, or −1. Used to vision-align a grab.</p></div>
+  <div class="fn"><code class="sig">int16_t largestHeight(uint8_t cls)</code><p class="desc">Tallest box height of a class, or −1. Used to confirm a grab (ball gone = captured).</p></div>
+  <div class="fn"><code class="sig">int16_t dominantClass()</code><p class="desc">Class of the largest box in the frame — in POINTS mode this is the corner colour.</p></div>
+  <div class="fn"><code class="sig">void setModel(Model m)</code><p class="desc">Command the K230 to load the victims model (Dead/Live/Point) or the points model (Green/Red).</p></div>
+  <div class="fn"><code class="sig">void setRunning(bool) / bool isRunning()</code><p class="desc">Detect/idle run flag for the K230.</p></div>
+</section>
+
+<section class="mod">
+  <h3>CommandFilter &amp; Pose <span class="ns">Processing</span></h3>
+  <div class="fn"><code class="sig">CommandFilter::update(uint8_t rawCmd) -&gt; uint8_t</code><p class="desc">Majority-vote ring buffer over the raw XIAO feature byte; returns a FEAT_* code once it passes its threshold within the window. Vote totals are exposed for debug.</p></div>
+  <div class="fn"><code class="sig">CommandFilter::clear()</code><p class="desc">Wipe the vote window (e.g. after acting on a command).</p></div>
+  <div class="fn"><code class="sig">poseInit(Pose&amp;, x, y, theta, ...)</code><p class="desc">Seed the 3-state (x,y,θ) EKF and its covariance.</p></div>
+  <div class="fn"><code class="sig">posePredict(Pose&amp;, v, omega, dt)</code><p class="desc">Integrate the motor-commanded velocity/turn-rate forward one step.</p></div>
+  <div class="fn"><code class="sig">poseUpdateYaw(Pose&amp;, yaw) / poseUpdateWall(Pose&amp;, angle, d)</code><p class="desc">Correct the pose from the IMU yaw / (phase 2) a ToF wall snap.</p></div>
+  <div class="fn"><code class="sig">wrapAngle(float) / poseInflateCovariance(...)</code><p class="desc">Wrap to ±π / bump uncertainty after an un-modelled move.</p></div>
+</section>
+
+<section class="mod">
+  <h3>Mapping <span class="ns">namespace Processing::Mapping</span></h3>
+  <div class="fn"><code class="sig">void init(bool restart)</code><p class="desc">Seed pose at the entrance, snapshot IMU yaw bias, bring up the ToF array. (Phase 0: pose-only.)</p></div>
+  <div class="fn"><code class="sig">void tick()</code><p class="desc">Predict from motor commands + correct with IMU yaw each loop.</p></div>
+  <div class="fn"><code class="sig">const Pose&amp; pose()</code><p class="desc">Current (x,y,θ) estimate.</p></div>
+  <div class="fn"><code class="sig">void persist() / void handleSerial(char c)</code><p class="desc">EEPROM save (phase 2) / serial debug ('p' pose dump, 't' ToF snapshot).</p></div>
+</section>
+
+<section class="mod">
+  <h3>Sensors <span class="ns">namespace Sensors</span></h3>
+  <div class="fn"><code class="sig">IMU::init() / tick() / getPitch() / getRoll() / getYaw()</code><p class="desc">MPU-6050 + Madgwick. tick() is internally throttled; getters return degrees (yaw wrapped ±180).</p></div>
+  <div class="fn"><code class="sig">Touch::init() / tick() / front() / conduct0() / conduct1()</code><p class="desc">Front bumper + two conductivity probes. Getters return true = active.</p></div>
+  <div class="fn"><code class="sig">ToF::init() / tick() / sensor(i) / count() / printFL()</code><p class="desc">VL53L7CX array; tick() refreshes tofFL[8][8] front-left distances when a fresh frame is ready.</p></div>
+  <div class="fn"><code class="sig">XIAO_link::init() / tick() / get(reg) / send(reg, value)</code><p class="desc">Raw register transport to the XIAO. tick() drains RX into the cache; get/send read/write [255,reg,value].</p></div>
+  <div class="fn"><code class="sig">K230_link::init() / tick() / readByte() / setCommand(cmd)</code><p class="desc">Raw byte transport to the K230; tick() buffers RX and re-sends the run/idle command.</p></div>
+</section>
+
+<section class="mod">
+  <h3>Drivers <span class="ns">low-level device classes</span></h3>
+  <div class="fn"><code class="sig">yacheSTS::power(lf, rf, lb, rb) / stop() / setWheelMode() / begin(serial, baud)</code><p class="desc">Feetech STS 4-wheel servo bus (SyncWrite). power() takes ±100 per wheel; right-side sign handled internally.</p></div>
+  <div class="fn"><code class="sig">yacheVL53L7CX::begin() / dataReady() / getRanges(mm, status) / zoneBearing(i) / isValid(status, mm)</code><p class="desc">VL53L7CX multizone ToF wrapper + mount transform (sensor→robot frame). isValid() gates good readings.</p></div>
+  <div class="fn"><code class="sig">yacheMPU6050::begin() / update() / calibrate() / getPitch/Roll/Yaw() / load/saveOffsetsFromEEPROM()</code><p class="desc">MPU-6050 + Madgwick (no DMP); offsets persist to EEPROM.</p></div>
+  <div class="fn"><code class="sig">YacheEncodedSerial::update() / get(id) / send(id, value)</code><p class="desc">3-byte [255,id,value] register protocol over UART (shared Teensy↔XIAO). Values clamped 0..254.</p></div>
+  <div class="fn"><code class="sig">YacheK230D::update() / box(i) / boxCount() / hasFreshFrame(ms) / sendCommand(cmd)</code><p class="desc">K230 box-list parser: [AA 55 N (10-byte boxes) XOR]. update() is non-blocking; sendCommand() controls run/idle + model.</p></div>
+</section>
+
+<!-- ===================== XIAO ===================== -->
+<div class="board" id="xiao">XIAO ESP32-S3 &mdash; XIAOdev <span class="meta">camera vision co-processor: line + colour detection</span></div>
+
+<section class="mod">
+  <h3>Vision modes <span class="ns">one per XIAO mode; run() per camera frame</span></h3>
+  <div class="fn"><code class="sig">modeLineFollowRun(fb, teensy) / modeLineFollowReset()</code><p class="desc">Mode 0. Scan the line row, send line error (COM) + the highest-priority feature (green/red/silver/U-turn) to the Teensy.</p></div>
+  <div class="fn"><code class="sig">modeSearchLineRun(fb, teensy)</code><p class="desc">Mode 1. Look for tape in a region; report silver tape or the black return line (black wins). Used after a U-turn / around obstacles.</p></div>
+  <div class="fn"><code class="sig">modeNoGIRun(fb, teensy)</code><p class="desc">Mode 2. Far-field black-pixel count across rows; flags a no-green intersection ahead.</p></div>
+  <div class="fn"><code class="sig">modeLineAngleRun(fb, teensy)</code><p class="desc">Mode 3. Gap-crossing helper: report the line slope, a precise fine angle, and point flags so the Teensy can drive straight across a gap.</p></div>
+  <div class="fn"><code class="sig">modeObstacleRun(fb, teensy)</code><p class="desc">Mode 4. After going around an obstacle, confirm the line is back in the top arc and report its tilt.</p></div>
+  <div class="fn"><code class="sig">modeSilverAlignRun(fb, teensy)</code><p class="desc">Mode 5. At the evac entrance/exit, classify the big tape as silver or black and report its angle for perpendicular alignment.</p></div>
+</section>
+
+<section class="mod">
+  <h3>LineCount <span class="ns">crossing detection &amp; tracking</span></h3>
+  <div class="fn"><code class="sig">lc_detectCrossings(fb, LineCounts&amp; out)</code><p class="desc">Walk the ROI border as a 1-D loop and list every black crossing (the raw input to all line logic).</p></div>
+  <div class="fn"><code class="sig">lc_updateIn(lc) -&gt; LineClass</code><p class="desc">Track the "in" line (the one the robot is on) frame-to-frame and split the rest into branch "outs".</p></div>
+  <div class="fn"><code class="sig">lc_trackPoint(prevPos, lc) / lc_lowestPixel(lc) / lc_resetTracking()</code><p class="desc">Nearest-with-gating tracker / base case (nearest-to-robot crossing) / forget the tracked point on a mode change.</p></div>
+  <div class="fn"><code class="sig">lc_commitStart(left) / lc_commitUpdate(...) / lc_commitActive() / lc_commitLocked() / lc_commitProgress() / lc_commitClear()</code><p class="desc">Green-turn commit: lock the steering target onto the chosen branch and follow it through the intersection until the line straightens.</p></div>
+  <div class="fn"><code class="sig">lc_focusedOut(lc, inIndex) / lc_slopeError(...) / lc_inOutAngleDeg(...)</code><p class="desc">Pick the steering target out-point, compute the 0..254 line error, and the in→out angle (to know when a turn is done).</p></div>
+</section>
+
+<section class="mod">
+  <h3>GreenFilter <span class="ns">green marker confirmation</span></h3>
+  <div class="fn"><code class="sig">uint8_t gf_update(uint8_t raw)</code><p class="desc">Rolling-window vote over per-frame green observations; returns a confirmed code (0 none, 1 U-turn, 2 left, 3 right).</p></div>
+  <div class="fn"><code class="sig">void gf_reset()</code><p class="desc">Clear the vote window after acting on a green.</p></div>
+</section>
+
+<section class="mod">
+  <h3>vision <span class="ns">colour primitives</span></h3>
+  <div class="fn"><code class="sig">scanRow(fb, y, xMin, xMax, cameraData* out)</code><p class="desc">Sample a full image row into per-column RGB/gray/HSV — the workhorse for line/colour scans.</p></div>
+  <div class="fn"><code class="sig">isBlack(d) / isSilver(d) / isSilverRaw(d) / isGreen(d) / isRed(d)</code><p class="desc">Pixel/sample classifiers using the config.h colour thresholds.</p></div>
+  <div class="fn"><code class="sig">rgb565To888() / rgb888_to_hsv() / rgbToGray() / rgb888Calibration() / unpackRGB565() / sampleRawRgb()</code><p class="desc">Low-level pixel conversion + per-camera colour calibration helpers.</p></div>
+</section>
+
+<section class="mod">
+  <h3>XiaoStream <span class="ns">PC viewer debug bridge</span></h3>
+  <div class="fn"><code class="sig">xs_setSensorBoth() / xs_setSensorSide() / xs_beginSensorFrame()</code><p class="desc">Feed the left/right colour-sensor display for esp32_camera_viewer.html.</p></div>
+  <div class="fn"><code class="sig">xs_storeLineDebug() / xs_storeLineSteer() / xs_storeLineAngleDebug() / xs_storeEvacTapeDebug()</code><p class="desc">Stash per-frame geometry/steer/angle/tape state for the overlay (debug only — no effect on robot behaviour).</p></div>
+  <div class="fn"><code class="sig">xs_noteCommitStart() / xs_noteCommitLock() / xs_noteCommitEnd()</code><p class="desc">Mark green-commit lifecycle events for the viewer.</p></div>
+  <div class="fn"><code class="sig">xs_formatLineDebug() / xs_formatLineAngleDebug() / xs_formatEvacTapeDebug() / xs_formatSensorRow() / xs_formatEvent()</code><p class="desc">Serialise the stored debug state into the text lines the HTML viewer parses.</p></div>
+</section>
+
+<footer>
+  Signatures pulled from the public headers in <code>teensy/STS-imuMerge/src</code> and <code>xiaoesp/XIAOdev/src</code>.
+  Pure config/<code>#define</code> files (config.h, pins, camera/wifi config) and the vendored VL53L7CX library are omitted.
+  Update this page when a header's public API changes.
+</footer>
+</div>
+
+<script>
+(function(){
+  var q = document.getElementById('q');
+  var fns = Array.prototype.slice.call(document.querySelectorAll('.fn'));
+  var mods = Array.prototype.slice.call(document.querySelectorAll('.mod'));
+  var boards = Array.prototype.slice.call(document.querySelectorAll('.board'));
+  var none = document.getElementById('nomatch');
+  fns.forEach(function(f){ f.dataset.k = f.textContent.toLowerCase(); });
+
+  function run(){
+    var s = q.value.trim().toLowerCase();
+    var any = false;
+    fns.forEach(function(f){
+      var hit = !s || f.dataset.k.indexOf(s) !== -1;
+      f.style.display = hit ? '' : 'none';
+      if (hit) any = true;
+    });
+    mods.forEach(function(m){
+      var vis = m.querySelector('.fn:not([style*="display: none"])');
+      m.style.display = vis ? '' : 'none';
+    });
+    boards.forEach(function(b){
+      var n = b.nextElementSibling, show = false;
+      while (n && !n.classList.contains('board')) {
+        if (n.classList.contains('mod') && n.style.display !== 'none') show = true;
+        n = n.nextElementSibling;
+      }
+      b.style.display = show ? '' : 'none';
+    });
+    none.style.display = any ? 'none' : 'block';
+  }
+  q.addEventListener('input', run);
+})();
+</script>
+</body>
+</html>

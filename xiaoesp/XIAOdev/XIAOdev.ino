@@ -142,6 +142,9 @@ void loop() {
     // Debug only: comment out the Teensy/state-machine mode and force angle mode.
     // uint8_t mode = teensy.get(XIAO_REG_MODE);
     uint8_t mode = MODE_LINE_ANGLE;
+#elif DEBUG_FORCE_EVAC_TAPE_MODE
+    // Debug only: force evacuation tape classify/mask mode.
+    uint8_t mode = MODE_SILVER_ALIGN;
 #else
     uint8_t mode = teensy.get(XIAO_REG_MODE);   // default 0 if Teensy hasn't sent yet
 #endif
@@ -196,10 +199,12 @@ static void sendStreamDebugOnly() {
 
     char lcLine[384];
     char laLine[256];
+    char saLine[1024];
     char rowLine[48];
     char evtLine[96];
     int lcLen = xs_formatLineDebug(lcLine, sizeof(lcLine));
     int laLen = xs_formatLineAngleDebug(laLine, sizeof(laLine));
+    int saLen = xs_formatEvacTapeDebug(saLine, sizeof(saLine));
     int rowLen = xs_formatSensorRow(rowLine, sizeof(rowLine));
 
     if (serialMutex) xSemaphoreTake(serialMutex, portMAX_DELAY);
@@ -208,6 +213,7 @@ static void sendStreamDebugOnly() {
         Serial.write((const uint8_t*)evtLine, evtLen);
     }
     if (laLen > 0) Serial.write((const uint8_t*)laLine, laLen);
+    if (saLen > 0) Serial.write((const uint8_t*)saLine, saLen);
     if (lcLen > 0) Serial.write((const uint8_t*)lcLine, lcLen);
     if (rowLen > 0) Serial.write((const uint8_t*)rowLine, rowLen);
     if (serialMutex) xSemaphoreGive(serialMutex);
@@ -238,10 +244,12 @@ void streamTask(void* pvParameters) {
         // frame so the viewer parses it as text (never inside the pixel bytes).
         char lcLine[384];
         char laLine[256];
+        char saLine[1024];
         char rowLine[48];
         char evtLine[96];
         int  lcLen = xs_formatLineDebug(lcLine, sizeof(lcLine));
         int  laLen = xs_formatLineAngleDebug(laLine, sizeof(laLine));
+        int  saLen = xs_formatEvacTapeDebug(saLine, sizeof(saLine));
         int  rowLen = xs_formatSensorRow(rowLine, sizeof(rowLine));
 
         // Frame integrity: send payload length + a Fletcher-16 checksum so the
@@ -255,6 +263,7 @@ void streamTask(void* pvParameters) {
             Serial.write((const uint8_t*)evtLine, evtLen);
         }
         if (laLen > 0) Serial.write((const uint8_t*)laLine, laLen);
+        if (saLen > 0) Serial.write((const uint8_t*)saLine, saLen);
         if (lcLen > 0) Serial.write((const uint8_t*)lcLine, lcLen);
         if (rowLen > 0) Serial.write((const uint8_t*)rowLine, rowLen);
         Serial.write(MAGIC_IMAGE,      4);

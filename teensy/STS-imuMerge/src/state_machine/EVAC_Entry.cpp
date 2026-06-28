@@ -35,6 +35,7 @@ void onEnter() {
 
     // Fresh evac run: clear held counts.
     VictimManager::reset();
+    digitalWrite(LED_BUILTIN, LOW);
 
     Actions::Arm::attachServos();
 

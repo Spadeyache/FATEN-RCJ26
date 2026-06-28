@@ -2,17 +2,18 @@
 #include "esp_camera.h"
 #include "../drivers/yacheEncodedSerial.h"
 
-// Mode 5 — Silver Align
+// Mode 5 - Evac tape align / classify
 //
-// Used at evacuation-zone entry to make the robot enter perpendicular to the
-// silver tape. The tape reads as a band of bright/gray silver pixels (with
-// saturated LED-reflection spots). This mode fits the tape's center-row across
-// several columns and reports its tilt — when the robot is perpendicular the
-// tape is horizontal in the image (tilt ≈ 0).
+// Used at evacuation-zone entrance/exit to classify the big tape as silver or
+// black and report its angle. Silver detection starts from the same saturated
+// reflection pixels used by line-follow, then grows a connected mask through
+// nearby silver-body pixels. Black detection does the same with dark pixels.
 //
 // Sends every frame:
-//   XIAO_REG_ANGLE  = 127 + signed tape tilt in degrees (127 = level/perpendicular)
-//   XIAO_REG_FLAG   bit0 = silver tape seen (enough columns carried silver)
+//   XIAO_REG_ANGLE = 127 + signed tape tilt in degrees
+//                    (127 = level/perpendicular)
+//   XIAO_REG_FLAG  bit0 = tape seen, bit1 = silver, bit2 = black
+//   XIAO_REG_COM   confidence-ish connected pixel count, clamped to 254
 //
 // Self-contained: shares nothing with the line-follow / other modes.
 void modeSilverAlignRun(camera_fb_t* fb, YacheEncodedSerial& teensy);

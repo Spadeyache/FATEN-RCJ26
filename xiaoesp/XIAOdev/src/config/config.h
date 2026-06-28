@@ -26,6 +26,10 @@
 // Set back to 0 before normal robot runs.
 #define DEBUG_FORCE_LINE_ANGLE_MODE 0
 
+// Debug: force XIAO to run the evacuation black/silver tape mask mode.
+// Leave DEBUG_FORCE_LINE_ANGLE_MODE at 0; this is a separate override.
+#define DEBUG_FORCE_EVAC_TAPE_MODE 0
+
 
 // ── Serial baud rates ────────────────────────────────────────────────────────
 

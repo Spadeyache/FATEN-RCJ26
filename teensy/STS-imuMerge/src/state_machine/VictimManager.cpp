@@ -19,9 +19,10 @@ namespace VictimManager {
 
 namespace {
     // --- arm capacities ---------------------------------------------------------
-    constexpr uint8_t LEFT_CAP  = 2;   // LEFT arm holds two balls (LIFO)
+    constexpr uint8_t LEFT_CAP  = 2;   // LEFT arm holds two balls (LIFO via bucket)
     constexpr uint8_t RIGHT_CAP = 1;   // RIGHT arm holds one
     constexpr uint8_t EVAC_MAX_BALLS = LEFT_CAP + RIGHT_CAP;
+    constexpr uint8_t DEPLOY_MIN_LIVE = 2;   // deploy once we hold this many live balls
 
     enum Side { SIDE_LEFT, SIDE_RIGHT };
 
@@ -42,7 +43,9 @@ namespace {
     constexpr int     RIGHT_DOWN_MS = 600,  RIGHT_FWD_MS = 700;
     constexpr int     CARRY_MS      = 800;
 
-    constexpr float   CONFIRM_FRAC  = 0.6f;        // x EVAC_GRAB_STOP_HEIGHT_PX
+    constexpr uint8_t CONFIRM_SAMPLE_FRAMES = 3;
+    constexpr uint8_t CONFIRM_CLEAR_REQUIRED = 2;
+    constexpr uint32_t CONFIRM_FRAME_TIMEOUT_MS = 500;
 
     // --- held state -------------------------------------------------------------
     uint8_t _leftStack[LEFT_CAP]   = {};   // type per slot, in grab order
@@ -53,23 +56,36 @@ namespace {
     bool leftHasSpace()  { return _leftCount  < LEFT_CAP;  }
     bool rightHasSpace() { return _rightCount < RIGHT_CAP; }
 
-    // Natural arm: alive -> LEFT, dead -> RIGHT. Overflow to the other when full.
+    // ========================================================================
+    //  Arm selection + held-stack bookkeeping
+    // ========================================================================
+
+    // DEAD -> RIGHT only (at most one dead). ALIVE -> LEFT first, then RIGHT.
     bool pickArm(uint8_t type, Side& out) {
-        const Side natural = (type == K230_CLASS_ALIVE) ? SIDE_LEFT : SIDE_RIGHT;
-        if (natural == SIDE_LEFT) {
-            if (leftHasSpace())  { out = SIDE_LEFT;  return true; }
+        if (type == K230_CLASS_DEAD) {
             if (rightHasSpace()) { out = SIDE_RIGHT; return true; }
-        } else {
-            if (rightHasSpace()) { out = SIDE_RIGHT; return true; }
-            if (leftHasSpace())  { out = SIDE_LEFT;  return true; }
+            return false;
         }
-        return false;   // both full
+        if (leftHasSpace())  { out = SIDE_LEFT;  return true; }
+        if (rightHasSpace()) { out = SIDE_RIGHT; return true; }
+        return false;
     }
 
     void record(Side side, uint8_t type) {
         if (side == SIDE_LEFT) _leftStack[_leftCount++]   = type;
         else                   _rightStack[_rightCount++] = type;
     }
+
+    uint8_t countType(uint8_t type) {
+        uint8_t n = 0;
+        for (uint8_t i = 0; i < _leftCount;  i++) if (_leftStack[i]  == type) n++;
+        for (uint8_t i = 0; i < _rightCount; i++) if (_rightStack[i] == type) n++;
+        return n;
+    }
+
+    // ========================================================================
+    //  Capture motion (vision align + blocking grab choreography)
+    // ========================================================================
 
     // Drive so `cls` sits at frame-centre + offset. Proportional, tolerant of
     // brief dropouts. Returns true if aligned, false if the ball was lost.
@@ -124,27 +140,62 @@ namespace {
         if (side == SIDE_LEFT) Actions::Arm::grabLeft(true); else Actions::Arm::grabRight(true);
         Actions::Arm::liftCarry();
         Processing::K230Decode::drainDelay(CARRY_MS);
+
+        // First ball on the left goes into the bucket so the gripper is free for a
+        // second one (LIFO). The second one stays in the gripper.
+        if (side == SIDE_LEFT && _leftCount == 0) Actions::Arm::store();
+
         Actions::Drive::stop();
     }
 
-    // True if no same-type ball remains tall in view -> we really took it.
+    // True if fresh post-grab frames no longer show this type.
     bool confirmCaptured(uint8_t type) {
-        Processing::K230Decode::tick();
-        const int16_t h      = Processing::K230Decode::largestHeight(type);
-        const int16_t thresh = (int16_t)(EVAC_GRAB_STOP_HEIGHT_PX * CONFIRM_FRAC);
-        return h < thresh;   // h == -1 (none visible) counts as captured
+        uint8_t clearFrames = 0;
+        uint32_t seenPacketMs = Processing::K230Decode::lastPacketMs();
+
+        for (uint8_t i = 0; i < CONFIRM_SAMPLE_FRAMES; i++) {
+            if (!Processing::K230Decode::waitForFreshFrameAfter(seenPacketMs, CONFIRM_FRAME_TIMEOUT_MS)) {
+                Serial.println("[VictimManager] confirm timeout waiting fresh K230 frame");
+                return false;
+            }
+            seenPacketMs = Processing::K230Decode::lastPacketMs();
+
+            const int16_t h = Processing::K230Decode::largestHeight(type);
+            if (h < 0) clearFrames++;
+        }
+
+        return clearFrames >= CONFIRM_CLEAR_REQUIRED;
     }
 }
 
+// ============================================================================
+//  Public API
+// ============================================================================
+
+// Lifecycle: reset() at evac start, clearAll() after a deploy empties the arms.
 void reset()    { _leftCount = 0; _rightCount = 0; }
 void clearAll() { _leftCount = 0; _rightCount = 0; }
 
-uint8_t count() { return (uint8_t)(_leftCount + _rightCount); }
-bool    full()  { return count() >= EVAC_MAX_BALLS; }
+// Held-count queries used by the search/deploy loop.
+uint8_t count()    { return (uint8_t)(_leftCount + _rightCount); }
+uint8_t liveHeld() { return countType(K230_CLASS_ALIVE); }
+uint8_t deadHeld() { return countType(K230_CLASS_DEAD); }
+bool    full()     { return count() >= EVAC_MAX_BALLS; }
 
+// DEAD: only if we hold none yet and the right arm is free. ALIVE: any space.
+bool acceptsType(uint8_t type) {
+    if (type == K230_CLASS_DEAD)  return deadHeld() == 0 && rightHasSpace();
+    if (type == K230_CLASS_ALIVE) return leftHasSpace() || rightHasSpace();
+    return false;
+}
+
+bool readyToDeploy() { return liveHeld() >= DEPLOY_MIN_LIVE; }
+
+// Grab one ball of `type`: choose an arm -> run the capture -> self-confirm ->
+// only book it on success. Returns true iff a ball was actually captured.
 bool tryGrab(uint8_t type) {
     Side side;
-    if (!pickArm(type, side)) {
+    if (!pickArm(type, side)) { //pickArm writes the chosen arm INTO side,and returns false if both arms are full
         Serial.println("[VictimManager] no arm space");
         return false;
     }
@@ -161,6 +212,24 @@ bool tryGrab(uint8_t type) {
                   type, side == SIDE_LEFT ? "LEFT" : "RIGHT",
                   count(), _leftCount, _rightCount);
     return true;
+}
+
+// Left arm only ever holds live; the right may hold a live overflow.
+void releaseLive() {
+    Actions::Arm::releaseBothLeft();
+    _leftCount = 0;
+    if (_rightCount > 0 && _rightStack[0] == K230_CLASS_ALIVE) {
+        Actions::Arm::releaseRight();
+        _rightCount = 0;
+    }
+}
+
+// The dead ball only ever sits in the right arm.
+void releaseDead() {
+    if (_rightCount > 0 && _rightStack[0] == K230_CLASS_DEAD) {
+        Actions::Arm::releaseRight();
+        _rightCount = 0;
+    }
 }
 
 }  // namespace VictimManager

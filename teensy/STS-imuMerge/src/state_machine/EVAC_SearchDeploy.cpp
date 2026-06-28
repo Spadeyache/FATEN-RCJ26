@@ -6,6 +6,8 @@
 
 #include "../actions/Drive.h"
 #include "../actions/Arm.h"
+#include "../actions/Forward.h"
+#include "../sensors/Touch.h"
 #include "../processing/K230Decode.h"
 
 #include <Arduino.h>
@@ -26,6 +28,11 @@ namespace {
     constexpr float    EVAC_POINT_STOP_HEIGHT_PX  = 120.0f;   // corner-approach stop height
     constexpr uint8_t  EVAC_POINT_STOP_REQUIRED   = 5;        // consecutive close frames at the corner
     constexpr uint32_t EVAC_DEPLOY_TIMEOUT_MS     = 30000UL;  // give up hunting the corner after this
+    constexpr uint32_t MODEL_SWAP_MS              = 1500;     // wait for the K230 to load a model
+    constexpr int      DEPLOY_TOUCH_SPEED         = 50;       // drive-into-corner speed
+    constexpr uint32_t DEPLOY_TOUCH_TIMEOUT_MS    = 4000;     // safety if the bumper never triggers
+    constexpr int      DEPLOY_BACKOFF_SPEED       = -50;      // back off after release / wrong colour
+    constexpr int      DEPLOY_BACKOFF_MM          = 100;
     // (EVAC_GRAB_STOP_HEIGHT_PX stays in config.h — shared with VictimManager.)
 
     // --- direction / size helpers (image frame) ---
@@ -40,7 +47,8 @@ namespace {
     }
     float boxHeightPx(const K230DBox& b) { return absF((float)b.y2 - (float)b.y1); }
 
-    // Nearest-to-centre box of a victim class (DEAD or ALIVE).
+    // Nearest-to-centre victim we still WANT (manager decides via acceptsType:
+    // skips dead once one is held / the right arm is full).
     const K230DBox* closestCenterVictim() {
         const K230DBox* boxes = Processing::K230Decode::boxes();
         const uint8_t   n     = Processing::K230Decode::boxCount();
@@ -48,6 +56,7 @@ namespace {
         float bestAbs = 999.0f;
         for (uint8_t i = 0; i < n; i++) {
             if (!Processing::K230Decode::isVictimClass(boxes[i].cls)) continue;
+            if (!VictimManager::acceptsType(boxes[i].cls)) continue;
             const float a = absF(directionFor(boxes[i]));
             if (best == nullptr || a < bestAbs) { best = &boxes[i]; bestAbs = a; }
         }
@@ -144,61 +153,81 @@ namespace {
         return (green >= red) ? K230_POINT_GREEN : K230_POINT_RED;
     }
 
-    // --- deploy: drive to a corner, classify its colour, release. Blocking. ---
-    void runDeploy() {
-        Serial.println("[deploy] start - approach corner");
-
-        // Phase A: approach the corner using the victims model's POINT class.
+    // Spin + drive to the nearest POINT (victims model) until close. true if reached.
+    bool approachPoint() {
         const uint32_t start = millis();
-        uint8_t stopHits = 0;
-        bool reached = false;
+        uint8_t hits = 0;
         while (millis() - start < EVAC_DEPLOY_TIMEOUT_MS) {
             Processing::K230Decode::drainDelay(50);
             const K230DBox* corner = closestCenterPoint();
-            if (corner == nullptr) {
-                stopHits = 0;
-                Actions::Drive::spinDecay(60, 400);
-                continue;
-            }
+            if (corner == nullptr) { hits = 0; Actions::Drive::spinDecay(60, 400); continue; }
             if (boxHeightPx(*corner) >= EVAC_POINT_STOP_HEIGHT_PX) {
-                if (++stopHits >= EVAC_POINT_STOP_REQUIRED) {   // 5 consecutive close frames
-                    Actions::Drive::stop();
-                    reached = true;
-                    break;
-                }
+                if (++hits >= EVAC_POINT_STOP_REQUIRED) { Actions::Drive::stop(); return true; }
                 Actions::Drive::stop();
             } else {
-                stopHits = 0;
+                hits = 0;
                 driveTowardDirection(directionFor(*corner));
             }
         }
+        return false;
+    }
 
-        if (!reached) {
-            Serial.println("[deploy] corner not reached - releasing anyway");
-            Actions::Drive::stop();
-            Actions::Arm::releaseAll();
-            return;
-        }
-
-        // Phase B: swap to the points model and classify the corner colour.
-        Serial.println("[deploy] reached - loading points model");
+    // Swap to the points model, classify the corner colour, swap back to victims.
+    int readCornerColor() {
         Processing::K230Decode::setModel(Processing::K230Decode::MODEL_POINTS);
-        Processing::K230Decode::drainDelay(1500);   // let the K230 load the model
-
+        Processing::K230Decode::drainDelay(MODEL_SWAP_MS);
         const int color = classifyPointColor();
-        Serial.printf("[deploy] corner colour = %s\n",
-                      color == K230_POINT_GREEN ? "GREEN(live)" :
-                      color == K230_POINT_RED   ? "RED(dead)"   : "UNKNOWN");
-
-        // Phase C: switch back to the victims model for the next batch.
         Processing::K230Decode::setModel(Processing::K230Decode::MODEL_VICTIMS);
-        Processing::K230Decode::drainDelay(1500);
+        Processing::K230Decode::drainDelay(MODEL_SWAP_MS);
+        return color;
+    }
 
-        // Phase D: release. Phase-1 drops everything; colour-routed + LIFO-ordered
-        // release (GREEN->alive, RED->dead) is the next step — `color` is known now.
+    // Drive forward until the front bumper hits (safety timeout).
+    void driveToTouch() {
+        Actions::Drive::motor(DEPLOY_TOUCH_SPEED, DEPLOY_TOUCH_SPEED);
+        const uint32_t t0 = millis();
+        while (!Sensors::Touch::front() && millis() - t0 < DEPLOY_TOUCH_TIMEOUT_MS) {
+            Sensors::Touch::tick();
+            delay(5);
+        }
         Actions::Drive::stop();
-        Actions::Arm::releaseAll();
-        Serial.println("[deploy] released");
+    }
+
+    // Find a corner of `targetColor` and drive into it. Wrong-colour corners are
+    // backed away from and the search continues. Returns true once parked at one.
+    bool driveToColorCorner(int targetColor) {
+        const uint32_t start = millis();
+        while (millis() - start < EVAC_DEPLOY_TIMEOUT_MS) {
+            if (!approachPoint()) return false;
+            const int color = readCornerColor();
+            Serial.printf("[deploy] corner=%s want=%s\n",
+                          color == K230_POINT_GREEN ? "GREEN" : color == K230_POINT_RED ? "RED" : "?",
+                          targetColor == K230_POINT_GREEN ? "GREEN" : "RED");
+            if (color == targetColor) {
+                driveToTouch();
+                return true;
+            }
+            // wrong corner -> back off + spin, look for another one.
+            Actions::Forward::forward(DEPLOY_BACKOFF_SPEED, DEPLOY_BACKOFF_MM);
+            Actions::Drive::spinDecay(60, 500);
+        }
+        return false;
+    }
+
+    // Deposit live balls at the GREEN corner, then back off.
+    void deployGreen() {
+        Serial.println("[deploy] GREEN (live)");
+        driveToColorCorner(K230_POINT_GREEN);
+        VictimManager::releaseLive();
+        Actions::Forward::forward(DEPLOY_BACKOFF_SPEED, DEPLOY_BACKOFF_MM);
+    }
+
+    // Deposit the dead ball at the RED corner, then back off.
+    void deployRed() {
+        Serial.println("[deploy] RED (dead)");
+        driveToColorCorner(K230_POINT_RED);
+        VictimManager::releaseDead();
+        Actions::Forward::forward(DEPLOY_BACKOFF_SPEED, DEPLOY_BACKOFF_MM);
     }
 }
 
@@ -214,32 +243,38 @@ void update() {
 
     // Collect-and-deploy loop for the 2-minute window.
     while (millis() - start < EVAC_SEARCH_TIMEOUT_MS) {
-        // Full -> deploy this batch, then keep collecting.
-        if (VictimManager::full()) {
-            runDeploy();
-            VictimManager::clearAll();
+        // >= 2 live held -> drop them at the green corner, then keep collecting.
+        // (A dead ball, if held, is carried until the timer triggers a red deploy.)
+        if (VictimManager::readyToDeploy()) {
+            Actions::Drive::stop();
+            digitalWrite(LED_BUILTIN, HIGH);
+            Processing::K230Decode::drainDelay(1000);    
+            deployGreen();
             continue;
         }
 
         Processing::K230Decode::drainDelay(50);   // always decide on a fresh frame
 
-
-//TODO :: approachVictim()  tryGrab() with grabManneger    runDeploy()
-        if (Processing::K230Decode::checkVictim()) {
+        // closestCenterVictim is already filtered to types we still want.
+        if (closestCenterVictim() != nullptr) {
             const int type = approachVictim();   // run and stop at front of victim.
             if (type >= 0) {
                 VictimManager::tryGrab((uint8_t)type);   // grab + self-confirm
+                Actions::Drive::stop();
+
+                const uint32_t seenPacketMs = Processing::K230Decode::lastPacketMs();
+                Processing::K230Decode::waitForFreshFrameAfter(seenPacketMs, 700);
+            
             }
         } else {
-            Actions::Drive::spinDecay(60, 400);          // sweep for a ball
+            // Actions::Drive::spinDecay(60, 400);          // sweep for a ball
+            Actions::Drive::motor(-50,50);
         }
     }
 
-    // Timer expired: deploy whatever is still held, then leave.
-    if (VictimManager::count() > 0) {
-        runDeploy();
-        VictimManager::clearAll();
-    }
+    // Timer expired: drop whatever we still hold (live->green, dead->red), leave.
+    if (VictimManager::liveHeld() > 0) deployGreen();
+    if (VictimManager::deadHeld() > 0) deployRed();
 
     Actions::Drive::stop();
     StateMachine::transitionTo(StateMachine::EVAC_EXIT);

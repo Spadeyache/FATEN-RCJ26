@@ -27,11 +27,20 @@ namespace Arm {
 
 void init();
 
-// Grippers (silver/alive = LEFT, dead/black = RIGHT).
-void grab(bool closed);                              // both grippers
+// Grippers.
 void grabLeft(bool closed, bool blocking = true);
 void grabRight(bool closed, bool blocking = true);
-void releaseAll();                                   // open both (drop held balls)
+
+// Left arm holds 2 via a bucket: store() moves the gripped ball into the bucket
+// so the gripper is free to grab a second one (LIFO).
+void store();
+
+// Drops.
+void releaseLeft();        // the ball in the left gripper
+void releaseStore();       // the ball in the left bucket
+void releaseRight();       // the ball in the right gripper
+void releaseBothLeft();    // left gripper ball, then the bucket ball
+void releaseAll();         // blocking: every held ball
 
 // Lift (KRS, PWM). lift() sets a raw pulse; the named helpers are the poses.
 void lift(int us);

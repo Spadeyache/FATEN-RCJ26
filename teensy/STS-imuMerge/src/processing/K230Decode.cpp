@@ -124,6 +124,19 @@ void drainDelay(uint32_t ms) {
     } while (millis() - t0 < ms);
 }
 
+bool waitForFreshFrameAfter(uint32_t sincePacketMs, uint32_t timeoutMs) {
+    const uint32_t t0 = millis();
+    do {
+        tick();
+        if (_k230d.lastPacketMs() != 0 &&
+            _k230d.lastPacketMs() != sincePacketMs) {
+            return true;
+        }
+        delay(2);
+    } while (millis() - t0 < timeoutMs);
+    return false;
+}
+
 const Detection* detections()   { return _detections; }
 uint8_t          count()        { return _k230d.boxCount(); }
 const Box*       boxes()        { return _k230d.boxCount() ? &_k230d.box(0) : nullptr; }

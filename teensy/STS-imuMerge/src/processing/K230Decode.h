@@ -114,6 +114,10 @@ void setModel(Model m);
 // in any blocking sequence that runs while the K230 is streaming.
 void drainDelay(uint32_t ms);
 
+// Drain RX until a complete frame newer than `sincePacketMs` arrives.
+// Returns false on timeout, leaving the most recent decoded frame in place.
+bool waitForFreshFrameAfter(uint32_t sincePacketMs, uint32_t timeoutMs);
+
 void setRunning(bool run);        // true -> send DETECT command, false -> IDLE
 bool isRunning();
 
