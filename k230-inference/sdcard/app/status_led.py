@@ -31,6 +31,10 @@ def set_status(status, force=False):
 
     if status == "found":
         color = config.STATUS_COLOR_FOUND
+    elif status == "boot":
+        color = config.STATUS_COLOR_BOOT
+    elif status == "run":
+        color = config.STATUS_COLOR_RUN
     elif status == "evac":
         color = config.STATUS_COLOR_EVAC
     else:

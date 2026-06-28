@@ -123,21 +123,11 @@ enum XiaoMode : uint8_t {
 //  State machine timings
 // =============================================================================
 
-// EVAC search victim sweep
-#define EVAC_GRAB_BASE_SPEED        45.0f
-#define EVAC_GRAB_TURN_GAIN         35.0f
-#define EVAC_GRAB_AVG_FRAMES          3
-#define EVAC_GRAB_LOST_HOLD_FRAMES    5
+// EVAC shared tuning — used by BOTH EVAC_SearchDeploy (approach stop) AND
+// VictimManager (grab self-confirm), so it stays here.
 #define EVAC_GRAB_STOP_HEIGHT_PX     145.0f
-#define EVAC_GRAB_STOP_WINDOW          4
-#define EVAC_GRAB_STOP_REQUIRED        3
-
-// EVAC collection / deposit policy
-#define EVAC_MAX_BALLS                 3          // stop collecting at this many
-#define EVAC_SEARCH_TIMEOUT_MS         120000UL   // 2-min collection window (from search start)
-#define EVAC_POINT_STOP_HEIGHT_PX      120.0f     // deploy: stop approaching the corner at this box height
-#define EVAC_POINT_STOP_REQUIRED        5         // deploy: consecutive close frames before classifying colour
-#define EVAC_DEPLOY_TIMEOUT_MS         30000UL    // safety: give up hunting the corner after this
+// Other EVAC tuning is now file-local: EVAC_SearchDeploy-only constants live in
+// EVAC_SearchDeploy.cpp; EVAC_MAX_BALLS lives in VictimManager.cpp.
 
 // =============================================================================
 //  CommandFilter — moving-average vote thresholds (votes within the last
@@ -147,8 +137,8 @@ enum XiaoMode : uint8_t {
 #define FILTER_THRESHOLD_RED      5   // red line
 #define FILTER_THRESHOLD_SILVER   4   // silver (evac entry)
 #define FILTER_THRESHOLD_LINELOST  3   // sustained line loss → gap
-#define FILTER_THRESHOLD_BLACK_INTERSECT 4  // saturated black row before/through an intersection
-// #define FILTER_THRESHOLD_GREEN    4   // green left/right (matches main); u-turn = both sides build up
+#define FILTER_THRESHOLD_BLACK_INTERSECT 8  // saturated black row before/through an intersection
+#define FILTER_THRESHOLD_GREEN    8   // green left/right (matches main); u-turn = both sides build up
 
 // After firing any green turn (u-turn / left / right), ignore all green for this
 // long so the same intersection isn't re-read on the way out.

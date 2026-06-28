@@ -2,13 +2,9 @@
 #
 # main.py -- Teensy-controlled YOLOv8 detection loop.
 #
-#   IDLE  (run_state=False)  -> no inference, no UART traffic, live preview only
-#   RUN   (run_state=True)   -> camera.apply_config re-applied + full inference,
-#                               ALL surviving boxes streamed to Teensy
-#
-# Transitions are driven by single-byte commands from the Teensy via
-# robot_io.read_command (0x00 idle, 0x01 run). Camera config is re-applied
-# on every IDLE -> RUN edge so a calibration change is picked up next run.
+# Boots into RUN, runs inference and streams boxes to the Teensy. The Teensy
+# drives idle/run state and can request a model swap. Status LED shows the
+# current phase (boot / running / detection).
 
 import gc
 import sys
@@ -32,11 +28,13 @@ import status_led
 
 
 def main():
-    import nncase_runtime as nn
-
+    # LED alive immediately (cyan) so the slow nncase import + 3.5MB kmodel
+    # load doesn't look like a hung board. Stays cyan until the loop runs.
     print("=== main.py === Teensy-controlled YOLO")
     status_led.init()
-    status_led.set_status("rest", force=True)
+    status_led.set_status("boot", force=True)
+
+    import nncase_runtime as nn
 
     # Camera + display + media up. Config is re-applied on every RUN edge.
     sensor = Sensor()
@@ -48,9 +46,9 @@ def main():
     MediaManager.init()
     sensor.run()
     time.sleep_ms(config.SETTLE_MS)
-    status_led.set_status("rest", force=True)
 
     # Model + ai2d. Starts on the victims model; Teensy can swap to points.
+    # Still cyan here -- this is the slow part. The loop switches to white/green.
     det = detmod.Detector(sensor)
     current_model = "victims"
 
@@ -74,14 +72,14 @@ def main():
                 cfg_path = (config.POINTS_DEPLOY_CONFIG if model_req == "points"
                             else config.DEPLOY_CONFIG_PATH)
                 print("-> swap model:", current_model, "->", model_req)
-                status_led.set_status("rest", force=True)
+                status_led.set_status("boot", force=True)   # cyan: loading kmodel
                 try:
                     det.release()
                     det = detmod.Detector(sensor, cfg_path)
                     current_model = model_req
                 except Exception as e:
                     print("model swap FAILED:", e)
-                status_led.set_status("evac", force=True)
+                status_led.set_status("run", force=True)
 
             # IDLE -> RUN edge: re-apply camera config.
             if run_state and not prev_state:
@@ -94,7 +92,7 @@ def main():
                 camera.apply_config(sensor)
                 sensor.run()
                 time.sleep_ms(config.SETTLE_MS)
-                status_led.set_status("evac", force=True)
+                status_led.set_status("run", force=True)
             elif not run_state and prev_state:
                 print("-> IDLE")
                 status_led.set_status("rest", force=True)
@@ -115,7 +113,7 @@ def main():
                 print("saved ->", saved)
 
             boxes = det.infer(img)               # list of [cls, score, x1,y1,x2,y2]
-            status_led.set_status("found" if len(boxes) > 0 else "evac")
+            status_led.set_status("found" if len(boxes) > 0 else "run")
             robot_io.send_boxes(u, boxes)
 
             # Draw same boxes on preview.

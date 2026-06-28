@@ -82,10 +82,10 @@ void loop() {
 
     // Actions::Arm::attachServos();
     // Actions::Arm::captureAlive();
-    Serial.println(Sensors::Touch::front());
-    delay(50);
+    // Serial.println(Sensors::Touch::front());
+    // delay(50);
 
-    return;
+    // return;
 
     // 4. Run the active state.
     StateMachine::tick();

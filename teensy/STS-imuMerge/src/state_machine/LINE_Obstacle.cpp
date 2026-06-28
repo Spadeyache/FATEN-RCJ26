@@ -89,7 +89,7 @@ namespace {
     void finishToLineFollow() {
         Actions::Drive::stop();
         Processing::XiaoDecode::setMode(XIAO_MODE_LINE);
-        delay(200);
+        pumpFor(200);
         Processing::XiaoDecode::clearFilter();
         StateMachine::transitionTo(StateMachine::LINE_FOLLOW);
     }
@@ -103,7 +103,7 @@ void onEnter() {
 
 void update() {
     // 50 ms debounce before committing to the avoidance manoeuvre.
-    delay(50);
+    pumpFor(50);
     Sensors::Touch::tick();
 
     if (!Sensors::Touch::front()) {
@@ -114,12 +114,12 @@ void update() {
     }
 
     // ── 1. Back off, turn out, nudge forward ──────────────────────────────────
-    Actions::Forward::forward(-70, 50);
+    Actions::Forward::forward(-70, 50, /*useIMU=*/false, /*pumpComms=*/true);
     Actions::Turn::turn(-80.0f);
 
     Actions::Drive::stop();
     Processing::XiaoDecode::setMode(XIAO_MODE_OBSTACLE);
-    delay(200);
+    pumpFor(200);
     Processing::XiaoDecode::clearFilter();
 
     // ── 2. Go around the obstacle until the arc sees the line ─────────────────
@@ -153,7 +153,7 @@ void update() {
     }
     Actions::Drive::stop();
     tone(BUZZER_PIN, 8000, 1000);
-    delay(2500);
+    pumpFor(2500);
 
     // ── 3b. Settle and read the line tilt angle ───────────────────────────────
     pumpFor(OBS_SETTLE_MS);
@@ -164,9 +164,9 @@ void update() {
 #endif
 
     // ── 3c. Reposition: back up, pre-spin, drive forward ──────────────────────
-    Actions::Forward::forward(-70, OBS_BACK_MM);
+    Actions::Forward::forward(-70, OBS_BACK_MM, /*useIMU=*/false, /*pumpComms=*/true);
     Actions::Turn::turn(OBS_PRESPIN_DEG * OBS_SPIN_DIR, OBS_SPIN_SPEED);
-    Actions::Forward::forward(70, OBS_FWD_MM);
+    Actions::Forward::forward(70, OBS_FWD_MM, /*useIMU=*/false, /*pumpComms=*/true);
 
     // ── 3d. Search spin for the line ──────────────────────────────────────────
     if (spinSearchUntilFlag(OBS_SPIN_DIR, OBS_SEARCH_SPIN_DEG, OBS_SPIN_SPEED)) {

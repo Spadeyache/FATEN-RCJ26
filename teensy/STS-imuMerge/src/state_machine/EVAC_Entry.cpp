@@ -38,7 +38,7 @@ void onEnter() {
 
     Actions::Arm::attachServos();
 
-    Actions::Forward::forward(70, 170);
+    Actions::Forward::forward(70, 170, /*useIMU=*/false, /*pumpComms=*/true);
 
     Actions::Drive::stop();
 }

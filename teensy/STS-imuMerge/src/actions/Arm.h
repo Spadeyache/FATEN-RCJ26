@@ -18,31 +18,27 @@
 //                 KRS_PWM_MIN_US..KRS_PWM_MAX_US). Blocking ~800 ms, then holds.
 // =============================================================================
 
+// =============================================================================
+//  Pure hardware primitives (blocking servo moves). NO vision, NO grab logic —
+//  the capture choreography lives in VictimManager, which calls these.
+// =============================================================================
 namespace Actions {
 namespace Arm {
 
 void init();
 
-void grab(bool closed);
-void grabLeft(bool closed, bool blocking = true);    // silver/alive arm (offset +120)
-void grabRight(bool closed, bool blocking = true);   // black/dead arm  (offset -120)
-void lift(int us);   // KRS PWM pulse width (microseconds)
+// Grippers (silver/alive = LEFT, dead/black = RIGHT).
+void grab(bool closed);                              // both grippers
+void grabLeft(bool closed, bool blocking = true);
+void grabRight(bool closed, bool blocking = true);
+void releaseAll();                                   // open both (drop held balls)
 
-// Evacuation-zone victim handling.
-enum Side : uint8_t { LEFT, RIGHT };
+// Lift (KRS, PWM). lift() sets a raw pulse; the named helpers are the poses.
+void lift(int us);
+void liftDown();      // lower to grab pose
+void liftCarry();     // raise to carry pose
+void liftPark();      // parked pose
 
-//   grabArm(side, alignCls): vision-align the given ball class to that arm's
-//     offset, then run the grab motion with that arm. Blocking. The arm is
-//     chosen by the caller (VictimManager) — type only drives the alignment.
-//   captureAlive()/captureDead(): convenience wrappers (natural arm).
-//   releaseAll(): open everything to drop all held balls at the corner.
-void grabArm(Side side, uint8_t alignCls);
-void captureDead();
-void captureAlive();
-void releaseAll();
-
-// Manual servo attach/detach — used when re-engaging the gripper inside
-// long sequences after init() detached it.
 void attachServos();
 void detachServos();
 

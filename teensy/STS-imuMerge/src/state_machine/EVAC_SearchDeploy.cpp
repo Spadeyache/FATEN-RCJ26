@@ -13,6 +13,21 @@
 namespace EVAC_SearchDeploy {
 
 namespace {
+    // --- EVAC_SearchDeploy-only tuning (moved out of config.h) -------------------
+    // Approach (victim chase):
+    constexpr float    EVAC_GRAB_BASE_SPEED       = 45.0f;
+    constexpr float    EVAC_GRAB_TURN_GAIN        = 35.0f;
+    constexpr uint8_t  EVAC_GRAB_AVG_FRAMES       = 3;        // direction moving-average window
+    constexpr uint8_t  EVAC_GRAB_LOST_HOLD_FRAMES = 5;        // coast this many frames when target drops
+    constexpr uint8_t  EVAC_GRAB_STOP_WINDOW      = 5;        // over-height vote window
+    constexpr uint8_t  EVAC_GRAB_STOP_REQUIRED    = 3;        // ...hits needed (3 of 5)
+    // Collection / deploy policy:
+    constexpr uint32_t EVAC_SEARCH_TIMEOUT_MS     = 120000UL; // 2-min collection window
+    constexpr float    EVAC_POINT_STOP_HEIGHT_PX  = 120.0f;   // corner-approach stop height
+    constexpr uint8_t  EVAC_POINT_STOP_REQUIRED   = 5;        // consecutive close frames at the corner
+    constexpr uint32_t EVAC_DEPLOY_TIMEOUT_MS     = 30000UL;  // give up hunting the corner after this
+    // (EVAC_GRAB_STOP_HEIGHT_PX stays in config.h — shared with VictimManager.)
+
     // --- direction / size helpers (image frame) ---
     float absF(float v) { return v < 0.0f ? -v : v; }
 
@@ -61,9 +76,20 @@ namespace {
     // --- approach: drive at the nearest victim until close. ---
     // Returns the reached victim's class, or -1 if the victim was lost.
     int approachVictim() {
-        uint8_t lost      = 0;
-        uint8_t stopHits  = 0;   // consecutive close-enough frames
-        float   lastDir   = 0.0f;
+        uint8_t lost = 0;
+
+        // Direction moving average (EVAC_GRAB_AVG_FRAMES) — smooths steering and
+        // gives a sane value to coast on when a frame drops the target.
+        float   dirWin[EVAC_GRAB_AVG_FRAMES] = {};
+        uint8_t dirIdx = 0;
+        uint8_t dirCnt = 0;
+        float   smoothedDir = 0.0f;
+
+        // Windowed stop vote: reach when EVAC_GRAB_STOP_REQUIRED of the last
+        // EVAC_GRAB_STOP_WINDOW frames are over-height (smooths a flickery frame).
+        bool    stopWin[EVAC_GRAB_STOP_WINDOW] = {};
+        uint8_t stopIdx = 0;
+        uint8_t stopCnt = 0;
 
         while (true) {
             Processing::K230Decode::tick();
@@ -74,23 +100,32 @@ namespace {
                     Actions::Drive::stop();
                     return -1;
                 }
-                driveTowardDirection(lastDir);   // coast on last direction
+                driveTowardDirection(smoothedDir);   // coast on last smoothed dir
                 delay(20);
                 continue;
             }
             lost = 0;
 
-            if (boxHeightPx(*t) >= EVAC_GRAB_STOP_HEIGHT_PX) {
-                if (++stopHits >= EVAC_GRAB_STOP_REQUIRED) {
-                    Actions::Drive::stop();
-                    return (int)t->cls;          // reached
-                }
-            } else {
-                stopHits = 0;
+            // stop vote: push this frame's over-height result into the ring.
+            stopWin[stopIdx] = (boxHeightPx(*t) >= EVAC_GRAB_STOP_HEIGHT_PX);
+            stopIdx = (stopIdx + 1) % EVAC_GRAB_STOP_WINDOW;
+            if (stopCnt < EVAC_GRAB_STOP_WINDOW) stopCnt++;
+            uint8_t hits = 0;
+            for (uint8_t i = 0; i < stopCnt; i++) if (stopWin[i]) hits++;
+            if (hits >= EVAC_GRAB_STOP_REQUIRED) {
+                Actions::Drive::stop();
+                return (int)t->cls;              // reached
             }
 
-            lastDir = directionFor(*t);
-            driveTowardDirection(lastDir);
+            // direction moving average -> steer on the smoothed value.
+            dirWin[dirIdx] = directionFor(*t);
+            dirIdx = (dirIdx + 1) % EVAC_GRAB_AVG_FRAMES;
+            if (dirCnt < EVAC_GRAB_AVG_FRAMES) dirCnt++;
+            float sum = 0.0f;
+            for (uint8_t i = 0; i < dirCnt; i++) sum += dirWin[i];
+            smoothedDir = sum / (float)dirCnt;
+
+            driveTowardDirection(smoothedDir);
             delay(20);
         }
     }
@@ -188,8 +223,10 @@ void update() {
 
         Processing::K230Decode::drainDelay(50);   // always decide on a fresh frame
 
+
+//TODO :: approachVictim()  tryGrab() with grabManneger    runDeploy()
         if (Processing::K230Decode::checkVictim()) {
-            const int type = approachVictim();
+            const int type = approachVictim();   // run and stop at front of victim.
             if (type >= 0) {
                 VictimManager::tryGrab((uint8_t)type);   // grab + self-confirm
             }

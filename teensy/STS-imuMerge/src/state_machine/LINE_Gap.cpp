@@ -67,6 +67,14 @@ namespace {
         }
     }
 
+    void pumpXiaoFor(uint16_t ms) {
+        const unsigned long start = millis();
+        while (millis() - start < ms) {
+            delay(5);
+            updateXiaoNow();
+        }
+    }
+
     void driveForwardUntilBottomLostThenFound() {
         uint8_t lowFrames = 0;
         updateXiaoNow();
@@ -79,7 +87,7 @@ namespace {
         }
 
         // driveForMs(GAP_FORWARD_SPEED, GAP_FORWARD_SPEED, GAP_AFTER_LOST_BLIND_MS);
-        delay(150);
+        pumpXiaoFor(150);
 
         uint8_t highFrames = 0;
         while (highFrames < GAP_BOTTOM_FOUND_FRAMES) {
@@ -169,7 +177,7 @@ void update() {
             updateXiaoNow();
         }
         // driveForMs(GAP_BACK_SPEED, GAP_BACK_SPEED, GAP_BACK_SETTLE_MS);
-        delay(375);//stop reverting to the line above
+        pumpXiaoFor(375);//stop reverting to the line above
         
         updateXiaoNow();
         if (firstGapPass && Processing::XiaoDecode::gapBothRowsFlag()) {
@@ -186,7 +194,7 @@ void update() {
         
         Serial.println(savedAngle);
         Actions::Drive::stop();
-        delay(1500);
+        pumpXiaoFor(1500);
 
 
         Processing::XiaoDecode::clearFilter();

@@ -18,11 +18,20 @@ namespace {
     constexpr uint8_t  SA_SETTLE_FRAMES = 5;      // consecutive aligned frames to finish
     constexpr uint32_t SA_TIMEOUT_MS    = 5000;   // give up if it can't converge
     constexpr float    SA_DIR           = 1.0f;   // flip to -1.0f to mirror spin direction
+
+    void pumpXiaoFor(uint32_t ms) {
+        const uint32_t start = millis();
+        while (millis() - start < ms) {
+            Sensors::XIAO_link::tick();
+            Processing::XiaoDecode::tick(true);
+            delay(2);
+        }
+    }
 }
 
 bool align() {
     Processing::XiaoDecode::setMode(XIAO_MODE_SILVER_ALIGN);
-    delay(150);
+    pumpXiaoFor(150);
     Processing::XiaoDecode::clearFilter();
 
     const uint32_t start = millis();

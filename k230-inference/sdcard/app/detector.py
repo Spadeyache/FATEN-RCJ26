@@ -8,6 +8,7 @@
 # Reads /data/models/deploy_config.json and optional labels.txt to find the
 # kmodel, preprocessing mode, thresholds, and class list.
 
+import gc
 import os
 import time
 import ujson
@@ -126,9 +127,24 @@ class Detector:
 
     # ------------------------------------------------------------------
     def release(self):
-        if hasattr(self._kpu, "deinit"):
-            try: self._kpu.deinit()
+        # Stop the KPU, then drop ai2d + tensors so the nncase pool is actually
+        # freed before the next model loads (otherwise B stacks on A -> OOM).
+        kpu = getattr(self, "_kpu", None)
+        if kpu is not None and hasattr(kpu, "deinit"):
+            try: kpu.deinit()
             except Exception: pass
+        self._kpu = None
+        self._ai2d = None
+        self._ai2d_builder = None
+        self._ai2d_out = None
+        try:
+            gc.collect()
+        except Exception:
+            pass
+        try:
+            nn.shrink_memory_pool()
+        except Exception:
+            pass
 
     # ------------------------------------------------------------------
     @staticmethod

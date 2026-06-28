@@ -1,8 +1,6 @@
 #include "Arm.h"
 #include "../../config.h"
 #include "../../pins_teensy.h"
-#include "Drive.h"
-#include "../processing/K230Decode.h"
 
 #include <Arduino.h>
 #include <Servo.h>
@@ -94,76 +92,14 @@ void grab(bool closed) {
     }
 }
 
-
-
-
-//
-
-// Align `alignCls` to the given arm's offset, then grab with that arm. Blocking.
-// Offset & grab timing are per physical side; the ball type only drives which
-// detections we align to, so either arm can grab either type (overflow case).
-//   LEFT  arm: offset +120, grab timing 800/1000
-//   RIGHT arm: offset -120, grab timing 600/700
-void grabArm(Side side, uint8_t alignCls) {
-    const int offset = (side == LEFT) ? +120 : -120;
-    Serial.printf("[grabArm] side=%s cls=%u\n", side == LEFT ? "LEFT" : "RIGHT", alignCls);
-
-    Processing::K230Decode::tick();
-    int16_t centerX = Processing::K230Decode::largestCenterX(alignCls);
-    int16_t delta = (centerX >= 0) ? (centerX - (int16_t)K230_FRAME_CENTER_X + offset) : 0;
-
-    // Discretised proportional alignment, tolerant of brief detection dropouts.
-    while (centerX >= 0 && abs(delta) > 25) {
-        int absD = abs(delta);
-        int speed  = constrain(map(absD, 8, 320, 30, 50), 30, 50);
-        int moveMs = constrain(20 + (int)((130L * absD * absD) / 102400L), 20, 150);
-        int dir = (delta < 0) ? -1 : 1;
-
-        Drive::motor(dir * speed, -dir * speed);
-        Processing::K230Decode::drainDelay(moveMs);
-        Drive::stop();
-        Processing::K230Decode::drainDelay(100);
-
-        centerX = Processing::K230Decode::largestCenterX(alignCls);
-        for (uint8_t r = 0; r < 4 && centerX < 0; r++) {
-            Processing::K230Decode::drainDelay(100);
-            centerX = Processing::K230Decode::largestCenterX(alignCls);
-        }
-        if (centerX < 0) break;
-        delta = centerX - (int16_t)K230_FRAME_CENTER_X + offset;
-    }
-    if (centerX < 0) return;   // lost during align; the caller's confirm won't count it
-
-    Drive::stop();
-
-    const int tDown = (side == LEFT) ? 800  : 600;
-    const int tFwd  = (side == LEFT) ? 1000 : 700;
-
-    if (side == LEFT) grabLeft(false); else grabRight(false);
-    Drive::motor(-15,-15);
-    lift(KRS_GRAB_US);
-    Processing::K230Decode::drainDelay(tDown);
-    Drive::motor(35,35);
-    Processing::K230Decode::drainDelay(tFwd);
-    if (side == LEFT) grabLeft(true); else grabRight(true);
-    lift(KRS_AIR_US);
-    Processing::K230Decode::drainDelay(800);
-    Drive::stop();
-}
-
-// Natural-arm convenience wrappers (silver/alive -> LEFT, dead/black -> RIGHT).
-void captureAlive() { grabArm(LEFT,  K230_CLASS_ALIVE); }
-void captureDead()  { grabArm(RIGHT, K230_CLASS_DEAD);  }
-
 void releaseAll() {
     attachServos();
     grab(false);  delay(300);       // open everything to drop held balls
     detachServos();
 }
 
-// Move the lift to a PWM pulse width (microseconds) and HOLD it there.
-// Blocking ~800 ms settle; the Servo library keeps refreshing the pulse after,
-// so the lift holds its load (PWM mode has no "free" — detach to release).
+// Move the lift to a raw PWM pulse width (microseconds) and HOLD it there.
+// PWM mode has no "free" — the Servo library keeps refreshing the pulse.
 void lift(int us) {
     us = constrain(us, 600, 2400);
     _krs.writeMicroseconds(us);
@@ -171,6 +107,11 @@ void lift(int us) {
     Serial.print("KRS PWM lift -> "); Serial.println(us);
 #endif
 }
+
+// Named lift poses (the only lift values callers need to know about).
+void liftDown()  { lift(KRS_GRAB_US); }
+void liftCarry() { lift(KRS_AIR_US);  }
+void liftPark()  { lift(KRS_PARK_US); }
 
 }  // namespace Arm
 }  // namespace Actions

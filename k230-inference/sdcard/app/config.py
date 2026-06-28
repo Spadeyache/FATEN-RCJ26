@@ -74,7 +74,9 @@ UART_RX_PIN        = 12
 STATUS_LED_ENABLED = True
 NEOPIXEL_PIN       = 35
 NEOPIXEL_PIXELS    = 1
+STATUS_COLOR_BOOT  = (255, 255, 255) # white: booting / loading kmodel
 STATUS_COLOR_REST  = (255, 255, 255) # white: rest / idle
+STATUS_COLOR_RUN   = (0, 255, 255)   # cyan: running, no detection
 STATUS_COLOR_EVAC  = (0, 0, 255)     # blue: evac mode, no victim
 STATUS_COLOR_FOUND = (0, 255, 0)     # green: at least one victim
 

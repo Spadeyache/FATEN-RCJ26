@@ -1,32 +1,25 @@
-/data/models/ -- kmodel + matching deploy config + optional labels
+/data/models/  â€” kmodel + matching deploy_config
 
-Put these files here:
+Put these two files here:
 
-    <model>.kmodel        the YOLOv8 anchor-free kmodel
+    victim.kmodel         the YOLOv8 anchor-free kmodel (winning variant from
+                          k230-train/exports/...)
 
-    deploy_config.json    matching deploy config. Set "kmodel_path" to the
-                          kmodel filename (no leading slash) so the loader
+    deploy_config.json    matching deploy config. Set "kmodel_path" to just
+                          "victim.kmodel" (no leading slash) so the loader
                           resolves it relative to this directory.
 
-    labels.txt            optional. One label per line. If present, it overrides
-                          deploy_config.json categories.
-
-Minimum deploy_config.json:
+Minimum deploy_config.json for a 2-class anchor-free model:
 
     {
-      "kmodel_path":      "best.kmodel",
+      "kmodel_path":      "victim.kmodel",
       "model_type":       "AnchorFreeDet",
       "img_size":         [640, 480],
-      "num_classes":      3,
-      "categories":       ["Dead", "Live", "Point"],
-      "confidence_threshold": 0.3,
-      "nms_threshold":    0.45,
-      "preprocess": {
-        "resize":         "direct (no letterbox)"
-      }
+      "num_classes":      2,
+      "categories":       ["silver", "black"]
     }
 
-The live app reads kmodel_path, labels/categories, num_classes, img_size,
-confidence_threshold, nms_threshold, and preprocess.resize. To update models,
-copy the deploy folder's .kmodel, deploy_config.json, and labels.txt here,
-then copy data/ to /data and sdcard/ to /sdcard on the K230.
+Other fields you may want to carry over from the train pipeline
+(conf_threshold, nms_threshold, strides) are not read by main.py --
+those live in /sdcard/app/config.py. Keep them in the JSON only as
+documentation of what the kmodel was trained for.

@@ -62,6 +62,15 @@ namespace {
 #endif
         }
     }
+
+    void pumpXiaoFor(uint32_t ms) {
+        const uint32_t start = millis();
+        while (millis() - start < ms) {
+            Sensors::XIAO_link::tick();
+            Processing::XiaoDecode::tick();
+            delay(2);
+        }
+    }
 }
 
 void onEnter() {
@@ -96,7 +105,7 @@ void update() {
             // until XIAO's SearchLine mode sees the black line again.
             Actions::Drive::stop();
             Processing::XiaoDecode::setMode(XIAO_MODE_SEARCH_LINE);
-            delay(200);
+            pumpXiaoFor(200);
             Processing::XiaoDecode::clearFilter();
 
             while (Processing::XiaoDecode::command() != FEAT_SEARCH_LINE_BLACK) {
@@ -107,7 +116,7 @@ void update() {
 
             Actions::Drive::stop();
             Processing::XiaoDecode::setMode(XIAO_MODE_LINE);
-            delay(200);
+            pumpXiaoFor(200);
             Processing::XiaoDecode::clearFilter();
             armGreenCooldown();
             return;
@@ -119,7 +128,7 @@ void update() {
                         Serial.println("Action: Green-Left");
             #endif
             tone(BUZZER_PIN, 9000, 300);
-            Actions::Forward::forward(50.0f, 52.0f);
+            Actions::Forward::forward(50.0f, 52.0f, /*useIMU=*/false, /*pumpComms=*/true);
             Actions::Turn::turn(-90.0f, 60.0f);   // for left
             Actions::Drive::stop();
             Processing::XiaoDecode::clearFilter();
@@ -132,7 +141,7 @@ void update() {
                         Serial.println("Action: Green-Right");
             #endif
             tone(BUZZER_PIN, 9000, 300);
-            Actions::Forward::forward(50.0f, 52.0f);
+            Actions::Forward::forward(50.0f, 52.0f, /*useIMU=*/false, /*pumpComms=*/true);
             Actions::Turn::turn(90.0f, 60.0f);  // for right
             Actions::Drive::stop();
             Processing::XiaoDecode::clearFilter();

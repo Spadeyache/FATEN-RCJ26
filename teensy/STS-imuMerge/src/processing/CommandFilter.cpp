@@ -46,8 +46,8 @@ uint8_t CommandFilter::update(uint8_t rawCmd) {
     if (isUturn) return FEAT_UTURN;
 
     // Green left/right.
-    if (votesLeft  >= 8) return FEAT_GREEN_LEFT;
-    if (votesRight >= 8) return FEAT_GREEN_RIGHT;
+    if (votesLeft  >= FILTER_THRESHOLD_GREEN) return FEAT_GREEN_LEFT;
+    if (votesRight >= FILTER_THRESHOLD_GREEN) return FEAT_GREEN_RIGHT;
 
     // Saturated black row: suppress possible green rereads at intersections.
     if (votesBlack >= FILTER_THRESHOLD_BLACK_INTERSECT) return FEAT_BLACK_INTERSECT;
