@@ -43,8 +43,8 @@ uint8_t CommandFilter::update(uint8_t rawCmd) {
     if (isUturn) return FEAT_UTURN;
 
     // Green left/right.
-    if (votesLeft  >= FILTER_THRESHOLD_GREEN) return FEAT_GREEN_LEFT;
-    if (votesRight >= FILTER_THRESHOLD_GREEN) return FEAT_GREEN_RIGHT;
+    if (votesLeft  >= 8) return FEAT_GREEN_LEFT;
+    if (votesRight >= 8) return FEAT_GREEN_RIGHT;
 
     // Sustained line loss.
     if (votesNoLine >= FILTER_THRESHOLD_LINELOST) return FEAT_LINE_LOST;
