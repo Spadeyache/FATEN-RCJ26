@@ -31,22 +31,19 @@ void init();
 void grabLeft(bool closed, bool blocking = true);
 void grabRight(bool closed, bool blocking = true);
 
-// Left arm holds 2 via a bucket: store() moves the gripped ball into the bucket
-// so the gripper is free to grab a second one (LIFO).
+// Left bucket pose. VictimManager owns the wait/release/carry choreography.
 void store();
 
 // Drops.
 void releaseLeft();        // the ball in the left gripper
-void releaseStore();       // the ball in the left bucket
 void releaseRight();       // the ball in the right gripper
-void releaseBothLeft();    // left gripper ball, then the bucket ball
-void releaseAll();         // blocking: every held ball
 
 // Lift (KRS, PWM). lift() sets a raw pulse; the named helpers are the poses.
 void lift(int us);
 void liftDown();      // lower to grab pose
 void liftCarry();     // raise to carry pose
 void liftPark();      // parked pose
+void liftRelease();
 
 void attachServos();
 void detachServos();

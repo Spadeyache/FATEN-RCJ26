@@ -63,6 +63,22 @@ namespace {
         return best;
     }
 
+    // During a GREEN deploy run, opportunistically fill the spare right arm with
+    // one more live ball, then resume corner hunting.
+    const K230DBox* closestCenterLiveVictim() {
+        const K230DBox* boxes = Processing::K230Decode::boxes();
+        const uint8_t   n     = Processing::K230Decode::boxCount();
+        const K230DBox* best  = nullptr;
+        float bestAbs = 999.0f;
+        for (uint8_t i = 0; i < n; i++) {
+            if (boxes[i].cls != K230_CLASS_ALIVE) continue;
+            if (!VictimManager::acceptsType(boxes[i].cls)) continue;
+            const float a = absF(directionFor(boxes[i]));
+            if (best == nullptr || a < bestAbs) { best = &boxes[i]; bestAbs = a; }
+        }
+        return best;
+    }
+
     // Nearest-to-centre evac-point (corner) box.
     const K230DBox* closestCenterPoint() {
         const K230DBox* boxes = Processing::K230Decode::boxes();
@@ -84,7 +100,7 @@ namespace {
 
     // --- approach: drive at the nearest victim until close. ---
     // Returns the reached victim's class, or -1 if the victim was lost.
-    int approachVictim() {
+    int approachVictim(int onlyCls = -1) {
         uint8_t lost = 0;
 
         // Direction moving average (EVAC_GRAB_AVG_FRAMES) — smooths steering and
@@ -102,7 +118,8 @@ namespace {
 
         while (true) {
             Processing::K230Decode::tick();
-            const K230DBox* t = closestCenterVictim();
+            const K230DBox* t = (onlyCls == K230_CLASS_ALIVE) ? closestCenterLiveVictim()
+                                                              : closestCenterVictim();
 
             if (t == nullptr) {
                 if (lost++ >= EVAC_GRAB_LOST_HOLD_FRAMES) {
@@ -153,12 +170,39 @@ namespace {
         return (green >= red) ? K230_POINT_GREEN : K230_POINT_RED;
     }
 
+    bool canGrabExtraLiveDuringGreenDeploy() {
+        return VictimManager::count() == 2 &&
+               VictimManager::liveHeld() == 2 &&
+               VictimManager::acceptsType(K230_CLASS_ALIVE);
+    }
+
+    bool tryGrabExtraLiveDuringGreenDeploy() {
+        if (!canGrabExtraLiveDuringGreenDeploy()) return false;
+        if (closestCenterLiveVictim() == nullptr) return false;
+
+        Serial.println("[deploy] extra live seen - grab before corner");
+        const int type = approachVictim(K230_CLASS_ALIVE);
+        if (type == K230_CLASS_ALIVE) {
+            VictimManager::tryGrab(K230_CLASS_ALIVE);
+            Actions::Drive::stop();
+            const uint32_t seenPacketMs = Processing::K230Decode::lastPacketMs();
+            Processing::K230Decode::waitForFreshFrameAfter(seenPacketMs, 700);
+            return true;
+        }
+        return false;
+    }
+
     // Spin + drive to the nearest POINT (victims model) until close. true if reached.
-    bool approachPoint() {
+    bool approachPoint(bool allowExtraLiveGrab) {
         const uint32_t start = millis();
         uint8_t hits = 0;
         while (millis() - start < EVAC_DEPLOY_TIMEOUT_MS) {
             Processing::K230Decode::drainDelay(50);
+            if (allowExtraLiveGrab && tryGrabExtraLiveDuringGreenDeploy()) {
+                hits = 0;
+                continue;
+            }
+
             const K230DBox* corner = closestCenterPoint();
             if (corner == nullptr) { hits = 0; Actions::Drive::spinDecay(60, 400); continue; }
             if (boxHeightPx(*corner) >= EVAC_POINT_STOP_HEIGHT_PX) {
@@ -198,7 +242,7 @@ namespace {
     bool driveToColorCorner(int targetColor) {
         const uint32_t start = millis();
         while (millis() - start < EVAC_DEPLOY_TIMEOUT_MS) {
-            if (!approachPoint()) return false;
+            if (!approachPoint(targetColor == K230_POINT_GREEN)) return false;
             const int color = readCornerColor();
             Serial.printf("[deploy] corner=%s want=%s\n",
                           color == K230_POINT_GREEN ? "GREEN" : color == K230_POINT_RED ? "RED" : "?",
@@ -217,7 +261,7 @@ namespace {
     // Deposit live balls at the GREEN corner, then back off.
     void deployGreen() {
         Serial.println("[deploy] GREEN (live)");
-        driveToColorCorner(K230_POINT_GREEN);
+        driveToColorCorner(K230_POINT_GREEN);   
         VictimManager::releaseLive();
         Actions::Forward::forward(DEPLOY_BACKOFF_SPEED, DEPLOY_BACKOFF_MM);
     }
@@ -246,10 +290,8 @@ void update() {
         // >= 2 live held -> drop them at the green corner, then keep collecting.
         // (A dead ball, if held, is carried until the timer triggers a red deploy.)
         if (VictimManager::readyToDeploy()) {
-            Actions::Drive::stop();
-            digitalWrite(LED_BUILTIN, HIGH);
-            Processing::K230Decode::drainDelay(1000);    
-            deployGreen();
+            digitalWrite(LED_BUILTIN, HIGH); 
+            deployGreen();  // calls driveToColorCorner(int targetcolor)
             continue;
         }
 
@@ -268,7 +310,7 @@ void update() {
             }
         } else {
             // Actions::Drive::spinDecay(60, 400);          // sweep for a ball
-            Actions::Drive::motor(-50,50);
+            Actions::Drive::motor(50,-50);
         }
     }
 

@@ -13,9 +13,10 @@ namespace {
     Servo _hs45hb1;
     Servo _krs;            // KRS lift, PWM mode (pin = KRS_PWM_PIN)
 
-    constexpr int KRS_PARK_US    = 1000;   // parked pose at boot — TODO tune
+    constexpr int KRS_PARK_US    = 850;   // parked pose at boot — TODO tune
     constexpr int KRS_GRAB_US    = 2040;
     constexpr int KRS_AIR_US    = 1450;
+    constexpr int KRS_RELEASE_US = 1700;
 
     constexpr int HS0_CLOSE_US = 2000;
     constexpr int HS0_OPEN_US  = 1000;
@@ -82,15 +83,12 @@ void grabRight(bool closed, bool blocking) {
     writeServoSmooth(_hs45hb0, _hs1CurrentUs, targetUs, blocking);
 }
 
-// --- left bucket mechanics (TODO: wire the servo macros) --------------------
-void store()        { /* TODO: push the left-gripper ball into the bucket */ }
-void releaseStore() { /* TODO: drop the ball held in the left bucket */ }
+// --- left bucket mechanics ---------------------------------------------------
+void store() { liftPark(); }
 
 // --- drops ------------------------------------------------------------------
 void releaseLeft()  { grabLeft(false); }
 void releaseRight() { grabRight(false); }
-void releaseBothLeft() { releaseLeft(); releaseStore(); }
-void releaseAll()      { releaseBothLeft(); releaseRight(); }
 
 // Move the lift to a raw PWM pulse width (microseconds) and HOLD it there.
 // PWM mode has no "free" — the Servo library keeps refreshing the pulse.
@@ -103,9 +101,10 @@ void lift(int us) {
 }
 
 // Named lift poses (the only lift values callers need to know about).
-void liftDown()  { lift(KRS_GRAB_US); }
-void liftCarry() { lift(KRS_AIR_US);  }
-void liftPark()  { lift(KRS_PARK_US); }
+void liftDown()    { lift(KRS_GRAB_US);   }
+void liftCarry()   { lift(KRS_AIR_US);    }
+void liftPark()    { lift(KRS_PARK_US);   }
+void liftRelease() { lift(KRS_RELEASE_US); }
 
 }  // namespace Arm
 }  // namespace Actions

@@ -42,6 +42,8 @@ namespace {
     constexpr int     LEFT_DOWN_MS  = 800,  LEFT_FWD_MS  = 1000;
     constexpr int     RIGHT_DOWN_MS = 600,  RIGHT_FWD_MS = 700;
     constexpr int     CARRY_MS      = 800;
+    constexpr int     STORE_MS      = 800;
+    constexpr int     RELEASE_MS    = 625;
 
     constexpr uint8_t CONFIRM_SAMPLE_FRAMES = 3;
     constexpr uint8_t CONFIRM_CLEAR_REQUIRED = 2;
@@ -86,6 +88,16 @@ namespace {
     // ========================================================================
     //  Capture motion (vision align + blocking grab choreography)
     // ========================================================================
+
+    void storeFirstLeftLive() {
+        Actions::Arm::store();
+        Processing::K230Decode::drainDelay(STORE_MS);
+        Actions::Arm::releaseLeft();
+        Processing::K230Decode::drainDelay(STORE_MS);
+        Actions::Arm::liftCarry();
+        Processing::K230Decode::drainDelay(CARRY_MS);
+        Actions::Arm::grabLeft(true);
+    }
 
     // Drive so `cls` sits at frame-centre + offset. Proportional, tolerant of
     // brief dropouts. Returns true if aligned, false if the ball was lost.
@@ -143,9 +155,10 @@ namespace {
 
         // First ball on the left goes into the bucket so the gripper is free for a
         // second one (LIFO). The second one stays in the gripper.
-        if (side == SIDE_LEFT && _leftCount == 0) Actions::Arm::store();
-
         Actions::Drive::stop();
+        if (side == SIDE_LEFT && _leftCount == 0) {
+            storeFirstLeftLive();
+        }
     }
 
     // True if fresh post-grab frames no longer show this type.
@@ -216,12 +229,28 @@ bool tryGrab(uint8_t type) {
 
 // Left arm only ever holds live; the right may hold a live overflow.
 void releaseLive() {
-    Actions::Arm::releaseBothLeft();
-    _leftCount = 0;
+    Actions::Arm::liftRelease();
+    Processing::K230Decode::drainDelay(RELEASE_MS);
+    Actions::Arm::releaseLeft();
     if (_rightCount > 0 && _rightStack[0] == K230_CLASS_ALIVE) {
         Actions::Arm::releaseRight();
         _rightCount = 0;
     }
+    Processing::K230Decode::drainDelay(20);
+
+    Actions::Arm::liftPark();  // release the stored victim
+    Processing::K230Decode::drainDelay(RELEASE_MS);
+    Processing::K230Decode::drainDelay(80); // time to settle
+    Actions::Arm::grabLeft(true);
+    Processing::K230Decode::drainDelay(135); // time to settle
+    Actions::Arm::liftRelease();
+    Processing::K230Decode::drainDelay(RELEASE_MS+150); //end of release stored victim
+    Actions::Arm::releaseLeft();
+
+    Actions::Arm::liftCarry(); // go back to evac start krs posision.
+    Processing::K230Decode::drainDelay(CARRY_MS);
+
+    _leftCount = 0;
 }
 
 // The dead ball only ever sits in the right arm.
