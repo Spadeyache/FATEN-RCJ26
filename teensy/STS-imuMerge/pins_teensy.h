@@ -128,7 +128,7 @@
 // =============================================================================
 //  Front touch + conductivity probes
 // =============================================================================
-#define TOUCH_FRONT_PIN     36
-// #define TOUCH_SIDE_PIN     33
-#define CONDUCT0_PIN         5
-#define CONDUCT1_PIN         6
+#define TOUCH_FRONT_PIN     33
+// #define TOUCH_SIDE_PIN     36
+// #define CONDUCT0_PIN         5
+// #define CONDUCT1_PIN         6

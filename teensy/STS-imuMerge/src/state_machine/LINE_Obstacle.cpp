@@ -129,7 +129,7 @@ void update() {
         Processing::XiaoDecode::tick(true);
         Sensors::Touch::tick();
 
-        if (Sensors::Touch::conduct0()) {
+        if (Sensors::Touch::front()) {
             analogWrite(BUZZER_PIN, 80);
             Actions::Turn::turn(-20.0f);
             if (Processing::XiaoDecode::obstacleSeeLine()) break;
@@ -152,6 +152,8 @@ void update() {
         Actions::Drive::motor(100, 7);
     }
     Actions::Drive::stop();
+    tone(BUZZER_PIN, 8000, 1000);
+    delay(2500);
 
     // ── 3b. Settle and read the line tilt angle ───────────────────────────────
     pumpFor(OBS_SETTLE_MS);

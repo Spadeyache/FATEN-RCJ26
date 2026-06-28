@@ -38,7 +38,7 @@ FLASHMEM void setup() {
     Actions::Drive::init();
     Actions::Arm::init();           // servos + KRS, sets initial pose
     Sensors::IMU::init();
-    // Sensors::Touch::init();
+    Sensors::Touch::init();
     Sensors::XIAO_link::init();
     Sensors::K230_link::init();
     // Sensors::ToF::init();  // Slow VL53L7CX firmware init; defer until mapping/evac needs it.
@@ -69,7 +69,7 @@ void loop() {
     Sensors::IMU::tick();
     // Sensors::ToF::tick();       // updates global tofFL[8][8]
     // Sensors::ToF::printFL(); // optional debug dump
-    // Sensors::Touch::tick();
+    Sensors::Touch::tick();
 
     // 2. Run processing layer (decode, filter, fuse).
     Processing::XiaoDecode::tick();
@@ -82,7 +82,10 @@ void loop() {
 
     // Actions::Arm::attachServos();
     // Actions::Arm::captureAlive();
-    // return;
+    Serial.println(Sensors::Touch::front());
+    delay(50);
+
+    return;
 
     // 4. Run the active state.
     StateMachine::tick();
