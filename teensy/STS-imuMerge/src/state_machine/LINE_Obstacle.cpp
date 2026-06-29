@@ -14,39 +14,25 @@
 #include <math.h>
 
 // =============================================================================
-//  LINE_Obstacle — front-bumper triggered avoidance + line re-acquisition.
+//  LINE_Obstacle - front-bumper triggered avoidance + line re-acquisition.
 //
-//  1. Debounce, back off, turn -80° (pass the obstacle on the LEFT), nudge.
-//  2. Go around: XIAO runs OBSTACLE mode; crawl in a curve (motor 100,7) with
-//     conductivity micro-turns until the XIAO "see-line" flag (arc sees black).
-//  3. Re-acquire the line:
-//       a. Keep traversing OBS_TRAVERSE_AFTER_FLAG_MS so the line drops into the
-//          tilted region of the box, then stop.
-//       b. Settle OBS_SETTLE_MS and read the line tilt angle.
-//       c. Back up OBS_BACK_MM, pre-spin OBS_PRESPIN_DEG, drive forward OBS_FWD_MM.
-//       d. Spin up to OBS_SEARCH_SPIN_DEG searching for the see-line flag.
-//            flag found  → restore LINE mode, hand back to LINE_FOLLOW.
-//            not found   → spin back (OBS_SEARCH_SPIN_DEG − |angle|) the other
-//                          way, then hand back to LINE_FOLLOW.
+//  1. Debounce, back off, turn +80 deg to pass the obstacle on the right.
+//  2. Run XIAO LINE_ANGLE mode while curving around the obstacle.
+//     End the first loop when LINE_ANGLE flag bit0 sees any point.
+//  3. Keep traversing a little, stop, then reposition.
+//  4. Drive forward until LINE_ANGLE sees any point again.
+//     - two or more border points: return to LINE_FOLLOW
+//     - one point: use the gap angle/Y rough recovery, then return
 // =============================================================================
 
 namespace LINE_Obstacle {
 
 namespace {
-    // Re-acquisition tuning.
-    constexpr uint32_t OBS_TRAVERSE_AFTER_FLAG_MS = 1000;  // keep going around after first sight
-    constexpr uint32_t OBS_SETTLE_MS              = 80;    // stand still before reading the angle
-    constexpr float    OBS_BACK_MM               = 80.0f;
-    constexpr float    OBS_PRESPIN_DEG           = 40.0f;
-    constexpr float    OBS_FWD_MM                = 120.0f;
-    constexpr float    OBS_SEARCH_SPIN_DEG       = 150.0f;
-    constexpr float    OBS_SPIN_SPEED            = 60.0f;
+    constexpr uint32_t OBS_TRAVERSE_AFTER_FLAG_MS = 1000;
+    constexpr float    OBS_REACQUIRE_TURN_DEG     = 25.0f;
+    constexpr float    OBS_REACQUIRE_TURN_SPEED   = 50.0f;
+    constexpr uint16_t OBS_AFTER_POINT_EXTRA_MS   = 120;
 
-    // Spin direction for a LEFT-side pass (motor 100,7). +1 = right (turn() sign).
-    // Flip to -1.0f to mirror the whole re-acquisition sweep.
-    constexpr float    OBS_SPIN_DIR              = 1.0f;
-
-    // Pump the XIAO link + decoder for `ms`, keeping motors as last commanded.
     void pumpFor(uint32_t ms) {
         const uint32_t start = millis();
         uint32_t lastComms = 0;
@@ -59,39 +45,32 @@ namespace {
         }
     }
 
-    // Spin in `dirSign` (>0 = right) up to `maxDeg`, polling the see-line flag.
-    // Returns true and stops immediately if the flag is raised; false if the
-    // full angle elapsed without it. Duration scales like Actions::Turn::turn().
-    bool spinSearchUntilFlag(float dirSign, float maxDeg, float speed) {
-        const uint32_t duration =
-            (uint32_t)(maxDeg * TURN_SPIN_MS_PER_DEG * MAX_MOTOR_SPEED / speed);
-        const float l = (dirSign > 0) ?  speed : -speed;
-        const float r = (dirSign > 0) ? -speed :  speed;
-        Actions::Drive::motor(l, r);
-
-        const uint32_t start = millis();
-        uint32_t lastComms = 0;
-        while (millis() - start < duration) {
-            if (millis() - lastComms >= 20) {
-                Sensors::XIAO_link::tick();
-                Processing::XiaoDecode::tick(true);
-                lastComms = millis();
-                if (Processing::XiaoDecode::obstacleSeeLine()) {
-                    Actions::Drive::stop();
-                    return true;
-                }
-            }
-        }
-        Actions::Drive::stop();
-        return false;
-    }
-
     void finishToLineFollow() {
         Actions::Drive::stop();
         Processing::XiaoDecode::setMode(XIAO_MODE_LINE);
         pumpFor(200);
         Processing::XiaoDecode::clearFilter();
         StateMachine::transitionTo(StateMachine::LINE_FOLLOW);
+    }
+
+    inline float signedGapAngleDeg() {
+        return Processing::XiaoDecode::gapFineAngleFlag()
+            ? Processing::XiaoDecode::gapFineAngle() - 127.0f
+            : Processing::XiaoDecode::gapAngle() - 127.0f;
+    }
+
+    void driveForwardUntilGapAnyPoint() {
+        Actions::Drive::motor(40, 40);
+        while (!Processing::XiaoDecode::gapAnyPointFlag()) {
+            Sensors::XIAO_link::tick();
+            Processing::XiaoDecode::tick(true);
+            Actions::Drive::motor(40, 40);
+            delay(5);
+        }
+        pumpFor(OBS_AFTER_POINT_EXTRA_MS);
+        Actions::Drive::stop();
+        Sensors::XIAO_link::tick();
+        Processing::XiaoDecode::tick(true);
     }
 }
 
@@ -102,45 +81,41 @@ void onEnter() {
 }
 
 void update() {
-    // 50 ms debounce before committing to the avoidance manoeuvre.
     pumpFor(50);
     Sensors::Touch::tick();
 
     if (!Sensors::Touch::front()) {
-        // False trigger — just resume following.
         Processing::XiaoDecode::clearFilter();
         StateMachine::transitionTo(StateMachine::LINE_FOLLOW);
         return;
     }
 
-    // ── 1. Back off, turn out, nudge forward ──────────────────────────────────
-    Actions::Forward::forward(-70, 50, /*useIMU=*/false, /*pumpComms=*/true);
-    Actions::Turn::turn(-80.0f);
+    Processing::XiaoDecode::setMode(XIAO_MODE_LINE_ANGLE);
+    // pumpFor(200);
+    Actions::Forward::forward(-60, 50, /*useIMU=*/false, /*pumpComms=*/true);
+    Actions::Turn::turn(80.0f);
+    
+    Actions::Forward::forward(60, 50, /*useIMU=*/false, /*pumpComms=*/true);
+    
 
-    Actions::Drive::stop();
-    Processing::XiaoDecode::setMode(XIAO_MODE_OBSTACLE);
-    pumpFor(200);
     Processing::XiaoDecode::clearFilter();
 
-    // ── 2. Go around the obstacle until the arc sees the line ─────────────────
-    //  (body unchanged: curve forward + conductivity micro-turns; exit on flag)
-    while (!Processing::XiaoDecode::obstacleSeeLine()) {
+    while (!Processing::XiaoDecode::gapAnyPointFlag()) {
         Sensors::XIAO_link::tick();
         Processing::XiaoDecode::tick(true);
         Sensors::Touch::tick();
 
         if (Sensors::Touch::front()) {
-            analogWrite(BUZZER_PIN, 80);
-            Actions::Turn::turn(-20.0f);
-            if (Processing::XiaoDecode::obstacleSeeLine()) break;
-            Actions::Forward::forward(80, 2, /*useIMU=*/false, /*pumpComms=*/true);
+            tone(BUZZER_PIN, 9000, 80);
+            Actions::Turn::turn(20.0f);
+            if (Processing::XiaoDecode::gapAnyPointFlag()) break;
+            Actions::Forward::forward(60, 20, /*useIMU=*/false, /*pumpComms=*/true);
         }
-        analogWrite(BUZZER_PIN, 0);
-        Actions::Drive::motor(100, 7);
-    }
-    analogWrite(BUZZER_PIN, 0);
 
-    // ── 3a. Keep traversing so the line falls into the tilted region, then stop.
+        analogWrite(BUZZER_PIN, 0);
+        Actions::Drive::motor(3, 67);
+    }
+
     const uint32_t start = millis();
     uint32_t lastComms = 0;
     while (millis() - start < OBS_TRAVERSE_AFTER_FLAG_MS) {
@@ -149,36 +124,32 @@ void update() {
             Processing::XiaoDecode::tick(true);
             lastComms = millis();
         }
-        Actions::Drive::motor(100, 7);
+        Actions::Drive::motor(3, 67);
     }
+    tone(BUZZER_PIN, 1000, 500);
+
+    Actions::Forward::forward(-60, 80, /*useIMU=*/false, /*pumpComms=*/true);
+    Actions::Turn::turn(30, 60);
+    driveForwardUntilGapAnyPoint();
+    
     Actions::Drive::stop();
-    tone(BUZZER_PIN, 8000, 1000);
-    pumpFor(2500);
+    delay(2500);
 
-    // ── 3b. Settle and read the line tilt angle ───────────────────────────────
-    pumpFor(OBS_SETTLE_MS);
-    const float angleDeg = Processing::XiaoDecode::obstacleAngle() - 127.0f;  // signed
-    const float angleMag = fabsf(angleDeg);
-#if PRINT_STATE
-    Serial.print("OBSTACLE re-acquire angle: "); Serial.println(angleDeg);
-#endif
-
-    // ── 3c. Reposition: back up, pre-spin, drive forward ──────────────────────
-    Actions::Forward::forward(-70, OBS_BACK_MM, /*useIMU=*/false, /*pumpComms=*/true);
-    Actions::Turn::turn(OBS_PRESPIN_DEG * OBS_SPIN_DIR, OBS_SPIN_SPEED);
-    Actions::Forward::forward(70, OBS_FWD_MM, /*useIMU=*/false, /*pumpComms=*/true);
-
-    // ── 3d. Search spin for the line ──────────────────────────────────────────
-    if (spinSearchUntilFlag(OBS_SPIN_DIR, OBS_SEARCH_SPIN_DEG, OBS_SPIN_SPEED)) {
+    if (Processing::XiaoDecode::gapBothRowsFlag()) {
         finishToLineFollow();
         return;
     }
 
-    // Not found on the full sweep → spin back (150 − |angle|) the other way.
-    const float backDeg = OBS_SEARCH_SPIN_DEG - angleMag;
-    if (backDeg > 0.0f) {
-        Actions::Turn::turn(-backDeg * OBS_SPIN_DIR, OBS_SPIN_SPEED);
-    }
+    const float savedAngle = signedGapAngleDeg();
+    const uint8_t savedY = Processing::XiaoDecode::gapLineY();
+#if PRINT_STATE
+    Serial.print("OBSTACLE one-point gap angle: ");
+    Serial.println(savedAngle);
+#endif
+
+    Actions::Forward::forward(45.0f, (float)savedY * 0.25f,
+                              /*useIMU=*/false, /*pumpComms=*/true);
+    Actions::Turn::turn(savedAngle);
     finishToLineFollow();
 }
 

@@ -33,9 +33,11 @@ namespace {
     constexpr float GAP_ALIGN_MIN_SPEED  = 12.0f;
     constexpr float GAP_ALIGN_MAX_SPEED  = 65.0f;
     constexpr float GAP_ALIGN_DEADBAND   = 2.0f;
-    constexpr float GAP_DIRECT_ALIGN_DEG = 40.0f;
+    constexpr float GAP_SAFE_FINE_DEG    = 45.0f;
 
     constexpr float GAP_FORWARD_SPEED    = 45.0f;
+    constexpr float GAP_ROUGH_FWD_MM_PER_DEG = 1.3f;
+    constexpr uint16_t GAP_ROUGH_BACK_BLIND_MS = 180;
     constexpr uint8_t GAP_BOTTOM_LOST_FRAMES  = 5;
     constexpr uint8_t GAP_BOTTOM_FOUND_FRAMES = 3;
     // constexpr uint16_t GAP_AFTER_LOST_BLIND_MS = 150;
@@ -51,6 +53,10 @@ namespace {
     inline float alignmentAngleDeg() {
         return Processing::XiaoDecode::gapFineAngleFlag() ? signedFineAngleDeg()
                                                           : signedAngleDeg();
+    }
+
+    inline bool needsCurvedAcquire(float angle, bool fineOk) {
+        return !fineOk || fabsf(angle) >= GAP_SAFE_FINE_DEG;
     }
 
     inline void updateXiaoNow() {
@@ -147,6 +153,27 @@ namespace {
         Actions::Drive::stop();
     }
 
+    void backUntilAnyGapPoint() {
+        driveForMs(GAP_BACK_SPEED, GAP_BACK_SPEED, GAP_ROUGH_BACK_BLIND_MS);
+        updateXiaoNow();
+        while (!Processing::XiaoDecode::gapAnyPointFlag()) {
+            Actions::Drive::motor(GAP_BACK_SPEED, GAP_BACK_SPEED);
+            delay(5);
+            updateXiaoNow();
+        }
+        Actions::Drive::stop();
+    }
+
+    void roughTurnBackToGapStart(float angleDeg) {
+        const float fwdMm = fabsf(angleDeg) * GAP_ROUGH_FWD_MM_PER_DEG;
+        Actions::Forward::forward(45.0f, fwdMm,
+                                  /*useIMU=*/false, /*pumpComms=*/true);
+        updateXiaoNow();
+        Actions::Turn::turn(-angleDeg);
+        Processing::XiaoDecode::clearFilter();
+        backUntilAnyGapPoint();
+    }
+
     inline void returnToLineFollow() {
         Actions::Drive::stop();
         Processing::XiaoDecode::setMode(XIAO_MODE_LINE);
@@ -179,17 +206,18 @@ void update() {
         // driveForMs(GAP_BACK_SPEED, GAP_BACK_SPEED, GAP_BACK_SETTLE_MS);
         pumpXiaoFor(375);//stop reverting to the line above
         
+// Line lost detection
         updateXiaoNow();
         if (firstGapPass && Processing::XiaoDecode::gapBothRowsFlag()) {
             returnToLineFollow();
-            tone(BUZZER_PIN, 7000, 4000);
+            tone(BUZZER_PIN, 7000, 3000);
             return;
         }
         firstGapPass = false;
 
         // Step 1: single-point recovery. Save the angle/Y before blind motion changes the view.
-        const float savedAngle = signedAngleDeg();
-        const uint8_t savedY = Processing::XiaoDecode::gapLineY();
+        const bool savedFineOk = Processing::XiaoDecode::gapFineAngleFlag();
+        const float savedAngle = savedFineOk ? signedFineAngleDeg() : signedAngleDeg();
 
         
         Serial.println(savedAngle);
@@ -199,25 +227,15 @@ void update() {
 
         Processing::XiaoDecode::clearFilter();
 
-        if (fabsf(savedAngle) <= GAP_DIRECT_ALIGN_DEG) {
-            // Small angle: spin at this position until the line is nearly straight.
-            
-            // tone(BUZZER_PIN, 7000, 4000);
+        if (!needsCurvedAcquire(savedAngle, savedFineOk)) {     //small tile adjustment
             alignToCurrentGapAngle();
-            // Actions::Drive::stop();
-            // delay(1000);
             
             driveForwardUntilBottomLostThenTwoPoints();
             returnToLineFollow();
             return;
         }
+        roughTurnBackToGapStart(savedAngle);                    //tight turn adjustment
 
-        // Large angle: do the rough move, then restart gap recovery from the top
-        // so we only exit through the small-angle/fine-align path.
-        Actions::Forward::forward(45.0f, (float)savedY * 0.25f,
-                                  /*useIMU=*/false, /*pumpComms=*/true);
-        updateXiaoNow();
-        Actions::Turn::turn(-savedAngle);
     }
 }
 

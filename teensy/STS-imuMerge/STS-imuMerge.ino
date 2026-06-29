@@ -48,7 +48,7 @@ FLASHMEM void setup() {
     // Avoid blocking startup here; the robot should enter loop() and start driving immediately.
     // Use a non-blocking status indicator if we need boot confirmation later.
 
-    delay(1000);
+    // delay(1000);
     delay(250);
     Actions::Arm::detachServos(); // sorry i wanted to save 16mAh and 225ms of time. i need to add this..
 }

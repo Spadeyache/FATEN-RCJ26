@@ -88,12 +88,19 @@ enum XiaoMode : uint8_t {
 // MPU6050 calibration offsets — fallback / initial-guess values (from IMU-01).
 // At boot they are overwritten by either the auto-calibration (CALIBRATE_IMU==1)
 // or the values loaded from EEPROM (CALIBRATE_IMU==0).
-#define IMU_AX_OFFSET       -4737
-#define IMU_AY_OFFSET        -374
-#define IMU_AZ_OFFSET         631
-#define IMU_GX_OFFSET          19
-#define IMU_GY_OFFSET          54
-#define IMU_GZ_OFFSET           2
+// #define IMU_AX_OFFSET       -4737
+// #define IMU_AY_OFFSET        -374
+// #define IMU_AZ_OFFSET         631
+// #define IMU_GX_OFFSET          19
+// #define IMU_GY_OFFSET          54
+// #define IMU_GZ_OFFSET           2
+
+#define IMU_AX_OFFSET       -897
+#define IMU_AY_OFFSET        -1901
+#define IMU_AZ_OFFSET         1060
+#define IMU_GX_OFFSET          203
+#define IMU_GY_OFFSET          -49
+#define IMU_GZ_OFFSET           -59
 
 // =============================================================================
 //  Robot geometry — shared unit reference for Forward and Turn

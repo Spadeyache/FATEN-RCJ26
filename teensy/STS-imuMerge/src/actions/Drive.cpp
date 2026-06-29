@@ -20,7 +20,7 @@ namespace {
     volatile float32_t _blGain = 0.0f;
     volatile float32_t _brGain = 0.0f;
 
-    // ISR — pushes current gains to servos every 9 ms.
+    // ISR - pushes current gains to servos every 9 ms.
     FASTRUN void motorOutput() {
         _sts.power(_flGain, _frGain, _blGain, _brGain);
     }
@@ -71,139 +71,117 @@ FASTRUN void motorRaw(float32_t fl, float32_t fr, float32_t bl, float32_t br) {
 }
 
 // =============================================================================
-//  Line-follow controller — slope-aware 4WD skid-steer.
+//  Line-follow controller - slope-aware 4WD skid-steer.
 //
 //  IMU mount note (do NOT change IMU code): this mount reports
-//    nose DOWN  → getRoll()  negative      left DOWN → getPitch() negative
+//    nose DOWN  -> getRoll()  negative      left DOWN -> getPitch() negative
 //  so fore/aft tilt lands on getRoll() and sideways tilt on getPitch(), with the
 //  signs inverted vs the robot frame. robotPitch()/robotRoll() do the axis-swap +
 //  sign-flip to the conventional:
-//    pitch > 0 → nose up        roll > 0 → LEFT side down  (roll < 0 → RIGHT down)
+//    pitch > 0 -> nose up        roll > 0 -> LEFT side down  (roll < 0 -> RIGHT down)
 //
-//  Slope compensation (gravAdj / rotAxisAdj / frictionCircAdj) is gated by
-//  TILT_GATE_DEG: below the gate every helper is an identity / no-op, so flat-
-//  ground racing runs symmetric with all four wheels full; the slope tune only
-//  appears once tilt exceeds the gate.
+//  Layout (top to bottom):
+//    1. DEV angle hardcode  - bench testing without the IMU.
+//    2. Tuning constants    - one flat block, edit in place.
+//    3. rotAxisBias()       - continuous fore/aft pivot shift from error + tilt.
+//    4. runLinePID()        - the controller.
 //
-//  Config split: universal constants (MAX_MOTOR_SPEED, pins, PRINT_PID) come from
-//  config.h / pins_teensy.h. Everything in the namespace below is line-follow-only
-//  tuning and lives here on purpose.
+//  Everything below the gate (|tilt| < TILT_GATE_DEG) is plain flat-ground PID
+//  with all four wheels equal; the slope layer only appears past the gate.
 // =============================================================================
 namespace {
 
-enum Side  : uint8_t { SIDE_LEFT, SIDE_RIGHT };
-enum Wheel : uint8_t { WHEEL_FL, WHEEL_FR, WHEEL_BL, WHEEL_BR };
+// =============================================================================
+//  1. DEV - angle hardcode for bench testing
+//
+//  DEV_FORCE_TILT = true feeds fixed pitch/roll instead of the IMU, so slope
+//  behaviour can be tested on a flat bench. Set false for normal IMU use.
+//    pitch + = nose up        roll + = left side down
+// =============================================================================
+constexpr bool  DEV_FORCE_TILT      = false;
+constexpr float DEV_ROBOT_PITCH_DEG = 0.0f;
+constexpr float DEV_ROBOT_ROLL_DEG  = 25.0f;
 
-inline bool wheelIsFront(Wheel w) { return w == WHEEL_FL || w == WHEEL_FR; }
-inline bool wheelIsLeft (Wheel w) { return w == WHEEL_FL || w == WHEEL_BL; }
+// IMU -> robot-frame remap for this mount (axis swap + sign flip, see header).
+inline float robotPitch() { return DEV_FORCE_TILT ? DEV_ROBOT_PITCH_DEG : Sensors::IMU::getRoll(); }
+inline float robotRoll()  { return DEV_FORCE_TILT ? DEV_ROBOT_ROLL_DEG  : -Sensors::IMU::getPitch(); }
 
-// IMU → robot-frame tilt remap for this mount (see header). Axis swap + sign flip.
-inline float robotPitch() { return  Sensors::IMU::getRoll();  }   // + = nose up
-inline float robotRoll()  { return -Sensors::IMU::getPitch(); }   // + = left side down
+// =============================================================================
+//  2. Tuning constants
+//  Slope layer activates once |pitch| or |roll| exceeds TILT_GATE_DEG.
+// =============================================================================
 
-// --- Tilt gate ---------------------------------------------------------------
-// Shared activation threshold. Below this tilt ALL slope compensation is a no-op
-// and the controller is pure flat-ground PID; above it the slope tune kicks in.
-constexpr float TILT_GATE_DEG = 8.0f;
+// --- Tilt gate + base speed --------------------------------------------------
+constexpr float TILT_GATE_DEG   = 12.0f;
+constexpr float FRIC_SPEED_FLAT = 70.0f;   // flat-ground base speed
+constexpr float FRIC_SPEED_TILT = 40.0f;   // base speed once tilted past the gate
 
-// --- PID gains ---------------------------------------------------------------
-// Flat ground uses the *_FLAT set; the moment frictionCircAdj detects a slope
-// (drops the base speed below FRIC_SPEED_FLAT) the controller swaps to *_SLOPE.
-constexpr float PID_KP_FLAT  = 1.5f;
-constexpr float PID_KI_FLAT  = 0.0f;
-constexpr float PID_KD_FLAT  = 0.0f;
-
-constexpr float PID_KP_SLOPE = 0.85f;   // validated slope tune
-constexpr float PID_KI_SLOPE = 0.0f;
-constexpr float PID_KD_SLOPE = 0.65f;
-
+// --- PID (flat vs slope; selected by the gate, NOT by error sign) ------------
+constexpr float PID_KP_FLAT  = 1.5f,  PID_KI_FLAT  = 0.0f, PID_KD_FLAT  = 1.0f;
+constexpr float PID_KP_SLOPE = 0.85f, PID_KI_SLOPE = 0.0f, PID_KD_SLOPE = 0.65f;
 constexpr float PID_INTEGRAL_LIMIT = 500.0f;
-constexpr float PID_PITCH_GAIN     = 0.0f;   // fore/aft pitch → forward-speed bias
-                                             // (line-follow tune; was config IMU_PITCH_GAIN)
 
-// --- Tight-turn slow-down (driven by the XIAO TIGHT_SLOW flag) ----------------
+// --- Tight-turn slow-down (driven by the XIAO TIGHT_SLOW flag) ---------------
 constexpr float TIGHT_SLOW_BASE_SPEED   = 10.0f;
 constexpr float TIGHT_SLOW_REVERSE_GAIN = 1.05f;
 
-// --- gravAdj : roll-driven left/right power asymmetry ------------------------
-constexpr float GRAV_GAIN_MIN  = 0.6f;   // upper-side correction gain at full tilt (1.0 = symmetric)
-constexpr float GRAV_BOOST_MAX = 1.3f;   // upper-side reverse-bite boost at full tilt (1.0 = none)
-constexpr float GRAV_ROLL_TAU  = 12.0f;  // deg: roll scale of the exponential saturation
+// --- Side-roll left/right power (|roll| > gate) ------------------------------
+// Hardcoded, symmetric for left-down / right-down: the UPPER wheels lose power.
+constexpr float ROLL_UPPER_GAIN = 0.7f;   // upper-side speed multiplier
 
-// --- rotAxisAdj : rear-wheel de-rate to shift the rotation axis --------------
-constexpr float ROTAXIS_PITCH_REF = 18.0f;  // deg : |pitch| at which the rear reaches ROTAXIS_REAR_MIN
-constexpr float ROTAXIS_REAR_MIN  = 0.75f;  // gain: rear scale at full pitch (fore/aft axis shift)
-constexpr float ROTAXIS_ROLL_REF  = 18.0f;  // deg : |roll| at which the downhill rear reaches ROTAXIS_DOWN_MIN
-constexpr float ROTAXIS_DOWN_MIN  = 0.60f;  // gain: downhill-rear scale at full roll
+// --- rot-axis : continuous fore/aft pivot shift ------------------------------
+// rotAxisBias() returns a signed value in [-1, +1]:
+//   bias > 0  -> pivot FORWARD  (de-rate FRONT wheels toward ROTAXIS_FRONT_MIN)
+//   bias < 0  -> pivot BACK     (de-rate REAR  wheels toward ROTAXIS_REAR_MIN)
+// Continuous in the XIAO line error (sign + magnitude), not bucketed.
+//   nose UP   : sharper curve -> more forward ; gentle -> neutral
+//   nose DOWN : pivot back regardless of curve direction
+//   side roll : curve toward the DOWNHILL side -> forward ; otherwise -> back
+constexpr float ROTAXIS_PITCH_REF  = 18.0f;  // deg: |pitch| for full fore/aft effect
+constexpr float ROTAXIS_ROLL_REF   = 18.0f;  // deg: |roll|  for full side effect
+constexpr float ROTAXIS_NOSE_UP    = 1.0f;   // nose-up forward strength  (x pitch x |err|)
+constexpr float ROTAXIS_NOSE_DN    = 1.0f;   // nose-down back strength   (x pitch)
+constexpr float ROTAXIS_ROLL_FWD   = 1.0f;   // downhill-curve forward strength (x roll x err)
+constexpr float ROTAXIS_ROLL_BACK  = 0.6f;   // otherwise back strength   (x roll)
+constexpr float ROTAXIS_FRONT_MIN  = 0.6f;   // front wheel scale at full forward bias
+constexpr float ROTAXIS_REAR_MIN   = 0.6f;   // rear  wheel scale at full back bias
+constexpr float ROLL_DOWNHILL_SIGN = 1.0f;   // flip to -1 if downhill mapping is reversed
 
-// --- frictionCircAdj : slope base-speed selector -----------------------------
-constexpr float FRIC_SPEED_FLAT = 70.0f;  // base speed on flat ground
-constexpr float FRIC_SPEED_TILT = 40.0f;  // base speed once tilted past the gate
-
-inline float rollGainFactor(float aRoll) {       // 1.0 → GRAV_GAIN_MIN as |roll| grows
-    return 1.0f - (1.0f - GRAV_GAIN_MIN) * (1.0f - expf(-aRoll / GRAV_ROLL_TAU));
-}
-inline float rollBoostFactor(float aRoll) {      // 1.0 → GRAV_BOOST_MAX as |roll| grows
-    return 1.0f + (GRAV_BOOST_MAX - 1.0f) * (1.0f - expf(-aRoll / GRAV_ROLL_TAU));
-}
-
-// gravAdj — roll-based left/right power. Below the gate: symmetric smooth
-// differential (flat racing, gain 1.0, no fold). Above the gate: the *upper* side
-// loses correction authority (→GRAV_GAIN_MIN) and snaps its inner wheel into
-// reverse (the -25 fold + boost) to pivot steep turns using gravity. Reads roll.
-float gravAdj(Side side, float base, float correction, float pitchAdj) {
-    const float roll     = robotRoll();   // + = left side down
-    const float aRoll    = fabsf(roll);
-    const float corrTerm = (side == SIDE_LEFT) ? correction : -correction;
-
-    if (aRoll <= TILT_GATE_DEG)
-        return base + corrTerm + pitchAdj;
-
-    const bool  isUpper = (side == SIDE_LEFT) ? (roll < 0.0f) : (roll > 0.0f);
-    const float gain    = isUpper ? rollGainFactor(aRoll) : 1.0f;
-
-    float speed = base + corrTerm * gain + pitchAdj;
-    if (isUpper) {
-        if (speed > -25.0f && speed < 25.0f) speed = -25.0f;   // fold the dead zone
-        if (speed <= -25.0f) speed *= rollBoostFactor(aRoll);  // boost the reverse bite
-    }
-    return speed;
-}
-
-// rotAxisAdj — returns a 0..1 power scale for the given wheel, de-rating the rear
-// to shift the rotation axis rearward. Identity below the gate (flat racing keeps
-// all four wheels full). Reads pitch + roll.
-//   pitch → de-rates BOTH rear wheels: 1.0 → ROTAXIS_REAR_MIN at ROTAXIS_PITCH_REF.
-//   roll  → de-rates only the DOWNHILL rear: → ROTAXIS_DOWN_MIN at ROTAXIS_ROLL_REF.
-//   combined by min(), so a full slope gives downhill 0.6 / uphill 0.75.
-float rotAxisAdj(Wheel w) {
-    const float pitch = robotPitch();   // + = nose up   (fore/aft)
-    const float roll  = robotRoll();    // + = left down (sideways)
-    const float tilt  = sqrtf(pitch * pitch + roll * roll);
-    if (tilt < TILT_GATE_DEG) return 1.0f;
-    if (wheelIsFront(w))      return 1.0f;   // front = reference axle
-
-    // Pitch (fore/aft): both rear wheels 1.0 → ROTAXIS_REAR_MIN.
-    const float pf = constrain(fabsf(pitch) / ROTAXIS_PITCH_REF, 0.0f, 1.0f);
-    float scale    = 1.0f - (1.0f - ROTAXIS_REAR_MIN) * pf;
-
-    // Roll: only the downhill rear wheel drops further toward ROTAXIS_DOWN_MIN.
-    //   roll > 0 → LEFT side down ; roll < 0 → RIGHT side down.
-    const bool isDown = wheelIsLeft(w) ? (roll > 0.0f) : (roll < 0.0f);
-    if (isDown) {
-        const float rf        = constrain(fabsf(roll) / ROTAXIS_ROLL_REF, 0.0f, 1.0f);
-        const float downFloor = 1.0f - (1.0f - ROTAXIS_DOWN_MIN) * rf;   // 1.0 → 0.6
-        scale = fminf(scale, downFloor);
-    }
-    return constrain(scale, 0.0f, 1.0f);
-}
-
-// frictionCircAdj — base-speed selector. On a slope (|pitch| or |roll| past the
-// gate) there is less grip, so drop to FRIC_SPEED_TILT; otherwise run the fast
-// flat-ground FRIC_SPEED_FLAT. The drop also triggers the *_SLOPE PID gain swap.
-float frictionCircAdj() {
+// =============================================================================
+//  3. rotAxisBias - signed pivot shift in [-1, +1] from pitch/roll + line error.
+//  eNorm = line error normalised to [-1, +1] (sign = steer direction).
+// =============================================================================
+float rotAxisBias(float eNorm) {
     const float pitch = robotPitch();   // + = nose up
-    const float roll  = robotRoll();    // + = left down
+    const float roll  = robotRoll();    // + = left side down
+    const float aErr  = fabsf(eNorm);
+    float bias = 0.0f;
+
+    // Fore/aft pitch.
+    if (pitch > TILT_GATE_DEG) {                 // nose up: sharp -> forward, gentle -> neutral
+        const float pf = constrain(pitch / ROTAXIS_PITCH_REF, 0.0f, 1.0f);
+        bias += ROTAXIS_NOSE_UP * pf * aErr;
+    } else if (pitch < -TILT_GATE_DEG) {         // nose down: back, both curve directions
+        const float pf = constrain(-pitch / ROTAXIS_PITCH_REF, 0.0f, 1.0f);
+        bias -= ROTAXIS_NOSE_DN * pf;
+    }
+
+    // Side roll (downhill-relative so left-down / right-down stay symmetric).
+    if (fabsf(roll) > TILT_GATE_DEG) {
+        const float rf = constrain(fabsf(roll) / ROTAXIS_ROLL_REF, 0.0f, 1.0f);
+        const float downhillErr = eNorm * ROLL_DOWNHILL_SIGN * (roll > 0.0f ? 1.0f : -1.0f);
+        if (downhillErr > 0.0f) bias += ROTAXIS_ROLL_FWD  * rf * downhillErr;  // toward downhill -> forward
+        else                    bias -= ROTAXIS_ROLL_BACK * rf;                // otherwise -> back
+    }
+    return constrain(bias, -1.0f, 1.0f);
+}
+
+// frictionCircAdj - base-speed selector. On a slope (past the gate) there is less
+// grip, so drop to FRIC_SPEED_TILT; otherwise run the fast flat-ground speed.
+// The drop also triggers the *_SLOPE PID gain swap in runLinePID().
+float frictionCircAdj() {
+    const float pitch = robotPitch();
+    const float roll  = robotRoll();
     if (fabsf(pitch) > TILT_GATE_DEG || fabsf(roll) > TILT_GATE_DEG)
         return FRIC_SPEED_TILT;
     return FRIC_SPEED_FLAT;
@@ -223,6 +201,9 @@ uint32_t scaledLinePidMs(uint32_t flatMs, uint32_t minMs, uint32_t maxMs) {
     return constrain(scaled, minMs, maxMs);
 }
 
+// =============================================================================
+//  4. runLinePID - the controller.
+// =============================================================================
 void runLinePID() {
     static float integral  = 0.0f;
     static float lastError = 0.0f;
@@ -233,16 +214,17 @@ void runLinePID() {
     lastTime = now;
     if (dt <= 0.0f || dt > 0.5f) dt = 0.02f;   // first call / stall guard
 
-    // Map XIAO line error 0..254 → ±200 so the PID gains match their tuned scale.
+    // Map XIAO line error 0..254 -> +-200 so the PID gains match their tuned scale.
     const float rawError   = (Processing::XiaoDecode::lineError() - 127.0f) * (200.0f / 127.0f);
+    const float eNorm      = rawError / 200.0f;            // [-1, +1], sign = steer direction
     const float derivative = (rawError - lastError) / dt;
     lastError = rawError;
 
     integral += rawError * dt;
     integral  = constrain(integral, -PID_INTEGRAL_LIMIT, PID_INTEGRAL_LIMIT);
 
-    // Base speed: 70 on flat, 40 once tilted past the gate. The drop also selects
-    // the *_SLOPE PID gains (flat → *_FLAT, slope → *_SLOPE).
+    // Base speed: flat vs slope (slope = tilted past the gate). The slope flag
+    // also selects the *_SLOPE PID gains.
     const float frictionBase = frictionCircAdj();
     const bool  slope = (frictionBase < FRIC_SPEED_FLAT);
     const float kp = slope ? PID_KP_SLOPE : PID_KP_FLAT;
@@ -251,30 +233,37 @@ void runLinePID() {
 
     const float correction = kp * rawError + ki * integral + kd * derivative;
 
-    const bool tightSlow = Processing::XiaoDecode::tightSlowFlag();
+    const bool  tightSlow = Processing::XiaoDecode::tightSlowFlag();
     const float base = tightSlow ? TIGHT_SLOW_BASE_SPEED : frictionBase;
     digitalWrite(LED_PIN, base == FRIC_SPEED_FLAT ? HIGH : LOW);   // LED on = flat-ground base speed
 
-    // Fore/aft pitch bias — gated like the rest of the slope layer (and inert
-    // while PID_PITCH_GAIN is 0).
-    const float pitch    = robotPitch();   // + = nose up
-    const float pitchAdj = (fabsf(pitch) > TILT_GATE_DEG) ? pitch * PID_PITCH_GAIN : 0.0f;
+    // Left/right steering speeds.
+    float leftSpeed  = base + correction;
+    float rightSpeed = base - correction;
 
-    // Steering speeds from gravAdj (roll-driven). Flat → symmetric smooth
-    // differential; sideways tilt → upper-side de-rate + reverse-bite pivot.
-    float leftSpeed  = gravAdj(SIDE_LEFT,  base, correction, pitchAdj);
-    float rightSpeed = gravAdj(SIDE_RIGHT, base, correction, pitchAdj);
+    // Side roll past the gate: the UPPER side loses power (hardcoded x0.7,
+    // symmetric for left-down / right-down). roll > 0 = left down -> right is upper.
+    const float roll = robotRoll();
+    if (fabsf(roll) > TILT_GATE_DEG) {
+        if (roll > 0.0f) rightSpeed *= ROLL_UPPER_GAIN;
+        else             leftSpeed  *= ROLL_UPPER_GAIN;
+    }
 
     leftSpeed  = constrain(leftSpeed,  -70.0f, base);
     rightSpeed = constrain(rightSpeed, -70.0f, base);
 
-    // Split into four wheels and de-rate the rear via rotAxisAdj to shift the
-    // rotation axis rearward (identity below the gate → flat racing keeps all
-    // four wheels at full power).
-    float fl = leftSpeed  * rotAxisAdj(WHEEL_FL);
-    float fr = rightSpeed * rotAxisAdj(WHEEL_FR);
-    float bl = leftSpeed  * rotAxisAdj(WHEEL_BL);
-    float br = rightSpeed * rotAxisAdj(WHEEL_BR);
+    // rot axis: continuous fore/aft pivot shift. bias > 0 de-rates the front
+    // (pivot forward), bias < 0 de-rates the rear (pivot back). Zero below the gate.
+    const float bias = rotAxisBias(eNorm);
+    float frontScale = 1.0f;
+    float rearScale  = 1.0f;
+    if (bias > 0.0f)      frontScale = 1.0f - bias * (1.0f - ROTAXIS_FRONT_MIN);
+    else if (bias < 0.0f) rearScale  = 1.0f + bias * (1.0f - ROTAXIS_REAR_MIN);  // bias < 0
+
+    float fl = leftSpeed  * frontScale;
+    float fr = rightSpeed * frontScale;
+    float bl = leftSpeed  * rearScale;
+    float br = rightSpeed * rearScale;
 
     if (tightSlow) {
         if (fl < 0.0f) fl *= TIGHT_SLOW_REVERSE_GAIN;
@@ -286,8 +275,8 @@ void runLinePID() {
     motorRaw(fl, fr, bl, br);
 
 #if PRINT_PID
-    Serial.printf("PID err:%.1f drv:%.1f corr:%.1f base:%.0f L:%.0f R:%.0f\n",
-                  rawError, derivative, correction, base, leftSpeed, rightSpeed);
+    Serial.printf("PID err:%.1f corr:%.1f base:%.0f bias:%.2f L:%.0f R:%.0f\n",
+                  rawError, correction, base, bias, leftSpeed, rightSpeed);
 #endif
 }
 
