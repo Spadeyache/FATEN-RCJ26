@@ -28,7 +28,6 @@
 namespace LINE_Obstacle {
 
 namespace {
-    constexpr uint32_t OBS_TRAVERSE_AFTER_FLAG_MS = 1000;
     constexpr float    OBS_REACQUIRE_TURN_DEG     = 25.0f;
     constexpr float    OBS_REACQUIRE_TURN_SPEED   = 50.0f;
     constexpr uint16_t OBS_AFTER_POINT_EXTRA_MS   = 120;
@@ -92,12 +91,10 @@ void update() {
 
     Processing::XiaoDecode::setMode(XIAO_MODE_LINE_ANGLE);
     // pumpFor(200);
-    Actions::Forward::forward(-60, 50, /*useIMU=*/false, /*pumpComms=*/true);
-    Actions::Turn::turn(80.0f);
+    Actions::Forward::forward(-45, 27, /*useIMU=*/false, /*pumpComms=*/true);
+    Actions::Turn::turn(80.0f, 40.0f);
+    Actions::Forward::forward(45, 50, /*useIMU=*/false, /*pumpComms=*/true);
     
-    Actions::Forward::forward(60, 50, /*useIMU=*/false, /*pumpComms=*/true);
-    
-
     Processing::XiaoDecode::clearFilter();
 
     while (!Processing::XiaoDecode::gapAnyPointFlag()) {
@@ -107,33 +104,35 @@ void update() {
 
         if (Sensors::Touch::front()) {
             tone(BUZZER_PIN, 9000, 80);
-            Actions::Turn::turn(20.0f);
-            if (Processing::XiaoDecode::gapAnyPointFlag()) break;
-            Actions::Forward::forward(60, 20, /*useIMU=*/false, /*pumpComms=*/true);
-        }
+            Actions::Drive::motor(60,5);
 
-        analogWrite(BUZZER_PIN, 0);
-        Actions::Drive::motor(3, 67);
+            // Actions::Turn::turn(20.0f, 40.0f);
+            // if (Processing::XiaoDecode::gapAnyPointFlag()) break;
+            // Actions::Forward::forward(50, 20, /*useIMU=*/false, /*pumpComms=*/true);
+        }
+        else{
+            Actions::Drive::motor(-3, 67);
+        }
     }
 
     const uint32_t start = millis();
     uint32_t lastComms = 0;
-    while (millis() - start < OBS_TRAVERSE_AFTER_FLAG_MS) {
+    while (millis() - start < 700) {
         if (millis() - lastComms >= 20) {
             Sensors::XIAO_link::tick();
             Processing::XiaoDecode::tick(true);
             lastComms = millis();
         }
-        Actions::Drive::motor(3, 67);
+        Actions::Drive::motor(-3, 67);
     }
     tone(BUZZER_PIN, 1000, 500);
 
-    Actions::Forward::forward(-60, 80, /*useIMU=*/false, /*pumpComms=*/true);
-    Actions::Turn::turn(30, 60);
+    Actions::Forward::forward(-50, 80, /*useIMU=*/false, /*pumpComms=*/true);
+    Actions::Turn::turn(25, 45);
     driveForwardUntilGapAnyPoint();
-    
-    Actions::Drive::stop();
-    delay(2500);
+    Actions::Drive::motor(50, 50);
+    delay(790);
+    Actions::Turn::turn(65, 45);
 
     if (Processing::XiaoDecode::gapBothRowsFlag()) {
         finishToLineFollow();

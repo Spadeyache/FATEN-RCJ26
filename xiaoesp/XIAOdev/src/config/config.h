@@ -28,7 +28,7 @@
 
 // Debug: force XIAO to run the evacuation black/silver color mask mode.
 // Leave DEBUG_FORCE_LINE_ANGLE_MODE at 0; this is a separate override.
-#define DEBUG_FORCE_EVAC_COLOR_MASK_MODE 1
+#define DEBUG_FORCE_EVAC_COLOR_MASK_MODE 0
 
 
 // ── Serial baud rates ────────────────────────────────────────────────────────

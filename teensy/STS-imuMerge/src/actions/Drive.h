@@ -20,6 +20,14 @@
 namespace Actions {
 namespace Drive {
 
+enum LineFollowState : uint8_t {
+    LINE_FOLLOW_FLAT = 0,
+    LINE_FOLLOW_NOSE_UP,
+    LINE_FOLLOW_NOSE_DOWN,
+    LINE_FOLLOW_LEFT_DOWN,
+    LINE_FOLLOW_RIGHT_DOWN,
+};
+
 void init();
 
 // Set both sides; replicated L→FL/BL, R→FR/BR and clamped to ±MAX_MOTOR_SPEED.
@@ -36,6 +44,8 @@ void motorRaw(float32_t fl, float32_t fr, float32_t bl, float32_t br) FASTRUN;
 
 void runLinePID();
 uint32_t scaledLinePidMs(uint32_t flatMs, uint32_t minMs, uint32_t maxMs);
+LineFollowState lineFollowState();
+const char* lineFollowStateName(LineFollowState state);
 
 // Per-wheel gain accessors (read by Processing::Mapping for unicycle model).
 float32_t frontLeftGain();

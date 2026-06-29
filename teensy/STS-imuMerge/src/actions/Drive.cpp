@@ -19,6 +19,7 @@ namespace {
     volatile float32_t _frGain = 0.0f;
     volatile float32_t _blGain = 0.0f;
     volatile float32_t _brGain = 0.0f;
+    volatile LineFollowState _lineFollowState = LINE_FOLLOW_FLAT;
 
     // ISR - pushes current gains to servos every 9 ms.
     FASTRUN void motorOutput() {
@@ -116,6 +117,23 @@ constexpr float TILT_GATE_DEG   = 12.0f;
 constexpr float FRIC_SPEED_FLAT = 70.0f;   // flat-ground base speed
 constexpr float FRIC_SPEED_TILT = 40.0f;   // base speed once tilted past the gate
 
+LineFollowState classifyLineFollowState(float pitch, float roll) {
+    const float absPitch = fabsf(pitch);
+    const float absRoll  = fabsf(roll);
+
+    if (absPitch <= TILT_GATE_DEG && absRoll <= TILT_GATE_DEG)
+        return LINE_FOLLOW_FLAT;
+
+    if (absPitch >= absRoll)
+        return (pitch > 0.0f) ? LINE_FOLLOW_NOSE_UP : LINE_FOLLOW_NOSE_DOWN;
+
+    return (roll > 0.0f) ? LINE_FOLLOW_LEFT_DOWN : LINE_FOLLOW_RIGHT_DOWN;
+}
+
+void updateLineFollowState(float pitch, float roll) {
+    _lineFollowState = classifyLineFollowState(pitch, roll);
+}
+
 // --- PID (flat vs slope; selected by the gate, NOT by error sign) ------------
 constexpr float PID_KP_FLAT  = 1.5f,  PID_KI_FLAT  = 0.0f, PID_KD_FLAT  = 1.0f;
 constexpr float PID_KP_SLOPE = 0.85f, PID_KI_SLOPE = 0.0f, PID_KD_SLOPE = 0.65f;
@@ -124,6 +142,11 @@ constexpr float PID_INTEGRAL_LIMIT = 500.0f;
 // --- Tight-turn slow-down (driven by the XIAO TIGHT_SLOW flag) ---------------
 constexpr float TIGHT_SLOW_BASE_SPEED   = 10.0f;
 constexpr float TIGHT_SLOW_REVERSE_GAIN = 1.05f;
+
+// --- Nose-down reverse bite --------------------------------------------------
+// Downhill line-follow needs extra negative motor authority for both gentle and
+// sharp corrections, without making the PID gains themselves more aggressive.
+constexpr float NOSE_DOWN_REVERSE_GAIN = 1.25f;
 
 // --- Side-roll left/right power (|roll| > gate) ------------------------------
 // Hardcoded, symmetric for left-down / right-down: the UPPER wheels lose power.
@@ -225,6 +248,10 @@ void runLinePID() {
 
     // Base speed: flat vs slope (slope = tilted past the gate). The slope flag
     // also selects the *_SLOPE PID gains.
+    const float pitch = robotPitch();
+    const float roll  = robotRoll();
+    updateLineFollowState(pitch, roll);
+
     const float frictionBase = frictionCircAdj();
     const bool  slope = (frictionBase < FRIC_SPEED_FLAT);
     const float kp = slope ? PID_KP_SLOPE : PID_KP_FLAT;
@@ -243,7 +270,6 @@ void runLinePID() {
 
     // Side roll past the gate: the UPPER side loses power (hardcoded x0.7,
     // symmetric for left-down / right-down). roll > 0 = left down -> right is upper.
-    const float roll = robotRoll();
     if (fabsf(roll) > TILT_GATE_DEG) {
         if (roll > 0.0f) rightSpeed *= ROLL_UPPER_GAIN;
         else             leftSpeed  *= ROLL_UPPER_GAIN;
@@ -272,12 +298,34 @@ void runLinePID() {
         if (br < 0.0f) br *= TIGHT_SLOW_REVERSE_GAIN;
     }
 
+    if (pitch < -TILT_GATE_DEG) {
+        if (fl < 0.0f) fl *= NOSE_DOWN_REVERSE_GAIN;
+        if (fr < 0.0f) fr *= NOSE_DOWN_REVERSE_GAIN;
+        if (bl < 0.0f) bl *= NOSE_DOWN_REVERSE_GAIN;
+        if (br < 0.0f) br *= NOSE_DOWN_REVERSE_GAIN;
+    }
+
     motorRaw(fl, fr, bl, br);
 
 #if PRINT_PID
     Serial.printf("PID err:%.1f corr:%.1f base:%.0f bias:%.2f L:%.0f R:%.0f\n",
                   rawError, correction, base, bias, leftSpeed, rightSpeed);
 #endif
+}
+
+LineFollowState lineFollowState() {
+    return _lineFollowState;
+}
+
+const char* lineFollowStateName(LineFollowState state) {
+    switch (state) {
+        case LINE_FOLLOW_NOSE_UP:    return "nose-up";
+        case LINE_FOLLOW_NOSE_DOWN:  return "nose-down";
+        case LINE_FOLLOW_LEFT_DOWN:  return "left-down";
+        case LINE_FOLLOW_RIGHT_DOWN: return "right-down";
+        case LINE_FOLLOW_FLAT:
+        default:                     return "flat";
+    }
 }
 
 float32_t frontLeftGain()  { return _flGain; }

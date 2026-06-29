@@ -155,6 +155,83 @@ enum XiaoMode : uint8_t {
 #define BLACK_INTERSECT_DISABLE_GREEN_MAX_MS  2000
 
 // =============================================================================
+//  Intersection / green-marker action tuning
+//
+//  Drive::lineFollowState() selects one row:
+//    FLAT, NOSE_UP, NOSE_DOWN, LEFT_DOWN, RIGHT_DOWN
+//
+//  Forward distance/speed runs before the turn. U-turn forward distance is 0 by
+//  default, so the current behavior is unchanged unless you tune it up.
+// =============================================================================
+
+#define INTERSECTION_GREEN_LEFT_FLAT_FORWARD_SPEED        50.0f
+#define INTERSECTION_GREEN_LEFT_FLAT_FORWARD_MM           52.0f
+#define INTERSECTION_GREEN_LEFT_FLAT_TURN_ANGLE          -90.0f
+#define INTERSECTION_GREEN_LEFT_FLAT_TURN_SPEED           30.0f
+
+// Nose-up / nose-down turns are symmetric: left and right share the same
+// forward values and turn speed; only the turn angle sign is mirrored.
+#define INTERSECTION_GREEN_NOSE_UP_FORWARD_SPEED          50.0f
+#define INTERSECTION_GREEN_NOSE_UP_FORWARD_MM             77.0f
+#define INTERSECTION_GREEN_NOSE_UP_TURN_ANGLE             90.0f
+#define INTERSECTION_GREEN_NOSE_UP_TURN_SPEED             45.0f
+
+#define INTERSECTION_GREEN_NOSE_DOWN_FORWARD_SPEED        50.0f
+#define INTERSECTION_GREEN_NOSE_DOWN_FORWARD_MM           52.0f
+#define INTERSECTION_GREEN_NOSE_DOWN_TURN_ANGLE           90.0f
+#define INTERSECTION_GREEN_NOSE_DOWN_TURN_SPEED           45.0f
+
+#define INTERSECTION_GREEN_LEFT_LEFT_DOWN_FORWARD_SPEED   50.0f
+#define INTERSECTION_GREEN_LEFT_LEFT_DOWN_FORWARD_MM      52.0f
+#define INTERSECTION_GREEN_LEFT_LEFT_DOWN_TURN_ANGLE     -90.0f
+#define INTERSECTION_GREEN_LEFT_LEFT_DOWN_TURN_SPEED      30.0f
+
+#define INTERSECTION_GREEN_LEFT_RIGHT_DOWN_FORWARD_SPEED  50.0f
+#define INTERSECTION_GREEN_LEFT_RIGHT_DOWN_FORWARD_MM     52.0f
+#define INTERSECTION_GREEN_LEFT_RIGHT_DOWN_TURN_ANGLE    -90.0f
+#define INTERSECTION_GREEN_LEFT_RIGHT_DOWN_TURN_SPEED     30.0f
+
+#define INTERSECTION_GREEN_RIGHT_FLAT_FORWARD_SPEED       50.0f
+#define INTERSECTION_GREEN_RIGHT_FLAT_FORWARD_MM          52.0f
+#define INTERSECTION_GREEN_RIGHT_FLAT_TURN_ANGLE          90.0f
+#define INTERSECTION_GREEN_RIGHT_FLAT_TURN_SPEED          45.0f
+
+#define INTERSECTION_GREEN_RIGHT_LEFT_DOWN_FORWARD_SPEED  50.0f
+#define INTERSECTION_GREEN_RIGHT_LEFT_DOWN_FORWARD_MM     52.0f
+#define INTERSECTION_GREEN_RIGHT_LEFT_DOWN_TURN_ANGLE     90.0f
+#define INTERSECTION_GREEN_RIGHT_LEFT_DOWN_TURN_SPEED     45.0f
+
+#define INTERSECTION_GREEN_RIGHT_RIGHT_DOWN_FORWARD_SPEED 50.0f
+#define INTERSECTION_GREEN_RIGHT_RIGHT_DOWN_FORWARD_MM    52.0f
+#define INTERSECTION_GREEN_RIGHT_RIGHT_DOWN_TURN_ANGLE    90.0f
+#define INTERSECTION_GREEN_RIGHT_RIGHT_DOWN_TURN_SPEED    45.0f
+
+#define INTERSECTION_UTURN_FLAT_FORWARD_SPEED             50.0f
+#define INTERSECTION_UTURN_FLAT_FORWARD_MM                 0.0f
+#define INTERSECTION_UTURN_FLAT_TURN_ANGLE               180.0f
+#define INTERSECTION_UTURN_FLAT_TURN_SPEED                45.0f
+
+#define INTERSECTION_UTURN_NOSE_UP_FORWARD_SPEED          50.0f
+#define INTERSECTION_UTURN_NOSE_UP_FORWARD_MM              0.0f
+#define INTERSECTION_UTURN_NOSE_UP_TURN_ANGLE            180.0f
+#define INTERSECTION_UTURN_NOSE_UP_TURN_SPEED             45.0f
+
+#define INTERSECTION_UTURN_NOSE_DOWN_FORWARD_SPEED        50.0f
+#define INTERSECTION_UTURN_NOSE_DOWN_FORWARD_MM            0.0f
+#define INTERSECTION_UTURN_NOSE_DOWN_TURN_ANGLE          180.0f
+#define INTERSECTION_UTURN_NOSE_DOWN_TURN_SPEED           45.0f
+
+#define INTERSECTION_UTURN_LEFT_DOWN_FORWARD_SPEED        50.0f
+#define INTERSECTION_UTURN_LEFT_DOWN_FORWARD_MM            0.0f
+#define INTERSECTION_UTURN_LEFT_DOWN_TURN_ANGLE          180.0f
+#define INTERSECTION_UTURN_LEFT_DOWN_TURN_SPEED           45.0f
+
+#define INTERSECTION_UTURN_RIGHT_DOWN_FORWARD_SPEED       50.0f
+#define INTERSECTION_UTURN_RIGHT_DOWN_FORWARD_MM           0.0f
+#define INTERSECTION_UTURN_RIGHT_DOWN_TURN_ANGLE         180.0f
+#define INTERSECTION_UTURN_RIGHT_DOWN_TURN_SPEED          45.0f
+
+// =============================================================================
 //  K230D AI processor
 // =============================================================================
 #define K230_BAUD           115200UL

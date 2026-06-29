@@ -33,6 +33,13 @@
 namespace LINE_Follow {
 
 namespace {
+    struct IntersectionMotion {
+        float forwardSpeed;
+        float forwardMm;
+        float turnAngle;
+        float turnSpeed;
+    };
+
     // One-shot green cooldown: after firing any green turn (u-turn/left/right)
     // we ignore all green for DISABLE_GREEN_MS so the same intersection isn't
     // re-read on the way out.
@@ -71,6 +78,107 @@ namespace {
             delay(2);
         }
     }
+
+    IntersectionMotion greenLeftMotion(Actions::Drive::LineFollowState state) {
+        switch (state) {
+            case Actions::Drive::LINE_FOLLOW_NOSE_UP:
+                return {INTERSECTION_GREEN_NOSE_UP_FORWARD_SPEED,
+                        INTERSECTION_GREEN_NOSE_UP_FORWARD_MM,
+                        -INTERSECTION_GREEN_NOSE_UP_TURN_ANGLE,
+                        INTERSECTION_GREEN_NOSE_UP_TURN_SPEED};
+            case Actions::Drive::LINE_FOLLOW_NOSE_DOWN:
+                return {INTERSECTION_GREEN_NOSE_DOWN_FORWARD_SPEED,
+                        INTERSECTION_GREEN_NOSE_DOWN_FORWARD_MM,
+                        -INTERSECTION_GREEN_NOSE_DOWN_TURN_ANGLE,
+                        INTERSECTION_GREEN_NOSE_DOWN_TURN_SPEED};
+            case Actions::Drive::LINE_FOLLOW_LEFT_DOWN:
+                return {INTERSECTION_GREEN_LEFT_LEFT_DOWN_FORWARD_SPEED,
+                        INTERSECTION_GREEN_LEFT_LEFT_DOWN_FORWARD_MM,
+                        INTERSECTION_GREEN_LEFT_LEFT_DOWN_TURN_ANGLE,
+                        INTERSECTION_GREEN_LEFT_LEFT_DOWN_TURN_SPEED};
+            case Actions::Drive::LINE_FOLLOW_RIGHT_DOWN:
+                return {INTERSECTION_GREEN_LEFT_RIGHT_DOWN_FORWARD_SPEED,
+                        INTERSECTION_GREEN_LEFT_RIGHT_DOWN_FORWARD_MM,
+                        INTERSECTION_GREEN_LEFT_RIGHT_DOWN_TURN_ANGLE,
+                        INTERSECTION_GREEN_LEFT_RIGHT_DOWN_TURN_SPEED};
+            case Actions::Drive::LINE_FOLLOW_FLAT:
+            default:
+                return {INTERSECTION_GREEN_LEFT_FLAT_FORWARD_SPEED,
+                        INTERSECTION_GREEN_LEFT_FLAT_FORWARD_MM,
+                        INTERSECTION_GREEN_LEFT_FLAT_TURN_ANGLE,
+                        INTERSECTION_GREEN_LEFT_FLAT_TURN_SPEED};
+        }
+    }
+
+    IntersectionMotion greenRightMotion(Actions::Drive::LineFollowState state) {
+        switch (state) {
+            case Actions::Drive::LINE_FOLLOW_NOSE_UP:
+                return {INTERSECTION_GREEN_NOSE_UP_FORWARD_SPEED,
+                        INTERSECTION_GREEN_NOSE_UP_FORWARD_MM,
+                        INTERSECTION_GREEN_NOSE_UP_TURN_ANGLE,
+                        INTERSECTION_GREEN_NOSE_UP_TURN_SPEED};
+            case Actions::Drive::LINE_FOLLOW_NOSE_DOWN:
+                return {INTERSECTION_GREEN_NOSE_DOWN_FORWARD_SPEED,
+                        INTERSECTION_GREEN_NOSE_DOWN_FORWARD_MM,
+                        INTERSECTION_GREEN_NOSE_DOWN_TURN_ANGLE,
+                        INTERSECTION_GREEN_NOSE_DOWN_TURN_SPEED};
+            case Actions::Drive::LINE_FOLLOW_LEFT_DOWN:
+                return {INTERSECTION_GREEN_RIGHT_LEFT_DOWN_FORWARD_SPEED,
+                        INTERSECTION_GREEN_RIGHT_LEFT_DOWN_FORWARD_MM,
+                        INTERSECTION_GREEN_RIGHT_LEFT_DOWN_TURN_ANGLE,
+                        INTERSECTION_GREEN_RIGHT_LEFT_DOWN_TURN_SPEED};
+            case Actions::Drive::LINE_FOLLOW_RIGHT_DOWN:
+                return {INTERSECTION_GREEN_RIGHT_RIGHT_DOWN_FORWARD_SPEED,
+                        INTERSECTION_GREEN_RIGHT_RIGHT_DOWN_FORWARD_MM,
+                        INTERSECTION_GREEN_RIGHT_RIGHT_DOWN_TURN_ANGLE,
+                        INTERSECTION_GREEN_RIGHT_RIGHT_DOWN_TURN_SPEED};
+            case Actions::Drive::LINE_FOLLOW_FLAT:
+            default:
+                return {INTERSECTION_GREEN_RIGHT_FLAT_FORWARD_SPEED,
+                        INTERSECTION_GREEN_RIGHT_FLAT_FORWARD_MM,
+                        INTERSECTION_GREEN_RIGHT_FLAT_TURN_ANGLE,
+                        INTERSECTION_GREEN_RIGHT_FLAT_TURN_SPEED};
+        }
+    }
+
+    IntersectionMotion uturnMotion(Actions::Drive::LineFollowState state) {
+        switch (state) {
+            case Actions::Drive::LINE_FOLLOW_NOSE_UP:
+                return {INTERSECTION_UTURN_NOSE_UP_FORWARD_SPEED,
+                        INTERSECTION_UTURN_NOSE_UP_FORWARD_MM,
+                        INTERSECTION_UTURN_NOSE_UP_TURN_ANGLE,
+                        INTERSECTION_UTURN_NOSE_UP_TURN_SPEED};
+            case Actions::Drive::LINE_FOLLOW_NOSE_DOWN:
+                return {INTERSECTION_UTURN_NOSE_DOWN_FORWARD_SPEED,
+                        INTERSECTION_UTURN_NOSE_DOWN_FORWARD_MM,
+                        INTERSECTION_UTURN_NOSE_DOWN_TURN_ANGLE,
+                        INTERSECTION_UTURN_NOSE_DOWN_TURN_SPEED};
+            case Actions::Drive::LINE_FOLLOW_LEFT_DOWN:
+                return {INTERSECTION_UTURN_LEFT_DOWN_FORWARD_SPEED,
+                        INTERSECTION_UTURN_LEFT_DOWN_FORWARD_MM,
+                        INTERSECTION_UTURN_LEFT_DOWN_TURN_ANGLE,
+                        INTERSECTION_UTURN_LEFT_DOWN_TURN_SPEED};
+            case Actions::Drive::LINE_FOLLOW_RIGHT_DOWN:
+                return {INTERSECTION_UTURN_RIGHT_DOWN_FORWARD_SPEED,
+                        INTERSECTION_UTURN_RIGHT_DOWN_FORWARD_MM,
+                        INTERSECTION_UTURN_RIGHT_DOWN_TURN_ANGLE,
+                        INTERSECTION_UTURN_RIGHT_DOWN_TURN_SPEED};
+            case Actions::Drive::LINE_FOLLOW_FLAT:
+            default:
+                return {INTERSECTION_UTURN_FLAT_FORWARD_SPEED,
+                        INTERSECTION_UTURN_FLAT_FORWARD_MM,
+                        INTERSECTION_UTURN_FLAT_TURN_ANGLE,
+                        INTERSECTION_UTURN_FLAT_TURN_SPEED};
+        }
+    }
+
+    void runIntersectionMotion(const IntersectionMotion& motion) {
+        if (motion.forwardSpeed != 0.0f && motion.forwardMm != 0.0f) {
+            Actions::Forward::forward(motion.forwardSpeed, motion.forwardMm,
+                                      /*useIMU=*/false, /*pumpComms=*/true);
+        }
+        Actions::Turn::turn(motion.turnAngle, motion.turnSpeed);
+    }
 }
 
 void onEnter() {
@@ -96,10 +204,14 @@ void update() {
     switch (Processing::XiaoDecode::command()) {
         case FEAT_UTURN:
             if (_disableGreen) { Actions::Drive::runLinePID(); return; }
+            {
+            const Actions::Drive::LineFollowState lfState = Actions::Drive::lineFollowState();
+            const IntersectionMotion motion = uturnMotion(lfState);
             #if PRINT_ACTIONS
-                        Serial.println("Action: U-Turn");
+                        Serial.printf("Action: U-Turn (%s)\n", Actions::Drive::lineFollowStateName(lfState));
             #endif
-            Actions::Turn::turn(180.0f, 60.0f);
+            runIntersectionMotion(motion);
+            }
 
             // After the timed U-turn, keep spinning with the same motor power
             // until XIAO's SearchLine mode sees the black line again.
@@ -124,12 +236,15 @@ void update() {
         // Green turns: hardcoded straight-in then 90° spin (no continuous commit).
         case FEAT_GREEN_LEFT:
             if (_disableGreen) { Actions::Drive::runLinePID(); return; }
+            {
+            const Actions::Drive::LineFollowState lfState = Actions::Drive::lineFollowState();
+            const IntersectionMotion motion = greenLeftMotion(lfState);
             #if PRINT_ACTIONS
-                        Serial.println("Action: Green-Left");
+                        Serial.printf("Action: Green-Left (%s)\n", Actions::Drive::lineFollowStateName(lfState));
             #endif
             tone(BUZZER_PIN, 9000, 300);
-            Actions::Forward::forward(50.0f, 52.0f, /*useIMU=*/false, /*pumpComms=*/true);
-            Actions::Turn::turn(-90.0f, 60.0f);   // for left
+            runIntersectionMotion(motion);
+            }
             Actions::Drive::stop();
             Processing::XiaoDecode::clearFilter();
             armGreenCooldown();
@@ -137,12 +252,15 @@ void update() {
 
         case FEAT_GREEN_RIGHT:
             if (_disableGreen) { Actions::Drive::runLinePID(); return; }
+            {
+            const Actions::Drive::LineFollowState lfState = Actions::Drive::lineFollowState();
+            const IntersectionMotion motion = greenRightMotion(lfState);
             #if PRINT_ACTIONS
-                        Serial.println("Action: Green-Right");
+                        Serial.printf("Action: Green-Right (%s)\n", Actions::Drive::lineFollowStateName(lfState));
             #endif
             tone(BUZZER_PIN, 9000, 300);
-            Actions::Forward::forward(50.0f, 52.0f, /*useIMU=*/false, /*pumpComms=*/true);
-            Actions::Turn::turn(90.0f, 60.0f);  // for right
+            runIntersectionMotion(motion);
+            }
             Actions::Drive::stop();
             Processing::XiaoDecode::clearFilter();
             armGreenCooldown();
