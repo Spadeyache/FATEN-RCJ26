@@ -10,7 +10,7 @@
 #include "src/modes/ModeNoGI.h"
 #include "src/modes/ModeLineAngle.h"
 #include "src/modes/ModeObstacle.h"
-#include "src/modes/ModeSilverAlign.h"
+#include "src/modes/ModeEvacColorMask.h"
 #include "src/stream/XiaoStream.h"
 // #include "src/drivers/wifi_config.h"
 
@@ -142,9 +142,9 @@ void loop() {
     // Debug only: comment out the Teensy/state-machine mode and force angle mode.
     // uint8_t mode = teensy.get(XIAO_REG_MODE);
     uint8_t mode = MODE_LINE_ANGLE;
-#elif DEBUG_FORCE_EVAC_TAPE_MODE
-    // Debug only: force evacuation tape classify/mask mode.
-    uint8_t mode = MODE_SILVER_ALIGN;
+#elif DEBUG_FORCE_EVAC_COLOR_MASK_MODE
+    // Debug only: force evacuation color mask mode.
+    uint8_t mode = MODE_EVAC_COLOR_MASK;
 #else
     uint8_t mode = teensy.get(XIAO_REG_MODE);   // default 0 if Teensy hasn't sent yet
 #endif
@@ -169,7 +169,7 @@ void loop() {
         case MODE_NOGI:        modeNoGIRun(fb, teensy);        break;
         case MODE_LINE_ANGLE:  modeLineAngleRun(fb, teensy);   break;
         case MODE_OBSTACLE:    modeObstacleRun(fb, teensy);    break;
-        case MODE_SILVER_ALIGN: modeSilverAlignRun(fb, teensy); break;
+        case MODE_EVAC_COLOR_MASK: modeEvacColorMaskRun(fb, teensy); break;
         default:               modeLineFollowRun(fb, teensy);  break;
     }
 

@@ -65,7 +65,7 @@ enum XiaoMode : uint8_t {
     XIAO_MODE_NOGI        = 2,
     XIAO_MODE_LINE_ANGLE  = 3,   // line slope + point flags/Y during gap traversal
     XIAO_MODE_OBSTACLE    = 4,   // obstacle re-acquire: arc see-line flag + line tilt angle
-    XIAO_MODE_SILVER_ALIGN= 5,   // evac entry: silver-tape tilt angle for perpendicular align
+    XIAO_MODE_EVAC_COLOR_MASK = 5,   // evac entry/exit: silver/black tape mask + tilt
 };
 
 // =============================================================================

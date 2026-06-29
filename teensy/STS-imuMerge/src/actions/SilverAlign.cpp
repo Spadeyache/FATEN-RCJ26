@@ -30,7 +30,7 @@ namespace {
 }
 
 bool align() {
-    Processing::XiaoDecode::setMode(XIAO_MODE_SILVER_ALIGN);
+    Processing::XiaoDecode::setMode(XIAO_MODE_EVAC_COLOR_MASK);
     pumpXiaoFor(150);
     Processing::XiaoDecode::clearFilter();
 

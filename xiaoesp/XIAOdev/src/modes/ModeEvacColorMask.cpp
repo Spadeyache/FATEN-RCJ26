@@ -1,4 +1,4 @@
-#include "ModeSilverAlign.h"
+#include "ModeEvacColorMask.h"
 #include "../processing/vision.h"
 #include "../config/config.h"
 #include "../config/serial_print.h"
@@ -7,19 +7,18 @@
 #include <string.h>
 
 // =============================================================================
-//  Mode 5 - Evac tape align / classify
+//  Mode 5 - Evac color mask
 //
 //  Goal:
 //    1. Detect whether a large entrance/exit tape is visible.
 //    2. Classify it as silver or black without AI.
-//    3. Report the visible tape angle, even if only the top/bottom part is in
-//       frame.
+//    3. Use the configured line-follow arc ROI as the camera-vision boundary.
+//    4. Report the visible tape tilt, where 0 deg means horizontal tape.
 //
 //  Silver:
-//    Starts from the same saturated reflection pixels used by line-follow, then
-//    grows through connected low-chroma gray/bright tape-body pixels. This keeps
-//    random white floor pixels from becoming "silver" unless connected to the
-//    real reflection area.
+//    Prefer silver over black because the evac entrance can contain the black
+//    line running into silver tape. Silver can seed from saturated reflection or
+//    from a strong connected low-chroma tape body.
 //
 //  Black:
 //    Starts from dark pixels and grows through connected dark pixels. Small
@@ -27,16 +26,15 @@
 // =============================================================================
 namespace {
 
-constexpr uint8_t SA_X_MIN = 12;
-constexpr uint8_t SA_X_MAX = 147;
-constexpr uint8_t SA_Y_MIN = 8;
-constexpr uint8_t SA_Y_MAX = 108;
-
 constexpr uint16_t SA_FRAME_W = 160;
 constexpr uint16_t SA_FRAME_H = 120;
 constexpr uint16_t SA_PIXELS = SA_FRAME_W * SA_FRAME_H;
+constexpr uint16_t SA_ROI_MAX_POINTS = LF_ARC_MAX_SAMPLES;
+constexpr float SA_ARC_SAMPLE_SPACING = LF_ARC_SAMPLE_SPACING;
+constexpr float SA_PI = 3.14159265358979323846f;
 
 constexpr uint16_t SA_SILVER_FLASH_THRESHOLD = 40;
+constexpr uint16_t SA_SILVER_BODY_ONLY_THRESHOLD = 110;
 constexpr uint16_t SA_BLACK_THRESHOLD = 60;
 constexpr uint16_t SA_MIN_COMPONENT_PIXELS = 40;
 constexpr uint8_t  SA_MIN_LONG_AXIS_PX = 18;
@@ -46,6 +44,10 @@ constexpr uint8_t SA_BLACK_GRAY_MAX = 45;
 constexpr uint8_t SA_SILVER_BODY_GRAY_MIN = 45;
 constexpr uint8_t SA_SILVER_BODY_GRAY_MAX = 232;
 constexpr uint8_t SA_SILVER_BODY_CHROMA_MAX = 38;
+constexpr uint8_t SA_SILVER_GREEN_G_MIN = 70;
+constexpr uint8_t SA_SILVER_GREEN_R_MAX = 80;
+constexpr uint8_t SA_SILVER_GREEN_B_MAX = 95;
+constexpr uint8_t SA_SILVER_GREEN_DOM_MIN = 18;
 
 constexpr uint8_t ANGLE_CENTER = 127;
 
@@ -80,9 +82,112 @@ struct TapeComponent {
 
 uint8_t s_seen[SA_PIXELS];
 uint16_t s_stack[SA_PIXELS];
+uint8_t s_roiMask[SA_PIXELS];
+uint8_t s_roiX[SA_ROI_MAX_POINTS];
+uint8_t s_roiY[SA_ROI_MAX_POINTS];
+uint16_t s_roiCount = 0;
+bool s_roiReady = false;
 
 inline uint16_t indexOf(uint8_t x, uint8_t y) {
     return (uint16_t)y * SA_FRAME_W + (uint16_t)x;
+}
+
+void addRoiPoint(int x, int y) {
+    if (s_roiCount >= SA_ROI_MAX_POINTS) return;
+    if (x < 0) x = 0;
+    if (x >= (int)SA_FRAME_W) x = SA_FRAME_W - 1;
+    if (y < 0) y = 0;
+    if (y >= (int)SA_FRAME_H) y = SA_FRAME_H - 1;
+
+    s_roiX[s_roiCount] = (uint8_t)x;
+    s_roiY[s_roiCount] = (uint8_t)y;
+    s_roiCount++;
+}
+
+void addRoiLine(float x0, float y0, float x1, float y1,
+                bool includeFirst, bool includeLast) {
+    const float dx = x1 - x0;
+    const float dy = y1 - y0;
+    const int steps = max(1, (int)lroundf(sqrtf(dx * dx + dy * dy) / SA_ARC_SAMPLE_SPACING));
+    const int first = includeFirst ? 0 : 1;
+    const int last = includeLast ? steps : steps - 1;
+
+    for (int i = first; i <= last; i++) {
+        const float t = (float)i / (float)steps;
+        addRoiPoint((int)lroundf(x0 + dx * t), (int)lroundf(y0 + dy * t));
+    }
+}
+
+void addRoiArc(float cx, float cy, float r, float startRad, float endRad,
+               bool includeFirst, bool includeLast) {
+    float sweep = endRad - startRad;
+    while (sweep > 0.0f) sweep -= 2.0f * SA_PI;
+    const int steps = max(1, (int)lroundf(fabsf(sweep) * r / SA_ARC_SAMPLE_SPACING));
+    const int first = includeFirst ? 0 : 1;
+    const int last = includeLast ? steps : steps - 1;
+
+    for (int i = first; i <= last; i++) {
+        const float t = (float)i / (float)steps;
+        const float a = startRad + sweep * t;
+        addRoiPoint((int)lroundf(cx + cosf(a) * r), (int)lroundf(cy + sinf(a) * r));
+    }
+}
+
+bool pointInsideRoiPolygon(uint8_t x, uint8_t y) {
+    bool inside = false;
+    if (s_roiCount < 3) return false;
+
+    for (uint16_t i = 0, j = s_roiCount - 1; i < s_roiCount; j = i++) {
+        const float xi = (float)s_roiX[i];
+        const float yi = (float)s_roiY[i];
+        const float xj = (float)s_roiX[j];
+        const float yj = (float)s_roiY[j];
+        const bool crosses = ((yi > y) != (yj > y)) &&
+            ((float)x < (xj - xi) * ((float)y - yi) / (yj - yi) + xi);
+        if (crosses) inside = !inside;
+    }
+    return inside;
+}
+
+void buildArcRoiMask() {
+    if (s_roiReady) return;
+
+    s_roiCount = 0;
+    memset(s_roiMask, 0, sizeof(s_roiMask));
+
+    const float cx = (float)LF_ARC_TOP_X;
+    const float topY = (float)LF_ARC_TOP_Y;
+    const float sideX = (float)LF_ARC_RIGHT_X;
+    const float sideY = (float)LF_ARC_SIDE_Y;
+    const float dx = sideX - cx;
+    const float cy = (sideY * sideY - topY * topY + dx * dx) / (2.0f * (sideY - topY));
+    const float r = cy - topY;
+
+    const float rightA = atan2f((float)LF_ARC_SIDE_Y - cy, (float)LF_ARC_RIGHT_X - cx);
+    const float leftA = atan2f((float)LF_ARC_SIDE_Y - cy, (float)LF_ARC_LEFT_X - cx);
+
+    addRoiLine(LF_ARC_BOTTOM_LEFT_X, LF_ARC_BOTTOM_Y,
+               LF_ARC_BOTTOM_RIGHT_X, LF_ARC_BOTTOM_Y, true, true);
+    addRoiLine(LF_ARC_BOTTOM_RIGHT_X, LF_ARC_BOTTOM_Y,
+               LF_ARC_RIGHT_X, LF_ARC_SIDE_Y, false, true);
+    addRoiArc(cx, cy, r, rightA, leftA, false, true);
+    addRoiLine(LF_ARC_LEFT_X, LF_ARC_SIDE_Y,
+               LF_ARC_BOTTOM_LEFT_X, LF_ARC_BOTTOM_Y, false, false);
+
+    for (uint16_t y = 0; y < SA_FRAME_H; y++) {
+        for (uint16_t x = 0; x < SA_FRAME_W; x++) {
+            if (pointInsideRoiPolygon((uint8_t)x, (uint8_t)y)) {
+                s_roiMask[indexOf((uint8_t)x, (uint8_t)y)] = 1;
+            }
+        }
+    }
+
+    s_roiReady = true;
+}
+
+bool insideArcRoi(uint8_t x, uint8_t y) {
+    buildArcRoiMask();
+    return s_roiMask[indexOf(x, y)] != 0;
 }
 
 inline uint8_t rawGray(const RawRgb& px) {
@@ -105,15 +210,30 @@ bool rawBlack(const RawRgb& px) {
 
 bool silverBody(const RawRgb& px) {
     const uint8_t gray = rawGray(px);
-    return gray >= SA_SILVER_BODY_GRAY_MIN &&
-           gray <= SA_SILVER_BODY_GRAY_MAX &&
-           rawChroma(px) <= SA_SILVER_BODY_CHROMA_MAX;
+    const bool graySilver =
+        gray >= SA_SILVER_BODY_GRAY_MIN &&
+        gray <= SA_SILVER_BODY_GRAY_MAX &&
+        rawChroma(px) <= SA_SILVER_BODY_CHROMA_MAX;
+
+    // The evac silver tape can look green under the XIAO lamp/camera. Treat a
+    // bright green-cast, non-black surface as silver body so the black line
+    // entering the silver tape does not steal the mask.
+    const bool greenCastSilver =
+        px.g >= SA_SILVER_GREEN_G_MIN &&
+        px.r <= SA_SILVER_GREEN_R_MAX &&
+        px.b <= SA_SILVER_GREEN_B_MAX &&
+        px.g >= px.r + SA_SILVER_GREEN_DOM_MIN &&
+        px.g >= px.b + SA_SILVER_GREEN_DOM_MIN;
+
+    return graySilver || greenCastSilver;
 }
 
 bool pixelMatches(camera_fb_t* fb, uint8_t x, uint8_t y, TapeKind kind,
                   bool& isFlash, bool& isBlackCore) {
     isFlash = false;
     isBlackCore = false;
+
+    if (!insideArcRoi(x, y)) return false;
 
     RawRgb px;
     if (!sampleRawRgb(fb, x, y, px)) return false;
@@ -179,7 +299,9 @@ void finishComponent(TapeComponent& c) {
     const bool enoughShape = c.count >= SA_MIN_COMPONENT_PIXELS &&
                              longAxis >= SA_MIN_LONG_AXIS_PX;
     const bool enoughColor =
-        (c.kind == TAPE_SILVER && c.flashCount >= SA_SILVER_FLASH_THRESHOLD) ||
+        (c.kind == TAPE_SILVER &&
+            (c.flashCount >= SA_SILVER_FLASH_THRESHOLD ||
+             c.count >= SA_SILVER_BODY_ONLY_THRESHOLD)) ||
         (c.kind == TAPE_BLACK && c.blackCount >= SA_BLACK_THRESHOLD);
 
     c.valid = enoughShape && enoughColor;
@@ -208,8 +330,9 @@ TapeComponent floodFrom(camera_fb_t* fb, uint8_t seedX, uint8_t seedY,
         const int nx[4] = { (int)x + 1, (int)x - 1, (int)x,     (int)x     };
         const int ny[4] = { (int)y,     (int)y,     (int)y + 1, (int)y - 1 };
         for (uint8_t i = 0; i < 4; i++) {
-            if (nx[i] < SA_X_MIN || nx[i] > SA_X_MAX ||
-                ny[i] < SA_Y_MIN || ny[i] > SA_Y_MAX) {
+            if (nx[i] < 0 || nx[i] >= (int)SA_FRAME_W ||
+                ny[i] < 0 || ny[i] >= (int)SA_FRAME_H ||
+                !insideArcRoi((uint8_t)nx[i], (uint8_t)ny[i])) {
                 continue;
             }
 
@@ -239,22 +362,32 @@ bool betterComponent(const TapeComponent& a, const TapeComponent& b) {
     return a.count > b.count;
 }
 
+bool seedMatchesKind(TapeKind kind, bool isFlash, bool isBlackCore) {
+    if (kind == TAPE_SILVER) return true;
+    if (kind == TAPE_BLACK) return isBlackCore;
+    (void)isFlash;
+    return false;
+}
+
 TapeComponent detectKind(camera_fb_t* fb, TapeKind kind, uint8_t mark) {
     TapeComponent best;
 
-    for (uint8_t y = SA_Y_MIN; y <= SA_Y_MAX; y++) {
-        for (uint8_t x = SA_X_MIN; x <= SA_X_MAX; x++) {
-            const uint16_t idx = indexOf(x, y);
+    for (uint16_t y = 0; y < SA_FRAME_H; y++) {
+        for (uint16_t x = 0; x < SA_FRAME_W; x++) {
+            const uint8_t ux = (uint8_t)x;
+            const uint8_t uy = (uint8_t)y;
+            if (!insideArcRoi(ux, uy)) continue;
+
+            const uint16_t idx = indexOf(ux, uy);
             if (s_seen[idx] == mark) continue;
 
             bool isFlash;
             bool isBlackCore;
-            if (!pixelMatches(fb, x, y, kind, isFlash, isBlackCore)) continue;
+            if (!pixelMatches(fb, ux, uy, kind, isFlash, isBlackCore)) continue;
 
-            if (kind == TAPE_SILVER && !isFlash) continue;     // silver seeds from 255 flash.
-            if (kind == TAPE_BLACK && !isBlackCore) continue;  // black seeds from dark core.
+            if (!seedMatchesKind(kind, isFlash, isBlackCore)) continue;
 
-            TapeComponent c = floodFrom(fb, x, y, kind, mark);
+            TapeComponent c = floodFrom(fb, ux, uy, kind, mark);
             if (c.valid) return c;
             if (betterComponent(c, best)) best = c;
         }
@@ -265,15 +398,15 @@ TapeComponent detectKind(camera_fb_t* fb, TapeKind kind, uint8_t mark) {
 
 }  // namespace
 
-void modeSilverAlignRun(camera_fb_t* fb, YacheEncodedSerial& teensy) {
+void modeEvacColorMaskRun(camera_fb_t* fb, YacheEncodedSerial& teensy) {
     memset(s_seen, 0, sizeof(s_seen));
 
     const TapeComponent silver = detectKind(fb, TAPE_SILVER, 1);
     const TapeComponent black = detectKind(fb, TAPE_BLACK, 2);
 
     TapeComponent tape;
-    if (betterComponent(silver, tape)) tape = silver;
-    if (betterComponent(black, tape)) tape = black;
+    if (silver.valid) tape = silver;
+    else if (black.valid) tape = black;
 
     const bool seen = tape.valid;
     const bool isSilver = seen && tape.kind == TAPE_SILVER;

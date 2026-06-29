@@ -40,4 +40,4 @@
 #define MODE_NOGI          2
 #define MODE_LINE_ANGLE    3
 #define MODE_OBSTACLE      4
-#define MODE_SILVER_ALIGN  5
+#define MODE_EVAC_COLOR_MASK  5
