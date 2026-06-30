@@ -25,12 +25,21 @@ namespace {
     constexpr uint8_t  EVAC_GRAB_STOP_REQUIRED    = 3;        // ...hits needed (3 of 5)
     // Collection / deploy policy:
     constexpr uint32_t EVAC_SEARCH_TIMEOUT_MS     = 120000UL; // 2-min collection window
-    constexpr float    EVAC_POINT_STOP_HEIGHT_PX  = 120.0f;   // corner-approach stop height
+    constexpr float    EVAC_POINT_STOP_WIDTH_PX   = 300.0f;   // corner-approach stop width
     constexpr uint8_t  EVAC_POINT_STOP_REQUIRED   = 5;        // consecutive close frames at the corner
+    constexpr int      EVAC_POINT_ALIGN_DEADBAND_PX = 25;     // centre band before colour read
+    constexpr int      EVAC_POINT_ALIGN_SPEED_MIN   = 30;
+    constexpr int      EVAC_POINT_ALIGN_SPEED_MAX   = 50;
+    constexpr int      EVAC_POINT_ALIGN_MOVEMS_MIN  = 20;
+    constexpr int      EVAC_POINT_ALIGN_MOVEMS_MAX  = 150;
+    constexpr long     EVAC_POINT_ALIGN_MOVEMS_K    = 130;
+    constexpr uint32_t EVAC_POINT_ALIGN_TIMEOUT_MS  = 2500;
     constexpr uint32_t EVAC_DEPLOY_TIMEOUT_MS     = 30000UL;  // give up hunting the corner after this
     constexpr uint32_t MODEL_SWAP_MS              = 1500;     // wait for the K230 to load a model
     constexpr int      DEPLOY_TOUCH_SPEED         = 50;       // drive-into-corner speed
+    constexpr float    DEPLOY_TOUCH_TURN_GAIN     = 35.0f;    // keep corner centred while touching
     constexpr uint32_t DEPLOY_TOUCH_TIMEOUT_MS    = 4000;     // safety if the bumper never triggers
+    constexpr uint32_t DEPLOY_TOUCH_CONFIRM_MS    = 50;       // ignore one-frame bumper noise
     constexpr int      DEPLOY_BACKOFF_SPEED       = -50;      // back off after release / wrong colour
     constexpr int      DEPLOY_BACKOFF_MM          = 100;
     // (EVAC_GRAB_STOP_HEIGHT_PX stays in config.h — shared with VictimManager.)
@@ -46,6 +55,8 @@ namespace {
         return dir;
     }
     float boxHeightPx(const K230DBox& b) { return absF((float)b.y2 - (float)b.y1); }
+    float boxWidthPx(const K230DBox& b) { return absF((float)b.x2 - (float)b.x1); }
+    int16_t boxCenterX(const K230DBox& b) { return (int16_t)(((int32_t)b.x1 + (int32_t)b.x2) / 2); }
 
     // Nearest-to-centre victim we still WANT (manager decides via acceptsType:
     // skips dead once one is held / the right arm is full).
@@ -205,13 +216,46 @@ namespace {
 
             const K230DBox* corner = closestCenterPoint();
             if (corner == nullptr) { hits = 0; Actions::Drive::spinDecay(60, 400); continue; }
-            if (boxHeightPx(*corner) >= EVAC_POINT_STOP_HEIGHT_PX) {
+            if (boxWidthPx(*corner) > EVAC_POINT_STOP_WIDTH_PX) {
                 if (++hits >= EVAC_POINT_STOP_REQUIRED) { Actions::Drive::stop(); return true; }
                 Actions::Drive::stop();
             } else {
                 hits = 0;
                 driveTowardDirection(directionFor(*corner));
             }
+        }
+        return false;
+    }
+
+    bool alignPointToCenter(float* outDir = nullptr) {
+        const uint32_t start = millis();
+        while (millis() - start < EVAC_POINT_ALIGN_TIMEOUT_MS) {
+            Processing::K230Decode::drainDelay(50);
+            const K230DBox* corner = closestCenterPoint();
+            if (corner == nullptr) {
+                Actions::Drive::stop();
+                Processing::K230Decode::drainDelay(100);
+                continue;
+            }
+
+            const int delta = (int)boxCenterX(*corner) - (int)K230_FRAME_CENTER_X;
+            if (outDir != nullptr) *outDir = directionFor(*corner);
+            if (abs(delta) <= EVAC_POINT_ALIGN_DEADBAND_PX) {
+                Actions::Drive::stop();
+                return true;
+            }
+
+            const int absD   = abs(delta);
+            const int speed  = constrain(map(absD, 8, 320, EVAC_POINT_ALIGN_SPEED_MIN, EVAC_POINT_ALIGN_SPEED_MAX),
+                                         EVAC_POINT_ALIGN_SPEED_MIN, EVAC_POINT_ALIGN_SPEED_MAX);
+            const int moveMs = constrain(EVAC_POINT_ALIGN_MOVEMS_MIN +
+                                         (int)((EVAC_POINT_ALIGN_MOVEMS_K * absD * absD) / 102400L),
+                                         EVAC_POINT_ALIGN_MOVEMS_MIN, EVAC_POINT_ALIGN_MOVEMS_MAX);
+            const int dir = (delta < 0) ? -1 : 1;
+
+            Actions::Drive::motor(dir * speed, -dir * speed);
+            Processing::K230Decode::drainDelay(moveMs);
+            Actions::Drive::stop();
         }
         return false;
     }
@@ -226,13 +270,28 @@ namespace {
         return color;
     }
 
-    // Drive forward until the front bumper hits (safety timeout).
-    void driveToTouch() {
-        Actions::Drive::motor(DEPLOY_TOUCH_SPEED, DEPLOY_TOUCH_SPEED);
+    // Drive forward until the front bumper hits, steering to keep the point centred.
+    void driveToTouch(float startDir) {
         const uint32_t t0 = millis();
-        while (!Sensors::Touch::front() && millis() - t0 < DEPLOY_TOUCH_TIMEOUT_MS) {
+        float driveDir = startDir;
+        while (millis() - t0 < DEPLOY_TOUCH_TIMEOUT_MS) {
             Sensors::Touch::tick();
-            delay(5);
+            if (Sensors::Touch::front()) {
+                Actions::Drive::stop();
+                Processing::K230Decode::drainDelay(DEPLOY_TOUCH_CONFIRM_MS);
+                Sensors::Touch::tick();
+                if (Sensors::Touch::front()) break;
+            }
+
+            Processing::K230Decode::tick();
+
+            const K230DBox* corner = closestCenterPoint();
+            if (corner != nullptr) driveDir = directionFor(*corner);
+
+            const float turn = driveDir * DEPLOY_TOUCH_TURN_GAIN;
+            Actions::Drive::motor(DEPLOY_TOUCH_SPEED + turn, DEPLOY_TOUCH_SPEED - turn);
+
+            Processing::K230Decode::drainDelay(20);
         }
         Actions::Drive::stop();
     }
@@ -243,17 +302,22 @@ namespace {
         const uint32_t start = millis();
         while (millis() - start < EVAC_DEPLOY_TIMEOUT_MS) {
             if (!approachPoint(targetColor == K230_POINT_GREEN)) return false;
+            float pointDir = 0.0f;
+            if (!alignPointToCenter(&pointDir)) continue;
             const int color = readCornerColor();
             Serial.printf("[deploy] corner=%s want=%s\n",
                           color == K230_POINT_GREEN ? "GREEN" : color == K230_POINT_RED ? "RED" : "?",
                           targetColor == K230_POINT_GREEN ? "GREEN" : "RED");
             if (color == targetColor) {
-                driveToTouch();
+                if (!alignPointToCenter(&pointDir)) continue;
+                driveToTouch(pointDir);
+                Actions::Forward::forward(100, 80);
                 return true;
             }
             // wrong corner -> back off + spin, look for another one.
-            Actions::Forward::forward(DEPLOY_BACKOFF_SPEED, DEPLOY_BACKOFF_MM);
-            Actions::Drive::spinDecay(60, 500);
+            Actions::Forward::forward(-60, 50);
+            Actions::Drive::spinDecay(70, 2000);
+            Actions::Forward::forward(60, 200);
         }
         return false;
     }

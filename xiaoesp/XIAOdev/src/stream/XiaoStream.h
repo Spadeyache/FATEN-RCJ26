@@ -55,6 +55,12 @@ void xs_storeLineAngleDebug(uint8_t count, bool twoDetected, bool bottomLine,
                             int fineFarX, int fineFarY, uint8_t fineFarWidth,
                             int fineNearX, int fineNearY, uint8_t fineNearWidth);
 
+void xs_storeEvacTapeDebug(bool seen, const char* cls, uint16_t count,
+                           uint16_t flashCount, uint16_t blackCount,
+                           uint8_t minX, uint8_t minY,
+                           uint8_t maxX, uint8_t maxY,
+                           const uint8_t* maskX, const uint8_t* maskY,
+                           uint8_t maskCount);
 void xs_storeEvacTapeDebug(bool seen, const char* cls, float angleDeg,
                            uint8_t encodedAngle, uint16_t count,
                            uint16_t flashCount, uint16_t blackCount,

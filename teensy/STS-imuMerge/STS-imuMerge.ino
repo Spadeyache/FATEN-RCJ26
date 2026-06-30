@@ -26,6 +26,10 @@
 // #include "src/processing/Mapping.h"   // DISABLED — see Mapping.*.disabled
 #include "src/state_machine/StateMachine.h"
 
+// Debug force-start. Set FORCE_START_STATE to 0 before normal runs.
+#define FORCE_START_STATE 1
+#define FORCE_STATE_TARGET StateMachine::EVAC_EXIT
+
 FLASHMEM void setup() {
     Serial.begin(115200);
 
@@ -41,9 +45,12 @@ FLASHMEM void setup() {
     Sensors::Touch::init();
     Sensors::XIAO_link::init();
     Sensors::K230_link::init();
-    // Sensors::ToF::init();  // Slow VL53L7CX firmware init; defer until mapping/evac needs it.
+    Sensors::ToF::init();  // Needed by EVAC_EXIT wall-follow.
 
     StateMachine::init();
+#if FORCE_START_STATE
+    StateMachine::transitionTo(FORCE_STATE_TARGET);
+#endif
 
     // Avoid blocking startup here; the robot should enter loop() and start driving immediately.
     // Use a non-blocking status indicator if we need boot confirmation later.
@@ -67,7 +74,7 @@ void loop() {
     Sensors::XIAO_link::tick();
     Sensors::K230_link::tick();
     Sensors::IMU::tick();
-    // Sensors::ToF::tick();       // updates global tofFL[8][8]
+    Sensors::ToF::tick();       // updates global tofFL[8][8]
     // Sensors::ToF::printFL(); // optional debug dump
     Sensors::Touch::tick();
 

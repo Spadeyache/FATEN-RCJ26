@@ -65,7 +65,7 @@ enum XiaoMode : uint8_t {
     XIAO_MODE_NOGI        = 2,
     XIAO_MODE_LINE_ANGLE  = 3,   // line slope + point flags/Y during gap traversal
     XIAO_MODE_OBSTACLE    = 4,   // obstacle re-acquire: arc see-line flag + line tilt angle
-    XIAO_MODE_EVAC_COLOR_MASK = 5,   // evac entry/exit: silver/black tape mask + tilt
+    XIAO_MODE_EVAC_COLOR_MASK = 5,   // evac entry/exit: silver side scan + row-45 black flag
 };
 
 // =============================================================================
@@ -133,7 +133,7 @@ enum XiaoMode : uint8_t {
 
 // EVAC shared tuning — used by BOTH EVAC_SearchDeploy (approach stop) AND
 // VictimManager (grab self-confirm), so it stays here.
-#define EVAC_GRAB_STOP_HEIGHT_PX     145.0f
+#define EVAC_GRAB_STOP_HEIGHT_PX     140.0f
 // Other EVAC tuning is now file-local: EVAC_SearchDeploy-only constants live in
 // EVAC_SearchDeploy.cpp; EVAC_MAX_BALLS lives in VictimManager.cpp.
 
@@ -177,8 +177,8 @@ enum XiaoMode : uint8_t {
 #define INTERSECTION_GREEN_NOSE_UP_TURN_ANGLE             68.0f
 #define INTERSECTION_GREEN_NOSE_UP_TURN_SPEED             45.0f
 
-#define INTERSECTION_GREEN_NOSE_DOWN_FORWARD_SPEED        LINE_FOLLOW_BASE_SPEED_SLOPE
-#define INTERSECTION_GREEN_NOSE_DOWN_FORWARD_MM           0.0f
+#define INTERSECTION_GREEN_NOSE_DOWN_FORWARD_SPEED        -LINE_FOLLOW_BASE_SPEED_SLOPE
+#define INTERSECTION_GREEN_NOSE_DOWN_FORWARD_MM           32.0f
 #define INTERSECTION_GREEN_NOSE_DOWN_TURN_ANGLE           90.0f
 #define INTERSECTION_GREEN_NOSE_DOWN_TURN_SPEED           45.0f
 
@@ -223,8 +223,8 @@ enum XiaoMode : uint8_t {
 #define INTERSECTION_UTURN_NOSE_UP_FINAL_TURN_ANGLE       90.0f
 #define INTERSECTION_UTURN_NOSE_UP_FINAL_TURN_SPEED       45.0f
 
-#define INTERSECTION_UTURN_NOSE_DOWN_PRE_FORWARD_SPEED    LINE_FOLLOW_BASE_SPEED_SLOPE
-#define INTERSECTION_UTURN_NOSE_DOWN_PRE_FORWARD_MM        0.0f
+#define INTERSECTION_UTURN_NOSE_DOWN_PRE_FORWARD_SPEED    -LINE_FOLLOW_BASE_SPEED_SLOPE
+#define INTERSECTION_UTURN_NOSE_DOWN_PRE_FORWARD_MM       50.0f
 #define INTERSECTION_UTURN_NOSE_DOWN_FIRST_TURN_ANGLE     90.0f
 #define INTERSECTION_UTURN_NOSE_DOWN_FIRST_TURN_SPEED     45.0f
 #define INTERSECTION_UTURN_NOSE_DOWN_MID_FORWARD_SPEED    -LINE_FOLLOW_BASE_SPEED_SLOPE

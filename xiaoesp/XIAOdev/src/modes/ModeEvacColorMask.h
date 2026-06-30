@@ -4,17 +4,14 @@
 
 // Mode 5 - Evac color mask
 //
-// Used at evacuation-zone entrance/exit to classify the big tape as silver or
-// black inside the configured line-follow arc ROI, then report its tilt. Silver
-// detection starts from the same saturated reflection pixels used by line-follow,
-// then grows a connected mask through nearby silver-body pixels. Black detection
-// does the same with dark pixels.
+// Used at evacuation-zone entrance/exit for two simple checks:
+//   - silver: same side-column raw-silver scan as line-follow
+//   - black: count black pixels on row 45
 //
 // Sends every frame:
-//   XIAO_REG_ANGLE = 127 + signed tape tilt in degrees
-//                    (127 = level/perpendicular)
-//   XIAO_REG_FLAG  bit0 = tape seen, bit1 = silver, bit2 = black
-//   XIAO_REG_COM   confidence-ish connected pixel count, clamped to 254
+//   XIAO_REG_FEATURE = FEAT_SILVER when silver is seen, else FEAT_NONE
+//   XIAO_REG_FLAG    bit0 = silver seen, bit2 = row-45 black threshold hit
+//   XIAO_REG_COM     row-45 black pixel count
 //
-// Self-contained: shares nothing with the line-follow / other modes.
+// No angle is calculated or sent.
 void modeEvacColorMaskRun(camera_fb_t* fb, YacheEncodedSerial& teensy);

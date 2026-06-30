@@ -11,11 +11,38 @@ namespace Actions {
 namespace WallFollow {
 
 namespace {
-    // --- Front-bumper obstacle recovery ---------------------------------------
-    constexpr float OBSTACLE_BACKUP_MM    = 80.0f;   // TODO: tune on the bench
+    constexpr bool DEBUG_WALL_FOLLOW = false;
+
+    // Obstacle recovery when the front touch sensor fires.
+    constexpr float OBSTACLE_BACKUP_MM    = 60.0f;
     constexpr float OBSTACLE_BACKUP_SPEED = 40.0f;
-    constexpr float OBSTACLE_TURN_DEG     = -90.0f;  // negative = left (Turn::turn() convention)
-    constexpr float OBSTACLE_TURN_SPEED   = 50.0f;
+    constexpr float OBSTACLE_TURN_DEG     = -90.0f;
+    constexpr float OBSTACLE_TURN_SPEED   = 60.0f;
+
+    // PID: error = measured wall distance - target distance.
+    constexpr float PID_KP = 0.3f;
+    constexpr float PID_KI = 0.0f;
+    constexpr float PID_KD = 0.0f;
+    constexpr float INTEGRAL_LIMIT = 200.0f;
+
+    // 2x2 ToF block used as the right-wall distance estimate.
+    constexpr uint8_t ZONE_ROW_LO = 3;
+    constexpr uint8_t ZONE_ROW_HI = 4;
+    constexpr uint8_t ZONE_COL_LO = 2;
+    constexpr uint8_t ZONE_COL_HI = 3;
+
+    // Exit candidate signal once a wall has been acquired.
+    constexpr float   EXIT_FAR_MM         = 200.0f;
+    constexpr uint8_t EXIT_FAR_FRAMES     = 1;
+    constexpr uint8_t EXIT_INVALID_FRAMES = 1;
+    constexpr uint8_t WALL_ACQUIRE_FRAMES = 5;
+
+    float         s_integral = 0.0f;
+    float         s_lastError = 0.0f;
+    unsigned long s_lastTime = 0;
+    uint8_t       s_walledFrames = 0;
+    uint8_t       s_farFrames = 0;
+    uint8_t       s_invalidFrames = 0;
 
     void handleObstacle() {
         Drive::stop();
@@ -23,79 +50,113 @@ namespace {
         Turn::turn(OBSTACLE_TURN_DEG, OBSTACLE_TURN_SPEED);
     }
 
-    // --- Wall-follow PID tuning -----------------------------------------------
-    //   error = measured distance - targetMm
-    //     error > 0 -> too far from the wall -> steer right (toward the wall)
-    //     error < 0 -> too close to the wall -> steer left  (away from the wall)
-    //   Not hardware-validated yet — flip the sign on `correction` below if the
-    //   robot steers the wrong way on the bench.
-    constexpr float PID_KP = 0.3f;   // TODO: tune on the bench
-    constexpr float PID_KI = 0.0f;
-    constexpr float PID_KD = 0.0f;
-
-    constexpr float INTEGRAL_LIMIT = 200.0f;
-
-    // Center 2x2 block of the 8x8 grid: the zones looking straight out to the
-    // side (perpendicular to travel), least sensitive to wall-end/corner noise
-    // at the FOV edges.
-    constexpr uint8_t CENTER_LO = 3;
-    constexpr uint8_t CENTER_HI = 4;
-
-    // Averages the valid (non -1) cells in the center block.
-    // Returns false if none of them are valid (no wall in range this tick).
-    bool centerDistanceMm(float& out) {
-        int32_t sum   = 0;
+    bool readWallDistanceMm(float& out) {
+        int32_t sum = 0;
         uint8_t count = 0;
-        for (uint8_t row = CENTER_LO; row <= CENTER_HI; ++row) {
-            for (uint8_t col = CENTER_LO; col <= CENTER_HI; ++col) {
+
+        for (uint8_t row = ZONE_ROW_LO; row <= ZONE_ROW_HI; ++row) {
+            for (uint8_t col = ZONE_COL_LO; col <= ZONE_COL_HI; ++col) {
                 const int16_t mm = tofFL[row][col];
                 if (mm < 0) continue;
                 sum += mm;
                 ++count;
             }
         }
+
         if (count == 0) return false;
         out = (float)sum / (float)count;
         return true;
     }
+
+    void resetExitCounters() {
+        s_farFrames = 0;
+        s_invalidFrames = 0;
+    }
+
+    Status classifyNoWall(bool valid, float distanceMm) {
+        s_integral = 0.0f;
+
+        if (valid) {
+            ++s_farFrames;
+            s_invalidFrames = 0;
+        } else {
+            ++s_invalidFrames;
+            s_farFrames = 0;
+        }
+
+        const bool armed = s_walledFrames >= WALL_ACQUIRE_FRAMES;
+        const bool candidate =
+            s_farFrames >= EXIT_FAR_FRAMES ||
+            s_invalidFrames >= EXIT_INVALID_FRAMES;
+
+        const Status status = (armed && candidate) ? Status::EXIT_CANDIDATE
+                                                   : Status::NO_WALL;
+        if (DEBUG_WALL_FOLLOW) {
+            Serial.printf("[WF] no-wall valid=%d dist=%.0f wall=%u far=%u inv=%u st=%d\n",
+                          valid ? 1 : 0, distanceMm,
+                          s_walledFrames, s_farFrames, s_invalidFrames,
+                          (int)status);
+        }
+        return status;
+    }
+
+    void updateWallAcquired() {
+        if (s_walledFrames < WALL_ACQUIRE_FRAMES) ++s_walledFrames;
+        resetExitCounters();
+    }
+
+    float pidCorrection(float distanceMm, float targetMm) {
+        const unsigned long now = micros();
+        float dt = (now - s_lastTime) * 1e-6f;
+        s_lastTime = now;
+        if (dt <= 0.0f || dt > 0.5f) dt = 0.05f;
+
+        const float error = distanceMm - targetMm;
+        const float derivative = (error - s_lastError) / dt;
+        s_lastError = error;
+
+        s_integral += error * dt;
+        s_integral = constrain(s_integral, -INTEGRAL_LIMIT, INTEGRAL_LIMIT);
+
+        return PID_KP * error + PID_KI * s_integral + PID_KD * derivative;
+    }
 }  // namespace
 
-bool tick(float targetMm, float baseSpeed) {
-    static float         integral  = 0.0f;
-    static float         lastError = 0.0f;
-    static unsigned long lastTime  = 0;
+void reset() {
+    s_integral = 0.0f;
+    s_lastError = 0.0f;
+    s_lastTime = micros();
+    s_walledFrames = 0;
+    resetExitCounters();
+}
 
+Status tick(float targetMm, float baseSpeed) {
     if (Sensors::Touch::front()) {
+        if (DEBUG_WALL_FOLLOW) Serial.println("[WF] touch recovery");
         handleObstacle();
-        integral  = 0.0f;
-        lastError = 0.0f;
-        lastTime  = micros();   // avoid a dt spike from the blocking maneuver
-        return false;
+        reset();
+        return Status::NO_WALL;
     }
 
-    float distanceMm;
-    if (!centerDistanceMm(distanceMm)) {
-        integral = 0.0f;   // don't let error wind up while the wall is out of range
-        Drive::stop();
-        return false;
+    float distanceMm = 0.0f;
+    const bool valid = readWallDistanceMm(distanceMm);
+    const bool noWall = !valid || distanceMm >= EXIT_FAR_MM;
+
+    if (noWall) {
+        const Status status = classifyNoWall(valid, distanceMm);
+        if (status == Status::EXIT_CANDIDATE) {
+            Drive::stop();
+        } else {
+            Drive::motor(baseSpeed, baseSpeed);
+        }
+        return status;
     }
 
-    const unsigned long now = micros();
-    float dt = (now - lastTime) * 1e-6f;
-    lastTime = now;
-    if (dt <= 0.0f || dt > 0.5f) dt = 0.05f;   // first call / stall guard (~TOF_FREQ_HZ)
+    updateWallAcquired();
 
-    const float error      = distanceMm - targetMm;
-    const float derivative = (error - lastError) / dt;
-    lastError = error;
-
-    integral += error * dt;
-    integral  = constrain(integral, -INTEGRAL_LIMIT, INTEGRAL_LIMIT);
-
-    const float correction = PID_KP * error + PID_KI * integral + PID_KD * derivative;
-
+    const float correction = pidCorrection(distanceMm, targetMm);
     Drive::motor(baseSpeed + correction, baseSpeed - correction);
-    return true;
+    return Status::FOLLOWING;
 }
 
 }  // namespace WallFollow

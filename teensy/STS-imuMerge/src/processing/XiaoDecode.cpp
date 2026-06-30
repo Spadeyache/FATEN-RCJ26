@@ -51,7 +51,7 @@ bool    gapFineAngleFlag() { return _fineAngleFlag; }
 bool    obstacleSeeLine()  { return _commitFlag; }
 float   obstacleAngle()    { return _gapAngle; }
 bool    silverSeen()       { return _commitFlag; }
-float   silverAlignAngle() { return _gapAngle; }
+bool    evacBlackSeen()    { return _bottomLineFlag; }
 
 void setMode(XiaoMode m) {
     Sensors::XIAO_link::send(XIAO_REG_MODE, (uint8_t)m);

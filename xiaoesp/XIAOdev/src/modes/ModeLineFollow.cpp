@@ -394,6 +394,28 @@ void scanColorRow(camera_fb_t* fb, float& blackCom, uint8_t& blackCount, uint8_t
     blackCom = blackCount ? (float)weighted / blackCount : (COLOR_X_MIN + COLOR_X_MAX) * 0.5f;
 }
 
+void printColorCenterSample(camera_fb_t* fb) {
+    constexpr uint8_t centerX = (COLOR_X_MIN + COLOR_X_MAX) / 2;
+    const cameraData px = updateRawGrayHSV(fb, centerX, COLOR_ROW);
+    uint8_t calR = px.avgR;
+    uint8_t calG = px.avgG;
+    uint8_t calB = px.avgB;
+    rgb888Calibration(calR, calG, calB);
+    const HSV rawHsv = rgb888_to_hsv(px.avgR, px.avgG, px.avgB);
+
+    if (SPRINT_RGB_HSV) {
+        Serial.printf(
+            "[PIX] colorCenter x=%u y=%u raw=%u,%u,%u rawHsv=%u,%u,%u cal=%u,%u,%u hsv=%u,%u,%u red=%u green=%u\n",
+            centerX, COLOR_ROW,
+            px.avgR, px.avgG, px.avgB,
+            rawHsv.h, rawHsv.s, rawHsv.v,
+            calR, calG, calB,
+            px.hsv.h, px.hsv.s, px.hsv.v,
+            isRed(px) ? 1 : 0,
+            isGreen(px) ? 1 : 0);
+    }
+}
+
 bool hasBottomLinePoint(const LineCounts& lc) {
     for (uint8_t i = 0; i < lc.count; i++) {
         if (lc.crossings[i].edge == LC_EDGE_BOTTOM || lc.crossings[i].pixelY >= ARC_BOTTOM_Y) return true;
@@ -819,6 +841,7 @@ void modeLineFollowRun(camera_fb_t* fb, YacheEncodedSerial& teensy) {
     float colorCom;
     uint8_t colorBlack, redCount;
     scanColorRow(fb, colorCom, colorBlack, redCount);
+    printColorCenterSample(fb);
     const bool bottomLinePoint = hasBottomLinePoint(lc);
     const bool gapDetected = gapByCrossings(lc);
     const bool blackIntersect = colorBlack > INTERSECTION_BLACK_SAT_THRESHOLD;

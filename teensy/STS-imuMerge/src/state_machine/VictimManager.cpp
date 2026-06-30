@@ -27,8 +27,8 @@ namespace {
     enum Side { SIDE_LEFT, SIDE_RIGHT };
 
     // --- capture tuning (offsets / speeds / timings are per physical arm) --------
-    constexpr int     ALIGN_OFFSET_LEFT  = +120;   // ball left-of-centre for LEFT arm
-    constexpr int     ALIGN_OFFSET_RIGHT = -120;
+    constexpr int     ALIGN_OFFSET_LEFT  = +90;   // ball left-of-centre for LEFT arm
+    constexpr int     ALIGN_OFFSET_RIGHT = -90;
     constexpr int     ALIGN_DEADBAND_PX  = 25;
     constexpr int     ALIGN_SPEED_MIN    = 30;
     constexpr int     ALIGN_SPEED_MAX    = 50;
@@ -48,6 +48,7 @@ namespace {
     constexpr uint8_t CONFIRM_SAMPLE_FRAMES = 3;
     constexpr uint8_t CONFIRM_CLEAR_REQUIRED = 2;
     constexpr uint32_t CONFIRM_FRAME_TIMEOUT_MS = 500;
+    constexpr float CAPTURE_ABORT_HEIGHT_PX = EVAC_GRAB_STOP_HEIGHT_PX - 10.0f;
 
     // --- held state -------------------------------------------------------------
     uint8_t _leftStack[LEFT_CAP]   = {};   // type per slot, in grab order
@@ -99,12 +100,18 @@ namespace {
         Actions::Arm::grabLeft(true);
     }
 
+    bool closeEnoughForCapture(uint8_t cls) {
+        const int16_t h = Processing::K230Decode::largestHeight(cls);
+        return h >= CAPTURE_ABORT_HEIGHT_PX;
+    }
+
     // Drive so `cls` sits at frame-centre + offset. Proportional, tolerant of
     // brief dropouts. Returns true if aligned, false if the ball was lost.
     bool alignToBall(uint8_t cls, int offset) {
         Processing::K230Decode::tick();
         int16_t centerX = Processing::K230Decode::largestCenterX(cls);
         if (centerX < 0) return false;
+        if (!closeEnoughForCapture(cls)) return false;
         int16_t delta = centerX - (int16_t)K230_FRAME_CENTER_X + offset;
 
         while (abs(delta) > ALIGN_DEADBAND_PX) {
@@ -126,6 +133,7 @@ namespace {
                 centerX = Processing::K230Decode::largestCenterX(cls);
             }
             if (centerX < 0) return false;
+            if (!closeEnoughForCapture(cls)) return false;
             delta = centerX - (int16_t)K230_FRAME_CENTER_X + offset;
         }
         Actions::Drive::stop();
@@ -133,25 +141,28 @@ namespace {
     }
 
     // Full grab choreography for one arm — built only from Arm / Drive primitives.
-    void captureWithArm(Side side, uint8_t cls) {
+    bool captureWithArm(Side side, uint8_t cls) {
         const int offset = (side == SIDE_LEFT) ? ALIGN_OFFSET_LEFT : ALIGN_OFFSET_RIGHT;
         if (!alignToBall(cls, offset)) {
             Actions::Drive::stop();
-            return;                       // lost during align -> confirm won't count it
+            return false;
         }
+        if (!closeEnoughForCapture(cls)) return false;
 
-        const int tDown = (side == SIDE_LEFT) ? LEFT_DOWN_MS : RIGHT_DOWN_MS;
-        const int tFwd  = (side == SIDE_LEFT) ? LEFT_FWD_MS  : RIGHT_FWD_MS;
+        // const int tDown = (side == SIDE_LEFT) ? LEFT_DOWN_MS : RIGHT_DOWN_MS;
+        // const int tFwd  = (side == SIDE_LEFT) ? LEFT_FWD_MS  : RIGHT_FWD_MS;
 
         if (side == SIDE_LEFT) Actions::Arm::grabLeft(false); else Actions::Arm::grabRight(false);
-        Actions::Drive::motor(GRAB_BACK_SPEED, GRAB_BACK_SPEED);   // back off
+        Actions::Drive::motor(-20, -20);   // back off
         Actions::Arm::liftDown();
-        Processing::K230Decode::drainDelay(tDown);
-        Actions::Drive::motor(GRAB_FWD_SPEED, GRAB_FWD_SPEED);     // lunge in
-        Processing::K230Decode::drainDelay(tFwd);
+        Processing::K230Decode::drainDelay(600);
+        Actions::Drive::motor(35, 35);     // lunge in
+        Processing::K230Decode::drainDelay(700);
         if (side == SIDE_LEFT) Actions::Arm::grabLeft(true); else Actions::Arm::grabRight(true);
         Actions::Arm::liftCarry();
-        Processing::K230Decode::drainDelay(CARRY_MS);
+        Processing::K230Decode::drainDelay(CARRY_MS - 600);
+        Actions::Drive::stop();
+        Processing::K230Decode::drainDelay(600);
 
         // First ball on the left goes into the bucket so the gripper is free for a
         // second one (LIFO). The second one stays in the gripper.
@@ -159,6 +170,7 @@ namespace {
         if (side == SIDE_LEFT && _leftCount == 0) {
             storeFirstLeftLive();
         }
+        return true;
     }
 
     // True if fresh post-grab frames no longer show this type.
@@ -213,7 +225,10 @@ bool tryGrab(uint8_t type) {
         return false;
     }
 
-    captureWithArm(side, type);
+    if (!captureWithArm(side, type)) {
+        Serial.printf("[VictimManager] grab ABORT type=%u (victim no longer close)\n", type);
+        return false;
+    }
 
     if (!confirmCaptured(type)) {
         Serial.printf("[VictimManager] grab FAILED type=%u (ball still visible)\n", type);
@@ -238,9 +253,14 @@ void releaseLive() {
     }
     Processing::K230Decode::drainDelay(20);
 
+    Actions::Arm::grabLeft(false);
     Actions::Arm::liftPark();  // release the stored victim
     Processing::K230Decode::drainDelay(RELEASE_MS);
-    Processing::K230Decode::drainDelay(80); // time to settle
+    Processing::K230Decode::drainDelay(120);
+    Actions::Arm::liftCarry();
+    Processing::K230Decode::drainDelay(300);
+    Actions::Arm::liftPark();  // confimr extar
+    Processing::K230Decode::drainDelay(420); // time to settle
     Actions::Arm::grabLeft(true);
     Processing::K230Decode::drainDelay(135); // time to settle
     Actions::Arm::liftRelease();

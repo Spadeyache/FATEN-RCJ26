@@ -1,13 +1,11 @@
 #pragma once
 
 // =============================================================================
-//  Actions::SilverAlign — rotate the robot perpendicular to the evac tape.
+//  Actions::SilverAlign — wait for evac silver tape.
 //
-//  align(): blocking. Puts the XIAO into EVAC_COLOR_MASK mode, P-spins in place to
-//  drive the reported tape tilt to ~0 (tape horizontal = robot perpendicular),
-//  holds until aligned for a few frames or a timeout, then stops the motors and
-//  restores XIAO line-follow mode. Returns true if it converged, false on
-//  timeout / tape-not-found.
+//  align(): blocking. Puts the XIAO into EVAC_COLOR_MASK mode, waits until the
+//  simplified mode reports silver for a few frames or times out, then restores
+//  XIAO line-follow mode. No angle is used.
 //
 //  Self-contained — call it from an entry sequence; it touches no other state.
 // =============================================================================

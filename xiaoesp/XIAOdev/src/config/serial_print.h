@@ -19,13 +19,13 @@
 #if defined(OUTPUT_STREAM) || defined(OUTPUT_CALIBRATE)
   #define SPRINT_RESULTS    0
   #define SPRINT_CLASSIFY   0
-  #define SPRINT_RGB_HSV    0
+  #define SPRINT_RGB_HSV    1
   #define SPRINT_SERIAL_IN  0
   #define SPRINT_SERIAL_OUT 0
 #else
   #define SPRINT_RESULTS    1   // [RES]  final output each frame
   #define SPRINT_CLASSIFY   0   // [CLS]  per-pixel color calls
-  #define SPRINT_RGB_HSV    0   // [PIX]  raw / calibrated pixel data
+  #define SPRINT_RGB_HSV    1   // [PIX]  raw / calibrated pixel data
   #define SPRINT_SERIAL_IN  0   // [SIN]  incoming serial from Teensy
   #define SPRINT_SERIAL_OUT 0   // [SOUT] outgoing serial to Teensy
 #endif

@@ -31,7 +31,7 @@ bool    gapFineAngleFlag();
 bool    obstacleSeeLine();
 float   obstacleAngle();
 bool    silverSeen();
-float   silverAlignAngle();
+bool    evacBlackSeen();
 
 void    setMode(XiaoMode m);
 void    clearFilter();

@@ -21,12 +21,11 @@
 //   1 = send camera frames + [LC]/[ROW]/[EVT] overlay text
 //   0 = send only [LC]/[ROW]/[EVT] text, no image payload
 #define STREAM_SEND_CAMERA_IMAGES 1
-
 // Debug: force XIAO to run MODE_LINE_ANGLE without Teensy/state-machine control.
 // Set back to 0 before normal robot runs.
 #define DEBUG_FORCE_LINE_ANGLE_MODE 0
 
-// Debug: force XIAO to run the evacuation black/silver color mask mode.
+// Debug: force XIAO to run the evacuation silver + row-45 black scan mode.
 // Leave DEBUG_FORCE_LINE_ANGLE_MODE at 0; this is a separate override.
 #define DEBUG_FORCE_EVAC_COLOR_MASK_MODE 0
 

@@ -126,7 +126,7 @@
   <h3>Turn / Forward / SilverAlign <span class="ns">namespace Actions</span></h3>
   <div class="fn"><code class="sig">Turn::turn(float angle_deg, float speed=65)</code><p class="desc">Blocking in-place spin. +angle = right, −angle = left; duration is speed-scaled from one calibration constant.</p></div>
   <div class="fn"><code class="sig">Forward::forward(float speed, float dist_mm, bool useIMU=false, bool pumpComms=false)</code><p class="desc">Blocking straight drive of a calibrated distance (negative speed reverses). useIMU holds heading; pumpComms services the XIAO link during the move.</p></div>
-  <div class="fn"><code class="sig">bool SilverAlign::align()</code><p class="desc">Spin to square the robot to the evac silver tape (drives reported tape tilt to ~0). Returns true on convergence, false on timeout.</p></div>
+  <div class="fn"><code class="sig">bool SilverAlign::align()</code><p class="desc">Switches the XIAO to evac color-mask mode and waits for silver tape confirmation. Returns true if seen, false on timeout.</p></div>
 </section>
 
 <section class="mod">
@@ -138,7 +138,7 @@
   <div class="fn"><code class="sig">bool commitFlag() / tightSlowFlag()</code><p class="desc">XIAO is mid green-turn commit / the turn target is low in frame (drive slower).</p></div>
   <div class="fn"><code class="sig">bool gapAnyPointFlag() / gapBothRowsFlag() / gapBottomLineFlag() / gapFineAngleFlag()</code><p class="desc">Per-frame gap detector flags (point seen, two rows, bottom edge, fine angle valid).</p></div>
   <div class="fn"><code class="sig">bool obstacleSeeLine() / float obstacleAngle()</code><p class="desc">Obstacle-reacquire mode: line back in view + its tilt.</p></div>
-  <div class="fn"><code class="sig">bool silverSeen() / float silverAlignAngle()</code><p class="desc">Evac tape seen + its angle, used by SilverAlign.</p></div>
+  <div class="fn"><code class="sig">bool silverSeen() / bool evacBlackSeen()</code><p class="desc">Evac color-mask flags: silver side scan and row-45 black threshold.</p></div>
   <div class="fn"><code class="sig">void setMode(XiaoMode m)</code><p class="desc">Tell the XIAO which vision mode to run (LINE / SEARCH_LINE / NOGI / LINE_ANGLE / OBSTACLE / EVAC_COLOR_MASK).</p></div>
   <div class="fn"><code class="sig">void clearFilter() / void setCommand(uint8_t c)</code><p class="desc">Reset the debounce votes / force the current command (used during scripted manoeuvres).</p></div>
 </section>
@@ -203,7 +203,7 @@
   <div class="fn"><code class="sig">modeNoGIRun(fb, teensy)</code><p class="desc">Mode 2. Far-field black-pixel count across rows; flags a no-green intersection ahead.</p></div>
   <div class="fn"><code class="sig">modeLineAngleRun(fb, teensy)</code><p class="desc">Mode 3. Gap-crossing helper: report the line slope, a precise fine angle, and point flags so the Teensy can drive straight across a gap.</p></div>
   <div class="fn"><code class="sig">modeObstacleRun(fb, teensy)</code><p class="desc">Mode 4. After going around an obstacle, confirm the line is back in the top arc and report its tilt.</p></div>
-  <div class="fn"><code class="sig">modeEvacColorMaskRun(fb, teensy)</code><p class="desc">Mode 5. At the evac entrance/exit, classify the big tape as silver or black inside the line-follow arc ROI and report its tilt.</p></div>
+  <div class="fn"><code class="sig">modeEvacColorMaskRun(fb, teensy)</code><p class="desc">Mode 5. At the evac entrance/exit, detect silver with the line-follow side scan and raise a flag when row 45 has enough black pixels.</p></div>
 </section>
 
 <section class="mod">

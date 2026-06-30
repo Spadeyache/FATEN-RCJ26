@@ -61,8 +61,6 @@ uint8_t    s_laFineNearWidth = 0;
 bool       s_saValid = false;
 bool       s_saSeen = false;
 char       s_saCls[8] = "none";
-float      s_saAngleDeg = 0.0f;
-uint8_t    s_saEncodedAngle = 127;
 uint16_t   s_saCount = 0;
 uint16_t   s_saFlashCount = 0;
 uint16_t   s_saBlackCount = 0;
@@ -208,8 +206,7 @@ void xs_storeLineAngleDebug(uint8_t count, bool twoDetected, bool bottomLine,
     s_laFineNearWidth = fineNearWidth;
 }
 
-void xs_storeEvacTapeDebug(bool seen, const char* cls, float angleDeg,
-                           uint8_t encodedAngle, uint16_t count,
+void xs_storeEvacTapeDebug(bool seen, const char* cls, uint16_t count,
                            uint16_t flashCount, uint16_t blackCount,
                            uint8_t minX, uint8_t minY,
                            uint8_t maxX, uint8_t maxY,
@@ -218,8 +215,6 @@ void xs_storeEvacTapeDebug(bool seen, const char* cls, float angleDeg,
     s_saValid = true;
     s_saSeen = seen;
     snprintf(s_saCls, sizeof(s_saCls), "%s", cls ? cls : "none");
-    s_saAngleDeg = angleDeg;
-    s_saEncodedAngle = encodedAngle;
     s_saCount = count;
     s_saFlashCount = flashCount;
     s_saBlackCount = blackCount;
@@ -232,6 +227,19 @@ void xs_storeEvacTapeDebug(bool seen, const char* cls, float angleDeg,
         s_saMaskX[i] = maskX ? maskX[i] : 0;
         s_saMaskY[i] = maskY ? maskY[i] : 0;
     }
+}
+
+void xs_storeEvacTapeDebug(bool seen, const char* cls, float angleDeg,
+                           uint8_t encodedAngle, uint16_t count,
+                           uint16_t flashCount, uint16_t blackCount,
+                           uint8_t minX, uint8_t minY,
+                           uint8_t maxX, uint8_t maxY,
+                           const uint8_t* maskX, const uint8_t* maskY,
+                           uint8_t maskCount) {
+    (void)angleDeg;
+    (void)encodedAngle;
+    xs_storeEvacTapeDebug(seen, cls, count, flashCount, blackCount,
+                          minX, minY, maxX, maxY, maskX, maskY, maskCount);
 }
 
 int xs_formatLineDebug(char* buf, int bufLen) {
@@ -299,14 +307,12 @@ int xs_formatLineAngleDebug(char* buf, int bufLen) {
 int xs_formatEvacTapeDebug(char* buf, int bufLen) {
     if (!s_saValid || bufLen < 32) return 0;
     if (!s_saSeen) {
-        return snprintf(buf, bufLen, "[SA] seen=0 cls=none angle=0.0 enc=127\n");
+        return snprintf(buf, bufLen, "[SA] seen=0 cls=none black=%u\n", s_saBlackCount);
     }
 
     int o = snprintf(buf, bufLen,
-        "[SA] seen=1 cls=%s angle=%.1f enc=%u cnt=%u flash=%u black=%u box=%u,%u,%u,%u p=",
+        "[SA] seen=1 cls=%s cnt=%u flash=%u black=%u box=%u,%u,%u,%u p=",
         s_saCls,
-        s_saAngleDeg,
-        s_saEncodedAngle,
         s_saCount,
         s_saFlashCount,
         s_saBlackCount,
