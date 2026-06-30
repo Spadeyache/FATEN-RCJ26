@@ -113,9 +113,9 @@ inline float robotRoll()  { return DEV_FORCE_TILT ? DEV_ROBOT_ROLL_DEG  : -Senso
 // =============================================================================
 
 // --- Tilt gate + base speed --------------------------------------------------
-constexpr float TILT_GATE_DEG   = 12.0f;
-constexpr float FRIC_SPEED_FLAT = 70.0f;   // flat-ground base speed
-constexpr float FRIC_SPEED_TILT = 40.0f;   // base speed once tilted past the gate
+constexpr float TILT_GATE_DEG   = 17.0f;
+constexpr float FRIC_SPEED_FLAT = LINE_FOLLOW_BASE_SPEED_FLAT;    // flat-ground base speed
+constexpr float FRIC_SPEED_TILT = LINE_FOLLOW_BASE_SPEED_SLOPE;   // base speed once tilted past the gate
 
 LineFollowState classifyLineFollowState(float pitch, float roll) {
     const float absPitch = fabsf(pitch);
@@ -146,7 +146,22 @@ constexpr float TIGHT_SLOW_REVERSE_GAIN = 1.05f;
 // --- Nose-down reverse bite --------------------------------------------------
 // Downhill line-follow needs extra negative motor authority for both gentle and
 // sharp corrections, without making the PID gains themselves more aggressive.
-constexpr float NOSE_DOWN_REVERSE_GAIN = 1.25f;
+constexpr float NOSE_DOWN_REVERSE_GAIN = 1.55f;
+
+// --- Blocking turn gravity gains --------------------------------------------
+// Turn profile uses motor sign instead of rot-axis scaling:
+//   nose up      -> strengthen positive drive, soften reverse drag
+//   nose down    -> strengthen reverse braking/counter-force
+//   side uphill  -> strengthen positive drive
+//   side downhill-> strengthen reverse counter-force
+constexpr float TURN_NOSE_UP_FORWARD_GAIN      = 1.20f;
+constexpr float TURN_NOSE_UP_REVERSE_GAIN      = 0.80f;
+constexpr float TURN_NOSE_DOWN_FORWARD_GAIN    = 1.00f;
+constexpr float TURN_NOSE_DOWN_REVERSE_GAIN    = 1.25f;
+constexpr float TURN_SIDE_UPHILL_FORWARD_GAIN  = 1.20f;
+constexpr float TURN_SIDE_UPHILL_REVERSE_GAIN  = 1.00f;
+constexpr float TURN_SIDE_DOWNHILL_FORWARD_GAIN = 1.00f;
+constexpr float TURN_SIDE_DOWNHILL_REVERSE_GAIN = 1.25f;
 
 // --- Side-roll left/right power (|roll| > gate) ------------------------------
 // Hardcoded, symmetric for left-down / right-down: the UPPER wheels lose power.
@@ -224,6 +239,102 @@ uint32_t scaledLinePidMs(uint32_t flatMs, uint32_t minMs, uint32_t maxMs) {
     return constrain(scaled, minMs, maxMs);
 }
 
+void applyNoseDownReverseGain(float& fl, float& fr, float& bl, float& br) {
+    if (fl < 0.0f) fl *= NOSE_DOWN_REVERSE_GAIN;
+    if (fr < 0.0f) fr *= NOSE_DOWN_REVERSE_GAIN;
+    if (bl < 0.0f) bl *= NOSE_DOWN_REVERSE_GAIN;
+    if (br < 0.0f) br *= NOSE_DOWN_REVERSE_GAIN;
+}
+
+void applySignGains(float& fl, float& fr, float& bl, float& br,
+                    float forwardGain, float reverseGain) {
+    if (fl > 0.0f) fl *= forwardGain; else if (fl < 0.0f) fl *= reverseGain;
+    if (fr > 0.0f) fr *= forwardGain; else if (fr < 0.0f) fr *= reverseGain;
+    if (bl > 0.0f) bl *= forwardGain; else if (bl < 0.0f) bl *= reverseGain;
+    if (br > 0.0f) br *= forwardGain; else if (br < 0.0f) br *= reverseGain;
+}
+
+void motorSlopeProfiled(float32_t left,
+                        float32_t right,
+                        float32_t turnNorm,
+                        bool applyTightSlowReverse) {
+    const float pitch = robotPitch();
+    const float roll  = robotRoll();
+    updateLineFollowState(pitch, roll);
+
+    float leftSpeed  = left;
+    float rightSpeed = right;
+
+    // Side roll past the gate: the UPPER side loses power (hardcoded x0.7,
+    // symmetric for left-down / right-down). roll > 0 = left down -> right is upper.
+    if (fabsf(roll) > TILT_GATE_DEG) {
+        if (roll > 0.0f) rightSpeed *= ROLL_UPPER_GAIN;
+        else             leftSpeed  *= ROLL_UPPER_GAIN;
+    }
+
+    const float bias = rotAxisBias(constrain(turnNorm, -1.0f, 1.0f));
+    float frontScale = 1.0f;
+    float rearScale  = 1.0f;
+    if (bias > 0.0f)      frontScale = 1.0f - bias * (1.0f - ROTAXIS_FRONT_MIN);
+    else if (bias < 0.0f) rearScale  = 1.0f + bias * (1.0f - ROTAXIS_REAR_MIN);  // bias < 0
+
+    float fl = leftSpeed  * frontScale;
+    float fr = rightSpeed * frontScale;
+    float bl = leftSpeed  * rearScale;
+    float br = rightSpeed * rearScale;
+
+    if (applyTightSlowReverse) {
+        if (fl < 0.0f) fl *= TIGHT_SLOW_REVERSE_GAIN;
+        if (fr < 0.0f) fr *= TIGHT_SLOW_REVERSE_GAIN;
+        if (bl < 0.0f) bl *= TIGHT_SLOW_REVERSE_GAIN;
+        if (br < 0.0f) br *= TIGHT_SLOW_REVERSE_GAIN;
+    }
+
+    if (pitch < -TILT_GATE_DEG) {
+        applyNoseDownReverseGain(fl, fr, bl, br);
+    }
+
+    motorRaw(fl, fr, bl, br);
+}
+
+void motorTurnGravityProfiled(float32_t left,
+                              float32_t right,
+                              float32_t turnNorm) {
+    const float pitch = robotPitch();
+    const float roll  = robotRoll();
+    updateLineFollowState(pitch, roll);
+
+    float fl = left;
+    float fr = right;
+    float bl = left;
+    float br = right;
+
+    if (pitch > TILT_GATE_DEG) {
+        applySignGains(fl, fr, bl, br,
+                       TURN_NOSE_UP_FORWARD_GAIN,
+                       TURN_NOSE_UP_REVERSE_GAIN);
+    } else if (pitch < -TILT_GATE_DEG) {
+        applySignGains(fl, fr, bl, br,
+                       TURN_NOSE_DOWN_FORWARD_GAIN,
+                       TURN_NOSE_DOWN_REVERSE_GAIN);
+    }
+
+    if (fabsf(roll) > TILT_GATE_DEG) {
+        const float downhill = turnNorm * ROLL_DOWNHILL_SIGN * (roll > 0.0f ? -1.0f : 1.0f);
+        if (downhill > 0.0f) {
+            applySignGains(fl, fr, bl, br,
+                           TURN_SIDE_DOWNHILL_FORWARD_GAIN,
+                           TURN_SIDE_DOWNHILL_REVERSE_GAIN);
+        } else {
+            applySignGains(fl, fr, bl, br,
+                           TURN_SIDE_UPHILL_FORWARD_GAIN,
+                           TURN_SIDE_UPHILL_REVERSE_GAIN);
+        }
+    }
+
+    motorRaw(fl, fr, bl, br);
+}
+
 // =============================================================================
 //  4. runLinePID - the controller.
 // =============================================================================
@@ -248,10 +359,6 @@ void runLinePID() {
 
     // Base speed: flat vs slope (slope = tilted past the gate). The slope flag
     // also selects the *_SLOPE PID gains.
-    const float pitch = robotPitch();
-    const float roll  = robotRoll();
-    updateLineFollowState(pitch, roll);
-
     const float frictionBase = frictionCircAdj();
     const bool  slope = (frictionBase < FRIC_SPEED_FLAT);
     const float kp = slope ? PID_KP_SLOPE : PID_KP_FLAT;
@@ -268,48 +375,16 @@ void runLinePID() {
     float leftSpeed  = base + correction;
     float rightSpeed = base - correction;
 
-    // Side roll past the gate: the UPPER side loses power (hardcoded x0.7,
-    // symmetric for left-down / right-down). roll > 0 = left down -> right is upper.
-    if (fabsf(roll) > TILT_GATE_DEG) {
-        if (roll > 0.0f) rightSpeed *= ROLL_UPPER_GAIN;
-        else             leftSpeed  *= ROLL_UPPER_GAIN;
-    }
-
     leftSpeed  = constrain(leftSpeed,  -70.0f, base);
     rightSpeed = constrain(rightSpeed, -70.0f, base);
 
-    // rot axis: continuous fore/aft pivot shift. bias > 0 de-rates the front
-    // (pivot forward), bias < 0 de-rates the rear (pivot back). Zero below the gate.
-    const float bias = rotAxisBias(eNorm);
-    float frontScale = 1.0f;
-    float rearScale  = 1.0f;
-    if (bias > 0.0f)      frontScale = 1.0f - bias * (1.0f - ROTAXIS_FRONT_MIN);
-    else if (bias < 0.0f) rearScale  = 1.0f + bias * (1.0f - ROTAXIS_REAR_MIN);  // bias < 0
-
-    float fl = leftSpeed  * frontScale;
-    float fr = rightSpeed * frontScale;
-    float bl = leftSpeed  * rearScale;
-    float br = rightSpeed * rearScale;
-
-    if (tightSlow) {
-        if (fl < 0.0f) fl *= TIGHT_SLOW_REVERSE_GAIN;
-        if (fr < 0.0f) fr *= TIGHT_SLOW_REVERSE_GAIN;
-        if (bl < 0.0f) bl *= TIGHT_SLOW_REVERSE_GAIN;
-        if (br < 0.0f) br *= TIGHT_SLOW_REVERSE_GAIN;
-    }
-
-    if (pitch < -TILT_GATE_DEG) {
-        if (fl < 0.0f) fl *= NOSE_DOWN_REVERSE_GAIN;
-        if (fr < 0.0f) fr *= NOSE_DOWN_REVERSE_GAIN;
-        if (bl < 0.0f) bl *= NOSE_DOWN_REVERSE_GAIN;
-        if (br < 0.0f) br *= NOSE_DOWN_REVERSE_GAIN;
-    }
-
-    motorRaw(fl, fr, bl, br);
+    // Line-follow slope profile:
+    //   nose down -> pivot back + strengthen any negative wheel output.
+    motorSlopeProfiled(leftSpeed, rightSpeed, eNorm, tightSlow);
 
 #if PRINT_PID
-    Serial.printf("PID err:%.1f corr:%.1f base:%.0f bias:%.2f L:%.0f R:%.0f\n",
-                  rawError, correction, base, bias, leftSpeed, rightSpeed);
+    Serial.printf("PID err:%.1f corr:%.1f base:%.0f L:%.0f R:%.0f\n",
+                  rawError, correction, base, leftSpeed, rightSpeed);
 #endif
 }
 

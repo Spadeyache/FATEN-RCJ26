@@ -16,6 +16,7 @@ namespace Actions {
 namespace Turn {
 
 void turn(float angle_deg, float speed = 65.0f);
+void turnRaw(float angle_deg, float speed = 65.0f);
 
 }  // namespace Turn
 }  // namespace Actions

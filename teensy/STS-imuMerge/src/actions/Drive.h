@@ -34,6 +34,20 @@ void init();
 void motor(float32_t left, float32_t right) FASTRUN;
 void stop() FASTRUN;
 
+// Slope-aware raw wheel output for behaviours that already picked left/right
+// powers. turnNorm is [-1,+1]: + = right turn, - = left turn, magnitude = turn sharpness.
+void motorSlopeProfiled(float32_t left,
+                        float32_t right,
+                        float32_t turnNorm,
+                        bool applyTightSlowReverse = false);
+
+// Turn-only IMU gravity compensation. This does not apply rot-axis front/rear
+// scaling; it strengthens the motor sign that counters gravity for the current
+// pitch/roll and turn direction.
+void motorTurnGravityProfiled(float32_t left,
+                              float32_t right,
+                              float32_t turnNorm);
+
 // Blocking spin-in-place that decays from |power| down to 35 over durationMs.
 // left = +power, right = -power (so positive power spins one way). Stops at end.
 void spinDecay(float32_t power, uint32_t durationMs);

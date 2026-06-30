@@ -11,7 +11,9 @@
 namespace Actions {
 namespace Turn {
 
-void turn(float angle_deg, float speed) {
+namespace {
+
+void turnImpl(float angle_deg, float speed, bool useGravityProfile) {
     // Duration scales the same way as Forward::forward():
     //   calibrated at MAX_MOTOR_SPEED, then inversely scaled by actual speed.
     const unsigned long duration =
@@ -20,11 +22,13 @@ void turn(float angle_deg, float speed) {
     // In-place spin: left and right wheels equal and opposite.
     const float l = (angle_deg > 0) ?  speed : -speed;
     const float r = (angle_deg > 0) ? -speed :  speed;
-    Drive::motor(l, r);
+    const float turnNorm = (angle_deg > 0) ? 1.0f : -1.0f;
+    if (useGravityProfile) Drive::motorTurnGravityProfiled(l, r, turnNorm);
+    else                   Drive::motor(l, r);
 
 #if PRINT_ACTIONS
-    Serial.printf("Turn: %.1f deg @ speed %.0f -> %lu ms  (L:%.0f R:%.0f)\n",
-                  angle_deg, speed, duration, l, r);
+    Serial.printf("Turn%s: %.1f deg @ speed %.0f -> %lu ms  (L:%.0f R:%.0f)\n",
+                  useGravityProfile ? "" : "Raw", angle_deg, speed, duration, l, r);
 #endif
 
     const unsigned long start = millis();
@@ -33,11 +37,23 @@ void turn(float angle_deg, float speed) {
         if (millis() - lastComms >= 20) {
             Sensors::XIAO_link::tick();
             Processing::XiaoDecode::tick();
+            if (useGravityProfile) Drive::motorTurnGravityProfiled(l, r, turnNorm);
+            else                   Drive::motor(l, r);
             lastComms = millis();
         }
     }
 
     Drive::stop();
+}
+
+}  // namespace
+
+void turn(float angle_deg, float speed) {
+    turnImpl(angle_deg, speed, true);
+}
+
+void turnRaw(float angle_deg, float speed) {
+    turnImpl(angle_deg, speed, false);
 }
 
 }  // namespace Turn

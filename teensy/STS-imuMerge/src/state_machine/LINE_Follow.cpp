@@ -40,6 +40,18 @@ namespace {
         float turnSpeed;
     };
 
+    struct UTurnSequence {
+        float preForwardSpeed;
+        float preForwardMm;
+        float firstTurnAngle;
+        float firstTurnSpeed;
+        float midForwardSpeed;
+        float midForwardMm;
+        float finalTurnAngle;
+        float finalTurnSpeed;
+        bool rawTurns;
+    };
+
     // One-shot green cooldown: after firing any green turn (u-turn/left/right)
     // we ignore all green for DISABLE_GREEN_MS so the same intersection isn't
     // re-read on the way out.
@@ -92,15 +104,15 @@ namespace {
                         -INTERSECTION_GREEN_NOSE_DOWN_TURN_ANGLE,
                         INTERSECTION_GREEN_NOSE_DOWN_TURN_SPEED};
             case Actions::Drive::LINE_FOLLOW_LEFT_DOWN:
-                return {INTERSECTION_GREEN_LEFT_LEFT_DOWN_FORWARD_SPEED,
-                        INTERSECTION_GREEN_LEFT_LEFT_DOWN_FORWARD_MM,
-                        INTERSECTION_GREEN_LEFT_LEFT_DOWN_TURN_ANGLE,
-                        INTERSECTION_GREEN_LEFT_LEFT_DOWN_TURN_SPEED};
+                return {INTERSECTION_GREEN_SIDE_DOWNHILL_FORWARD_SPEED,
+                        INTERSECTION_GREEN_SIDE_DOWNHILL_FORWARD_MM,
+                        -INTERSECTION_GREEN_SIDE_DOWNHILL_TURN_ANGLE,
+                        INTERSECTION_GREEN_SIDE_DOWNHILL_TURN_SPEED};
             case Actions::Drive::LINE_FOLLOW_RIGHT_DOWN:
-                return {INTERSECTION_GREEN_LEFT_RIGHT_DOWN_FORWARD_SPEED,
-                        INTERSECTION_GREEN_LEFT_RIGHT_DOWN_FORWARD_MM,
-                        INTERSECTION_GREEN_LEFT_RIGHT_DOWN_TURN_ANGLE,
-                        INTERSECTION_GREEN_LEFT_RIGHT_DOWN_TURN_SPEED};
+                return {INTERSECTION_GREEN_SIDE_UPHILL_FORWARD_SPEED,
+                        INTERSECTION_GREEN_SIDE_UPHILL_FORWARD_MM,
+                        -INTERSECTION_GREEN_SIDE_UPHILL_TURN_ANGLE,
+                        INTERSECTION_GREEN_SIDE_UPHILL_TURN_SPEED};
             case Actions::Drive::LINE_FOLLOW_FLAT:
             default:
                 return {INTERSECTION_GREEN_LEFT_FLAT_FORWARD_SPEED,
@@ -123,15 +135,15 @@ namespace {
                         INTERSECTION_GREEN_NOSE_DOWN_TURN_ANGLE,
                         INTERSECTION_GREEN_NOSE_DOWN_TURN_SPEED};
             case Actions::Drive::LINE_FOLLOW_LEFT_DOWN:
-                return {INTERSECTION_GREEN_RIGHT_LEFT_DOWN_FORWARD_SPEED,
-                        INTERSECTION_GREEN_RIGHT_LEFT_DOWN_FORWARD_MM,
-                        INTERSECTION_GREEN_RIGHT_LEFT_DOWN_TURN_ANGLE,
-                        INTERSECTION_GREEN_RIGHT_LEFT_DOWN_TURN_SPEED};
+                return {INTERSECTION_GREEN_SIDE_UPHILL_FORWARD_SPEED,
+                        INTERSECTION_GREEN_SIDE_UPHILL_FORWARD_MM,
+                        INTERSECTION_GREEN_SIDE_UPHILL_TURN_ANGLE,
+                        INTERSECTION_GREEN_SIDE_UPHILL_TURN_SPEED};
             case Actions::Drive::LINE_FOLLOW_RIGHT_DOWN:
-                return {INTERSECTION_GREEN_RIGHT_RIGHT_DOWN_FORWARD_SPEED,
-                        INTERSECTION_GREEN_RIGHT_RIGHT_DOWN_FORWARD_MM,
-                        INTERSECTION_GREEN_RIGHT_RIGHT_DOWN_TURN_ANGLE,
-                        INTERSECTION_GREEN_RIGHT_RIGHT_DOWN_TURN_SPEED};
+                return {INTERSECTION_GREEN_SIDE_DOWNHILL_FORWARD_SPEED,
+                        INTERSECTION_GREEN_SIDE_DOWNHILL_FORWARD_MM,
+                        INTERSECTION_GREEN_SIDE_DOWNHILL_TURN_ANGLE,
+                        INTERSECTION_GREEN_SIDE_DOWNHILL_TURN_SPEED};
             case Actions::Drive::LINE_FOLLOW_FLAT:
             default:
                 return {INTERSECTION_GREEN_RIGHT_FLAT_FORWARD_SPEED,
@@ -141,34 +153,59 @@ namespace {
         }
     }
 
-    IntersectionMotion uturnMotion(Actions::Drive::LineFollowState state) {
+    UTurnSequence uturnSequence(Actions::Drive::LineFollowState state) {
         switch (state) {
             case Actions::Drive::LINE_FOLLOW_NOSE_UP:
-                return {INTERSECTION_UTURN_NOSE_UP_FORWARD_SPEED,
-                        INTERSECTION_UTURN_NOSE_UP_FORWARD_MM,
-                        INTERSECTION_UTURN_NOSE_UP_TURN_ANGLE,
-                        INTERSECTION_UTURN_NOSE_UP_TURN_SPEED};
+                return {INTERSECTION_UTURN_NOSE_UP_PRE_FORWARD_SPEED,
+                        INTERSECTION_UTURN_NOSE_UP_PRE_FORWARD_MM,
+                        INTERSECTION_UTURN_NOSE_UP_FIRST_TURN_ANGLE,
+                        INTERSECTION_UTURN_NOSE_UP_FIRST_TURN_SPEED,
+                        INTERSECTION_UTURN_NOSE_UP_MID_FORWARD_SPEED,
+                        INTERSECTION_UTURN_NOSE_UP_MID_FORWARD_MM,
+                        INTERSECTION_UTURN_NOSE_UP_FINAL_TURN_ANGLE,
+                        INTERSECTION_UTURN_NOSE_UP_FINAL_TURN_SPEED,
+                        true};
             case Actions::Drive::LINE_FOLLOW_NOSE_DOWN:
-                return {INTERSECTION_UTURN_NOSE_DOWN_FORWARD_SPEED,
-                        INTERSECTION_UTURN_NOSE_DOWN_FORWARD_MM,
-                        INTERSECTION_UTURN_NOSE_DOWN_TURN_ANGLE,
-                        INTERSECTION_UTURN_NOSE_DOWN_TURN_SPEED};
+                return {INTERSECTION_UTURN_NOSE_DOWN_PRE_FORWARD_SPEED,
+                        INTERSECTION_UTURN_NOSE_DOWN_PRE_FORWARD_MM,
+                        INTERSECTION_UTURN_NOSE_DOWN_FIRST_TURN_ANGLE,
+                        INTERSECTION_UTURN_NOSE_DOWN_FIRST_TURN_SPEED,
+                        INTERSECTION_UTURN_NOSE_DOWN_MID_FORWARD_SPEED,
+                        INTERSECTION_UTURN_NOSE_DOWN_MID_FORWARD_MM,
+                        INTERSECTION_UTURN_NOSE_DOWN_FINAL_TURN_ANGLE,
+                        INTERSECTION_UTURN_NOSE_DOWN_FINAL_TURN_SPEED,
+                        true};
             case Actions::Drive::LINE_FOLLOW_LEFT_DOWN:
-                return {INTERSECTION_UTURN_LEFT_DOWN_FORWARD_SPEED,
-                        INTERSECTION_UTURN_LEFT_DOWN_FORWARD_MM,
-                        INTERSECTION_UTURN_LEFT_DOWN_TURN_ANGLE,
-                        INTERSECTION_UTURN_LEFT_DOWN_TURN_SPEED};
+                return {INTERSECTION_UTURN_LEFT_DOWN_PRE_FORWARD_SPEED,
+                        INTERSECTION_UTURN_LEFT_DOWN_PRE_FORWARD_MM,
+                        INTERSECTION_UTURN_LEFT_DOWN_FIRST_TURN_ANGLE,
+                        INTERSECTION_UTURN_LEFT_DOWN_FIRST_TURN_SPEED,
+                        INTERSECTION_UTURN_LEFT_DOWN_MID_FORWARD_SPEED,
+                        INTERSECTION_UTURN_LEFT_DOWN_MID_FORWARD_MM,
+                        INTERSECTION_UTURN_LEFT_DOWN_FINAL_TURN_ANGLE,
+                        INTERSECTION_UTURN_LEFT_DOWN_FINAL_TURN_SPEED,
+                        false};
             case Actions::Drive::LINE_FOLLOW_RIGHT_DOWN:
-                return {INTERSECTION_UTURN_RIGHT_DOWN_FORWARD_SPEED,
-                        INTERSECTION_UTURN_RIGHT_DOWN_FORWARD_MM,
-                        INTERSECTION_UTURN_RIGHT_DOWN_TURN_ANGLE,
-                        INTERSECTION_UTURN_RIGHT_DOWN_TURN_SPEED};
+                return {INTERSECTION_UTURN_RIGHT_DOWN_PRE_FORWARD_SPEED,
+                        INTERSECTION_UTURN_RIGHT_DOWN_PRE_FORWARD_MM,
+                        INTERSECTION_UTURN_RIGHT_DOWN_FIRST_TURN_ANGLE,
+                        INTERSECTION_UTURN_RIGHT_DOWN_FIRST_TURN_SPEED,
+                        INTERSECTION_UTURN_RIGHT_DOWN_MID_FORWARD_SPEED,
+                        INTERSECTION_UTURN_RIGHT_DOWN_MID_FORWARD_MM,
+                        INTERSECTION_UTURN_RIGHT_DOWN_FINAL_TURN_ANGLE,
+                        INTERSECTION_UTURN_RIGHT_DOWN_FINAL_TURN_SPEED,
+                        false};
             case Actions::Drive::LINE_FOLLOW_FLAT:
             default:
-                return {INTERSECTION_UTURN_FLAT_FORWARD_SPEED,
-                        INTERSECTION_UTURN_FLAT_FORWARD_MM,
-                        INTERSECTION_UTURN_FLAT_TURN_ANGLE,
-                        INTERSECTION_UTURN_FLAT_TURN_SPEED};
+                return {INTERSECTION_UTURN_FLAT_PRE_FORWARD_SPEED,
+                        INTERSECTION_UTURN_FLAT_PRE_FORWARD_MM,
+                        INTERSECTION_UTURN_FLAT_FIRST_TURN_ANGLE,
+                        INTERSECTION_UTURN_FLAT_FIRST_TURN_SPEED,
+                        INTERSECTION_UTURN_FLAT_MID_FORWARD_SPEED,
+                        INTERSECTION_UTURN_FLAT_MID_FORWARD_MM,
+                        INTERSECTION_UTURN_FLAT_FINAL_TURN_ANGLE,
+                        INTERSECTION_UTURN_FLAT_FINAL_TURN_SPEED,
+                        false};
         }
     }
 
@@ -178,6 +215,21 @@ namespace {
                                       /*useIMU=*/false, /*pumpComms=*/true);
         }
         Actions::Turn::turn(motion.turnAngle, motion.turnSpeed);
+    }
+
+    void runForwardIfNeeded(float speed, float mm) {
+        if (speed != 0.0f && mm != 0.0f) {
+            Actions::Forward::forward(speed, mm, /*useIMU=*/false, /*pumpComms=*/true);
+        }
+    }
+
+    void runUTurnSequence(const UTurnSequence& seq) {
+        runForwardIfNeeded(seq.preForwardSpeed, seq.preForwardMm);
+        if (seq.rawTurns) Actions::Turn::turnRaw(seq.firstTurnAngle, seq.firstTurnSpeed);
+        else              Actions::Turn::turn(seq.firstTurnAngle, seq.firstTurnSpeed);
+        runForwardIfNeeded(seq.midForwardSpeed, seq.midForwardMm);
+        if (seq.rawTurns) Actions::Turn::turnRaw(seq.finalTurnAngle, seq.finalTurnSpeed);
+        else              Actions::Turn::turn(seq.finalTurnAngle, seq.finalTurnSpeed);
     }
 }
 
@@ -206,11 +258,11 @@ void update() {
             if (_disableGreen) { Actions::Drive::runLinePID(); return; }
             {
             const Actions::Drive::LineFollowState lfState = Actions::Drive::lineFollowState();
-            const IntersectionMotion motion = uturnMotion(lfState);
+            const UTurnSequence seq = uturnSequence(lfState);
             #if PRINT_ACTIONS
                         Serial.printf("Action: U-Turn (%s)\n", Actions::Drive::lineFollowStateName(lfState));
             #endif
-            runIntersectionMotion(motion);
+            runUTurnSequence(seq);
             }
 
             // After the timed U-turn, keep spinning with the same motor power
