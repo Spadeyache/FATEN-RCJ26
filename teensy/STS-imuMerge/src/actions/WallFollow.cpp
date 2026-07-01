@@ -36,7 +36,6 @@ namespace {
     constexpr uint8_t ZONE_COL_HI = 3;
 
     // Exit candidate signal once a wall has been acquired.
-    constexpr float   EXIT_FAR_MM         = 230.0f;
     constexpr uint8_t EXIT_FAR_FRAMES     = 1;
     constexpr uint8_t EXIT_INVALID_FRAMES = 1;
     constexpr uint8_t WALL_ACQUIRE_FRAMES = 5;
@@ -66,9 +65,7 @@ namespace {
     }
 
     void handleObstacle() {
-        Drive::stop();
-        Forward::forward(-OBSTACLE_BACKUP_SPEED, OBSTACLE_BACKUP_MM);
-        Turn::turn(obstacleTurnDeg(), OBSTACLE_TURN_SPEED);
+        recover(OBSTACLE_BACKUP_MM);
     }
 
     bool readWallDistanceMm(float& out) {
@@ -94,7 +91,7 @@ namespace {
         s_invalidFrames = 0;
     }
 
-    Status classifyNoWall(bool valid, float distanceMm) {
+    Status classifyNoWall(bool valid, float distanceMm, bool detectSudden) {
         s_integral = 0.0f;
 
         if (valid) {
@@ -111,7 +108,7 @@ namespace {
             s_invalidFrames >= EXIT_INVALID_FRAMES;
 
         Status status = Status::NO_WALL;
-        if (armed && candidate) {
+        if (armed && candidate && detectSudden) {
             // No numeric reading to compare for a dropout -> always sudden.
             // Otherwise compare against the last locked-on distance: a big
             // one-frame jump is sudden, anything smaller falls back to the
@@ -166,20 +163,26 @@ void reset() {
     resetExitCounters();
 }
 
-Status tick(float targetMm, float baseSpeed) {
+void recover(float backupMm) {
+    Drive::stop();
+    Forward::forward(-OBSTACLE_BACKUP_SPEED, backupMm);
+    Turn::turn(obstacleTurnDeg(), OBSTACLE_TURN_SPEED);
+    reset();
+}
+
+Status tick(float targetMm, float baseSpeed, float farMm, bool detectSudden) {
     if (Sensors::Touch::front()) {
         if (DEBUG_WALL_FOLLOW) Serial.println("[WF] touch recovery");
         handleObstacle();
-        reset();
         return Status::TOUCH;
     }
 
     float distanceMm = 0.0f;
     const bool valid = readWallDistanceMm(distanceMm);
-    const bool noWall = !valid || distanceMm >= EXIT_FAR_MM;
+    const bool noWall = !valid || distanceMm >= farMm;
 
     if (noWall) {
-        const Status status = classifyNoWall(valid, distanceMm);
+        const Status status = classifyNoWall(valid, distanceMm, detectSudden);
         if (status == Status::EXIT_CANDIDATE_SUDDEN) {
             Drive::stop();
         } else {

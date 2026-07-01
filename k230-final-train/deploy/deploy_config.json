@@ -2,10 +2,11 @@
   "model_type": "AnchorFreeDet",
   "kmodel_path": "best.kmodel",
   "categories": [
-    "Green",
-    "Red"
+    "Dead",
+    "Live",
+    "Point"
   ],
-  "num_classes": 2,
+  "num_classes": 3,
   "img_size": [
     640,
     480

@@ -146,6 +146,11 @@ namespace {
         Serial.println("[EXIT] sudden wall-loss -> 10s steer-only pause");
         const uint32_t end = millis() + SUDDEN_PAUSE_MS;
         while ((int32_t)(end - millis()) > 0) {
+            // This loop doesn't return to the main Arduino loop(), so it has to
+            // re-tick Touch/ToF itself or WallFollow::tick() would keep reading
+            // a stale snapshot from the instant the pause started.
+            Sensors::Touch::tick();
+            Sensors::ToF::tick();
             refreshTapeFlags();
             if (s_tape.black) { finishExit(); return; }
             if (s_tape.silver) { recoverFromSilver(); return; }
