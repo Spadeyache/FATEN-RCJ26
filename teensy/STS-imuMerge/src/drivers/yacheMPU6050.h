@@ -76,7 +76,7 @@ private:
     // sample instead, so the filter falls back to pure gyro integration
     // (accurate over the few hundred ms a turn takes) until accel is trustworthy
     // again.
-    void gateAccelForSpin(float &ax, float &ay, float &az);
+    void gateAccelForSpin(float &ax, float &ay, float &az) FASTRUN;
 
     void applyOffsets();
     void meansensors();

@@ -26,12 +26,9 @@ void forward(float speed, float distance_mm, bool useIMU, bool pumpComms) {
 
     if (!useIMU) {
         Drive::motor(speed, speed);
-        // Always loop (never a blind delay()) so the IMU filter keeps getting
-        // fed -- otherwise it goes stale for the whole move and the next
-        // tick() after this returns integrates over the entire elapsed gap,
-        // producing a bogus attitude jump. pumpComms only gates XIAO/decode.
+        // IMU sampling is ISR-driven now, so a plain wait would be safe; we still
+        // loop (not a blind delay) only to keep pumping comms. pumpComms gates XIAO/decode.
         while (millis() - start < duration) {
-            Sensors::IMU::tick();
             if (pumpComms && millis() - lastComms >= 20) {
                 Sensors::XIAO_link::tick();
                 Processing::XiaoDecode::tick();
@@ -42,10 +39,9 @@ void forward(float speed, float distance_mm, bool useIMU, bool pumpComms) {
         return;
     }
 
-    // IMU yaw-hold: correct drift on each tick.
+    // IMU yaw-hold: correct drift using the ISR-updated yaw.
     const float startYaw = (float)Sensors::IMU::getYaw();
     while (millis() - start < duration) {
-        Sensors::IMU::tick();
         if (pumpComms && millis() - lastComms >= 20) {
             Sensors::XIAO_link::tick();
             Processing::XiaoDecode::tick();

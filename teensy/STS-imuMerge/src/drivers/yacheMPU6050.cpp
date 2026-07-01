@@ -9,6 +9,9 @@ yacheMPU6050::yacheMPU6050(TwoWire &w)
 
 void yacheMPU6050::begin() {
     _wire->begin();
+    _wire->setClock(400000);   // 400 kHz fast-mode: trims the blocking getMotion6()
+                               // read that runs inside the timer ISR. Drop back to
+                               // default if the IMU bus ever NAKs / testConnection fails.
 
     // Bare initialize() only — matches IMU-01 (defaults: ±2g, ±250°/s, DLPF off).
     _mpu.initialize();
@@ -32,7 +35,7 @@ void yacheMPU6050::begin() {
     Serial.printf("IMU+Madgwick ready @ %.1f Hz.\n", IMU_SAMPLE_HZ);
 }
 
-void yacheMPU6050::gateAccelForSpin(float &ax, float &ay, float &az) {
+FASTRUN void yacheMPU6050::gateAccelForSpin(float &ax, float &ay, float &az) {
     const float norm = sqrtf(ax * ax + ay * ay + az * az);
     if (fabsf(norm - 1.0f) > ACCEL_GATE_DEVIATION_G) {
         ax = _lastGoodAx; ay = _lastGoodAy; az = _lastGoodAz;
@@ -63,18 +66,11 @@ void yacheMPU6050::sampleAndFilterOnce() {
 }
 
 FASTRUN void yacheMPU6050::update() {
-    const uint32_t now     = micros();
-    const uint32_t elapsed = now - _microsPrevious;
-    if (elapsed < _microsPerReading) return;     // ~25 Hz gate (bounds I2C load, like IMU-01)
-
-    // Feed Madgwick the REAL elapsed time, not a fixed 1/25 s. Our main loop does
-    // far more than IMU-01's bare loop, so the interval jitters; using the true dt
-    // keeps responsiveness independent of loop rate (kills the laggy / low-pass feel).
-    // begin() only updates invSampleFreq — it does NOT touch the quaternion.
-    const float dt = elapsed * 1e-6f;
-    _microsPrevious = now;                        // reset → no deficit build-up / catch-up bursts
-    _filter.begin(1.0f / dt);
-
+    // Driven by the IMU IntervalTimer ISR at a fixed IMU_SAMPLE_HZ. The timer IS
+    // the sample clock, so there is no micros() re-gate and no per-sample dt: the
+    // fixed interval already matches the invSampleFreq begin() handed Madgwick.
+    // (Dropping the old measured-dt path removes the sample-drop / dt-doubling
+    // jitter that a slightly-early ISR entry used to inject into pitch/roll.)
     _mpu.getMotion6(&axRaw, &ayRaw, &azRaw, &gxRaw, &gyRaw, &gzRaw);
     float ax = convertRawAccel(axRaw), ay = convertRawAccel(ayRaw), az = convertRawAccel(azRaw);
     float gx = convertRawGyro (gxRaw), gy = convertRawGyro (gyRaw), gz = convertRawGyro (gzRaw);
