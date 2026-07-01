@@ -40,8 +40,8 @@ uint8_t CommandFilter::update(uint8_t rawCmd) {
     // U-turn = left AND right both build up (main-branch logic). One side strong
     // with the other barely present, or both moderately present — looser than the
     // single-side green threshold so a real both-green wins before a plain turn.
-    const bool isUturn = (votesLeft  >= 4 && votesRight >= 2)
-                      || (votesRight >= 4 && votesLeft  >= 2)
+    const bool isUturn = (votesLeft  >= 5 && votesRight >= 2)
+                      || (votesRight >= 5 && votesLeft  >= 2)
                       || (votesLeft  >= 3 && votesRight >= 3);
     if (isUturn) return FEAT_UTURN;
 

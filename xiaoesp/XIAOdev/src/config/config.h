@@ -20,7 +20,7 @@
 // OUTPUT_STREAM submode:
 //   1 = send camera frames + [LC]/[ROW]/[EVT] overlay text
 //   0 = send only [LC]/[ROW]/[EVT] text, no image payload
-#define STREAM_SEND_CAMERA_IMAGES 0
+#define STREAM_SEND_CAMERA_IMAGES 1
 // Debug: force XIAO to run MODE_LINE_ANGLE without Teensy/state-machine control.
 // Set back to 0 before normal robot runs.
 #define DEBUG_FORCE_LINE_ANGLE_MODE 0
@@ -66,7 +66,7 @@
 #define GREEN_HUE_MIN      80
 #define GREEN_HUE_MAX      165
 #define GREEN_SAT_MIN      150
-#define GREEN_VAL_MIN      135
+#define GREEN_VAL_MIN      60
 
 #define RED_SAT_MIN        80
 #define RED_VAL_MIN        40

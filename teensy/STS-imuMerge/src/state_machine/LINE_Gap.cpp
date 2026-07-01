@@ -34,6 +34,8 @@ namespace {
     constexpr float GAP_ALIGN_MAX_SPEED  = 65.0f;
     constexpr float GAP_ALIGN_DEADBAND   = 2.0f;
     constexpr float GAP_SAFE_FINE_DEG    = 45.0f;
+    constexpr float GAP_GOAL_RIGHT_DOWN_DEG = 5.0f;
+    constexpr float GAP_GOAL_LEFT_DOWN_DEG  = -5.0f;
 
     constexpr float GAP_FORWARD_SPEED    = 45.0f;
     constexpr float GAP_ROUGH_FWD_MM_PER_DEG = 1.3f;
@@ -57,8 +59,26 @@ namespace {
                                                           : signedAngleDeg();
     }
 
+    inline float gapGoalAngleDeg() {
+        switch (Actions::Drive::lineFollowState()) {
+            case Actions::Drive::LINE_FOLLOW_RIGHT_DOWN:
+                return GAP_GOAL_RIGHT_DOWN_DEG;
+            case Actions::Drive::LINE_FOLLOW_LEFT_DOWN:
+                return GAP_GOAL_LEFT_DOWN_DEG;
+            case Actions::Drive::LINE_FOLLOW_NOSE_UP:
+            case Actions::Drive::LINE_FOLLOW_NOSE_DOWN:
+            case Actions::Drive::LINE_FOLLOW_FLAT:
+            default:
+                return 0.0f;
+        }
+    }
+
+    inline float gapAngleErrorDeg(float angle) {
+        return angle - gapGoalAngleDeg();
+    }
+
     inline bool needsCurvedAcquire(float angle, bool fineOk) {
-        return !fineOk || fabsf(angle) >= GAP_SAFE_FINE_DEG;
+        return !fineOk || fabsf(gapAngleErrorDeg(angle)) >= GAP_SAFE_FINE_DEG;
     }
 
     inline void updateXiaoNow() {
@@ -131,16 +151,19 @@ namespace {
         updateXiaoNow();
         while (true) {
             const float angle = alignmentAngleDeg();
+            const float error = gapAngleErrorDeg(angle);
 
 #if PRINT_STATE
             Serial.print("GAP align angle: ");
             Serial.println(angle);
+            Serial.print("GAP goal angle: ");
+            Serial.println(gapGoalAngleDeg());
 #endif
 
-            if (angle >= -GAP_ALIGN_DEADBAND && angle <= GAP_ALIGN_DEADBAND) break;
+            if (error >= -GAP_ALIGN_DEADBAND && error <= GAP_ALIGN_DEADBAND) break;
 
-            const float absAngle = fabsf(angle);
-            float power = angle * GAP_ALIGN_KP;
+            const float absAngle = fabsf(error);
+            float power = error * GAP_ALIGN_KP;
             const float minPower = (absAngle < 15.0f) ? GAP_ALIGN_MIN_SPEED : (GAP_ALIGN_MIN_SPEED + 8.0f);
             if (power >  GAP_ALIGN_MAX_SPEED) power =  GAP_ALIGN_MAX_SPEED;
             if (power < -GAP_ALIGN_MAX_SPEED) power = -GAP_ALIGN_MAX_SPEED;
@@ -219,6 +242,7 @@ void update() {
         // Step 1: single-point recovery. Save the angle/Y before blind motion changes the view.
         const bool savedFineOk = Processing::XiaoDecode::gapFineAngleFlag();
         const float savedAngle = savedFineOk ? signedFineAngleDeg() : signedAngleDeg();
+        const float savedAngleError = gapAngleErrorDeg(savedAngle);
 
         
         Actions::Drive::stop();
@@ -234,7 +258,7 @@ void update() {
             returnToLineFollow();
             return;
         }
-        roughTurnBackToGapStart(savedAngle);                    //tight turn adjustment
+        roughTurnBackToGapStart(savedAngleError);               //tight turn adjustment
 
     }
 }

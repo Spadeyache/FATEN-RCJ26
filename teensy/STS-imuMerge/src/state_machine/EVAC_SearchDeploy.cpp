@@ -56,8 +56,10 @@ namespace {
     constexpr int      DEPLOY_BACKOFF_MM          = 100;
 
     uint32_t s_searchStartMs = 0;
+    bool     s_disposeMode   = false;   // final drop-all after the timer: ignore the clock
 
     bool searchTimedOut() {
+        if (s_disposeMode) return false;   // final disposal runs to completion
         return (uint32_t)(millis() - s_searchStartMs) >= EVAC_SEARCH_TIMEOUT_MS;
     }
     // (EVAC_GRAB_STOP_HEIGHT_PX stays in config.h — shared with VictimManager.)
@@ -431,13 +433,18 @@ void update() {
 
     // Collect-and-deploy loop for the fixed window started in onEnter().
     while (!searchTimedOut()) {
-        // >= 2 live held -> drop them at the green corner, then keep collecting.
-        // (A dead ball, if held, is carried until the timer sends us to exit.)
-        if (VictimManager::readyToDeploy()) {
+        // Deploy when we hold enough live (green trigger) OR we're already holding
+        // both a live and a dead ball. Either way dispose EVERYTHING in hand:
+        // live -> green corner, dead -> red corner.
+        const bool holdsBoth =
+            VictimManager::liveHeld() > 0 && VictimManager::deadHeld() > 0;
+        if (VictimManager::readyToDeploy() || holdsBoth) {
             digitalWrite(LED_BUILTIN, HIGH);
-            deployGreen();  // calls driveToColorCorner(int targetcolor)
+            if (VictimManager::liveHeld() > 0) deployGreen();  // driveToColorCorner(GREEN)
             if (searchTimedOut()) break;
-            lastSeen = millis();   // fresh search window after a deploy
+            if (VictimManager::deadHeld() > 0) deployRed();    // driveToColorCorner(RED)
+            if (searchTimedOut()) break;
+            lastSeen = millis();   // fresh search window after disposing
             continue;
         }
 
@@ -481,7 +488,14 @@ void update() {
         }
     }
 
-    // Timer expired: leave immediately, without starting another deploy.
+    // Timer expired: stop collecting, then dispose everything still in hand
+    // (live -> green, dead -> red) ignoring the clock, and only then leave.
+    Actions::Drive::stop();
+    s_disposeMode = true;
+    if (VictimManager::liveHeld() > 0) deployGreen();
+    if (VictimManager::deadHeld() > 0) deployRed();
+    s_disposeMode = false;
+
     Actions::Drive::stop();
     StateMachine::transitionTo(StateMachine::EVAC_EXIT);
 }

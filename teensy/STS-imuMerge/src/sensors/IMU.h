@@ -2,8 +2,11 @@
 
 // =============================================================================
 //  Sensors::IMU — MPU-6050 + Madgwick wrapper.
-//  Owns one yacheMPU6050 on Wire1. tick() is internally throttled to
-//  IMU_SAMPLE_HZ, so safe to call every loop iteration.
+//  Owns one yacheMPU6050 on Wire (I2C1). Sampling runs off a hardware
+//  IntervalTimer at IMU_SAMPLE_HZ, independent of the main loop — delay()s
+//  elsewhere no longer starve the filter. tick() only drives the optional
+//  PRINT_IMU debug print now; calling it (or not) doesn't affect freshness
+//  of getPitch/getRoll/getYaw, so all existing call sites stay harmless.
 // =============================================================================
 
 #include <arm_math.h>

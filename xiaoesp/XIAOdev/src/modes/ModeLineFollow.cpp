@@ -72,7 +72,7 @@ constexpr uint8_t COLOR_X_MIN = ARC_LEFT_X;
 constexpr uint8_t COLOR_X_MAX = ARC_RIGHT_X;
 constexpr uint8_t RED_THRESHOLD = 30;
 constexpr uint8_t GAP_BLACK_MAX = 5;
-constexpr uint8_t GREEN_WINDOW = 30;
+constexpr uint8_t GREEN_WINDOW = 37;
 constexpr uint8_t GREEN_LINE_HALF_W = 2;
 constexpr uint8_t GREEN_PX_THRESHOLD = 5;
 
@@ -409,7 +409,9 @@ bool gapByCrossings(const LineCounts& lc) {
     return lc.count == 0;
 }
 
-uint8_t rawGreenOnColorRow(camera_fb_t* fb, float lineCom, uint8_t& greenLeft, uint8_t& greenRight,
+uint8_t rawGreenOnColorRow(camera_fb_t* fb, float lineCom,
+                           uint8_t colorBlack, uint8_t redCount,
+                           uint8_t& greenLeft, uint8_t& greenRight,
                            uint8_t& blackLeft, uint8_t& blackRight) {
     cameraData rowPixels[160] = {};
     scanRow(fb, COLOR_ROW, COLOR_X_MIN, COLOR_X_MAX, rowPixels);
@@ -448,16 +450,24 @@ uint8_t rawGreenOnColorRow(camera_fb_t* fb, float lineCom, uint8_t& greenLeft, u
     const uint8_t rightMid = (rightStart < rightEnd)
         ? (uint8_t)(((uint16_t)rightStart + (uint16_t)(rightEnd - 1)) / 2)
         : rightStart;
+    int16_t comSample = (int16_t)lroundf(lineCom);
+    if (comSample < COLOR_X_MIN) comSample = COLOR_X_MIN;
+    if (comSample > COLOR_X_MAX) comSample = COLOR_X_MAX;
 
-    xs_storeGreenBandDebug(COLOR_ROW,
-                           leftStart, leftEnd,
-                           rightStart, rightEnd,
-                           rowPixels[leftMid].hsv.h,
-                           rowPixels[leftMid].hsv.s,
-                           rowPixels[leftMid].hsv.v,
-                           rowPixels[rightMid].hsv.h,
-                           rowPixels[rightMid].hsv.s,
-                           rowPixels[rightMid].hsv.v);
+    xs_storeColorRowDebug(COLOR_ROW, lineCom,
+                          colorBlack, redCount,
+                          greenLeft, greenRight,
+                          leftStart, leftEnd,
+                          rightStart, rightEnd,
+                          rowPixels[leftMid].hsv.h,
+                          rowPixels[leftMid].hsv.s,
+                          rowPixels[leftMid].hsv.v,
+                          rowPixels[rightMid].hsv.h,
+                          rowPixels[rightMid].hsv.s,
+                          rowPixels[rightMid].hsv.v,
+                          rowPixels[comSample].hsv.h,
+                          rowPixels[comSample].hsv.s,
+                          rowPixels[comSample].hsv.v);
     return rawGreen;
 }
 
@@ -843,7 +853,8 @@ void modeLineFollowRun(camera_fb_t* fb, YacheEncodedSerial& teensy) {
     const bool intersectionSaturated = blackIntersect;
 
     uint8_t greenLeft = 0, greenRight = 0, blackLeft = 0, blackRight = 0;
-    uint8_t rawGreen = rawGreenOnColorRow(fb, colorCom, greenLeft, greenRight, blackLeft, blackRight);
+    uint8_t rawGreen = rawGreenOnColorRow(fb, colorCom, colorBlack, redCount,
+                                          greenLeft, greenRight, blackLeft, blackRight);
     // No XIAO-side filtering: forward the raw per-frame green reading and let the
     // Teensy CommandFilter vote/debounce. (1 u-turn, 2 left, 3 right.)
     const uint8_t greenCmd = gapDetected ? 0 : rawGreen;
