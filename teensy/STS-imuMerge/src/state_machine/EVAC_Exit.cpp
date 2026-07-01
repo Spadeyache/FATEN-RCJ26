@@ -39,6 +39,9 @@ namespace {
     constexpr float RAM_APPROACH_MM = 160.0f;  // forward before the right turn
     constexpr float RAM_DISTANCE_MM = 250.0f;  // drive into candidate gap
     constexpr float RAM_BACKUP_MM   = 60.0f;
+    // When the ram confirmed nothing (no black, no silver, no wall hit), back out
+    // the whole ram distance instead of the short silver/wall backup.
+    constexpr float RAM_NOCOLOR_BACKUP_MM = 250.0f;
     constexpr float RAM_TURN_SPEED  = 50.0f;
 
     struct TapeFlags {
@@ -140,9 +143,9 @@ namespace {
         StateMachine::transitionTo(StateMachine::LINE_FOLLOW);
     }
 
-    void recoverToWallFollow() {
-        Serial.printf("[EXIT] recover: back %.0fmm, left 90\n", RAM_BACKUP_MM);
-        Actions::Forward::forward(-RAM_SPEED, RAM_BACKUP_MM);
+    void recoverToWallFollow(float backupMm = RAM_BACKUP_MM) {
+        Serial.printf("[EXIT] recover: back %.0fmm, left 90\n", backupMm);
+        Actions::Forward::forward(-RAM_SPEED, backupMm);
         Actions::Turn::turn(-90.0f, RAM_TURN_SPEED);
         refreshTapeFlags();
         Actions::WallFollow::reset();
@@ -159,7 +162,7 @@ namespace {
 
     bool approachCandidateOpening() {
         Serial.printf("[EXIT] approach %.0fmm before turn\n", RAM_APPROACH_MM);
-        waitWithSensors(1000);
+        waitWithSensors(200);
         const DriveWatchResult result =
             driveStraightAndWatch(RAM_SPEED, RAM_APPROACH_MM, true);
 
@@ -176,17 +179,17 @@ namespace {
 
     DriveWatchResult ramCandidateOpening() {
         Serial.println("[EXIT] turn right 90 into candidate");
-        waitWithSensors(1000);
+        waitWithSensors(200);
         Actions::Turn::turn(90.0f, RAM_TURN_SPEED);
 
         Serial.printf("[EXIT] ram %.0fmm\n", RAM_DISTANCE_MM);
-        waitWithSensors(1000);
+        waitWithSensors(200);
         // Watch black for the whole straight ram, not just at the end, so a line
         // crossed mid-ram is caught immediately.
         const DriveWatchResult result =
             driveStraightAndWatch(RAM_SPEED, RAM_DISTANCE_MM, true);
         if (result == DriveWatchResult::BLACK) return result;
-        waitWithSensors(500);
+        waitWithSensors(200);
         return result;
     }
 
@@ -195,23 +198,23 @@ namespace {
 
         if (hitSomething) {
             Serial.println("[EXIT] ram hit wall/obstacle -> recover");
-            waitWithSensors(1000);
+            waitWithSensors(200);
             recoverToWallFollow();
             return;
         }
 
         if (s_tape.silver) {
             Serial.println("[EXIT] silver/wrong exit -> recover");
-            waitWithSensors(1000);
+            waitWithSensors(200);
             recoverToWallFollow();
             return;
         }
 
         if (finishIfBlackSeen("ram")) return;
 
-        Serial.println("[EXIT] no color confirmed -> recover");
-        waitWithSensors(1000);
-        recoverToWallFollow();
+        Serial.println("[EXIT] no color confirmed -> recover (full back-out)");
+        waitWithSensors(200);
+        recoverToWallFollow(RAM_NOCOLOR_BACKUP_MM);
     }
 
     void handleExitCandidate() {
@@ -252,6 +255,7 @@ void update() {
     // return to line follow immediately instead of driving over it.
     if (s_tape.black) {
         Serial.println("[EXIT] black seen during wall-follow -> LINE_FOLLOW");
+        Actions::Forward::forward(50,50);
         returnToLineFollow();
         return;
     }

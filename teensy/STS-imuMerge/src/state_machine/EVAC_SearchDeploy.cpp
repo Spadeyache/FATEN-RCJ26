@@ -25,7 +25,9 @@ namespace {
     constexpr uint8_t  EVAC_GRAB_STOP_REQUIRED    = 3;        // ...hits needed (3 of 5)
     // Collection / deploy policy:
     constexpr uint32_t EVAC_SEARCH_TIMEOUT_MS     = 120000UL; // 2-min collection window
+    constexpr uint32_t SPIN_SEARCH_MS             = 10000UL;  // spin in place this long with no victim, then roam forward
     constexpr float    EVAC_POINT_STOP_WIDTH_PX   = 300.0f;   // corner-approach stop width
+    constexpr float    EVAC_POINT_STOP_HEIGHT_PX  = 140.0f;    // corner-approach stop height
     constexpr uint8_t  EVAC_POINT_STOP_REQUIRED   = 5;        // consecutive close frames at the corner
     constexpr int      EVAC_POINT_ALIGN_DEADBAND_PX = 25;     // centre band before colour read
     constexpr int      EVAC_POINT_ALIGN_SPEED_MIN   = 30;
@@ -216,7 +218,8 @@ namespace {
 
             const K230DBox* corner = closestCenterPoint();
             if (corner == nullptr) { hits = 0; Actions::Drive::spinDecay(60, 400); continue; }
-            if (boxWidthPx(*corner) > EVAC_POINT_STOP_WIDTH_PX) {
+            if (boxWidthPx(*corner) > EVAC_POINT_STOP_WIDTH_PX &&
+                boxHeightPx(*corner) >= EVAC_POINT_STOP_HEIGHT_PX) {
                 if (++hits >= EVAC_POINT_STOP_REQUIRED) { Actions::Drive::stop(); return true; }
                 Actions::Drive::stop();
             } else {
@@ -348,14 +351,16 @@ void onEnter() {
 
 void update() {
     const uint32_t start = millis();
+    uint32_t lastSeen = millis();   // last time a victim was in view (roam timer)
 
     // Collect-and-deploy loop for the 2-minute window.
     while (millis() - start < EVAC_SEARCH_TIMEOUT_MS) {
         // >= 2 live held -> drop them at the green corner, then keep collecting.
         // (A dead ball, if held, is carried until the timer triggers a red deploy.)
         if (VictimManager::readyToDeploy()) {
-            digitalWrite(LED_BUILTIN, HIGH); 
+            digitalWrite(LED_BUILTIN, HIGH);
             deployGreen();  // calls driveToColorCorner(int targetcolor)
+            lastSeen = millis();   // fresh search window after a deploy
             continue;
         }
 
@@ -363,6 +368,7 @@ void update() {
 
         // closestCenterVictim is already filtered to types we still want.
         if (closestCenterVictim() != nullptr) {
+            lastSeen = millis();                 // reset roam timer: something in view
             const int type = approachVictim();   // run and stop at front of victim.
             if (type >= 0) {
                 VictimManager::tryGrab((uint8_t)type);   // grab + self-confirm
@@ -370,11 +376,18 @@ void update() {
 
                 const uint32_t seenPacketMs = Processing::K230Decode::lastPacketMs();
                 Processing::K230Decode::waitForFreshFrameAfter(seenPacketMs, 700);
-            
+
             }
+        } else if (millis() - lastSeen < SPIN_SEARCH_MS) {
+            // Sweep in place to find a victim.
+            Actions::Drive::motor(50, -50);
         } else {
-            // Actions::Drive::spinDecay(60, 400);          // sweep for a ball
-            Actions::Drive::motor(50,-50);
+            // Nothing found while spinning for SPIN_SEARCH_MS: roam forward to a new
+            // spot, turning away when the front bumper hits, instead of spinning on
+            // the same blind corner.
+            Sensors::Touch::tick();
+            if (Sensors::Touch::front()) Actions::Drive::motor(50, -50);  // blocked -> turn in place
+            else                         Actions::Drive::motor(50, 50);   // roam forward
         }
     }
 

@@ -394,28 +394,6 @@ void scanColorRow(camera_fb_t* fb, float& blackCom, uint8_t& blackCount, uint8_t
     blackCom = blackCount ? (float)weighted / blackCount : (COLOR_X_MIN + COLOR_X_MAX) * 0.5f;
 }
 
-void printColorCenterSample(camera_fb_t* fb) {
-    constexpr uint8_t centerX = (COLOR_X_MIN + COLOR_X_MAX) / 2;
-    const cameraData px = updateRawGrayHSV(fb, centerX, COLOR_ROW);
-    uint8_t calR = px.avgR;
-    uint8_t calG = px.avgG;
-    uint8_t calB = px.avgB;
-    rgb888Calibration(calR, calG, calB);
-    const HSV rawHsv = rgb888_to_hsv(px.avgR, px.avgG, px.avgB);
-
-    if (SPRINT_RGB_HSV) {
-        Serial.printf(
-            "[PIX] colorCenter x=%u y=%u raw=%u,%u,%u rawHsv=%u,%u,%u cal=%u,%u,%u hsv=%u,%u,%u red=%u green=%u\n",
-            centerX, COLOR_ROW,
-            px.avgR, px.avgG, px.avgB,
-            rawHsv.h, rawHsv.s, rawHsv.v,
-            calR, calG, calB,
-            px.hsv.h, px.hsv.s, px.hsv.v,
-            isRed(px) ? 1 : 0,
-            isGreen(px) ? 1 : 0);
-    }
-}
-
 bool hasBottomLinePoint(const LineCounts& lc) {
     for (uint8_t i = 0; i < lc.count; i++) {
         if (lc.crossings[i].edge == LC_EDGE_BOTTOM || lc.crossings[i].pixelY >= ARC_BOTTOM_Y) return true;
@@ -459,10 +437,28 @@ uint8_t rawGreenOnColorRow(camera_fb_t* fb, float lineCom, uint8_t& greenLeft, u
 
     const bool left = greenLeft > GREEN_PX_THRESHOLD;
     const bool right = greenRight > GREEN_PX_THRESHOLD;
-    if (left && right) return 1;
-    if (left) return 2;
-    if (right) return 3;
-    return 0;
+    uint8_t rawGreen = 0;
+    if (left && right) rawGreen = 1;
+    else if (left) rawGreen = 2;
+    else if (right) rawGreen = 3;
+
+    const uint8_t leftMid = (leftStart < leftEnd)
+        ? (uint8_t)(((uint16_t)leftStart + (uint16_t)(leftEnd - 1)) / 2)
+        : leftStart;
+    const uint8_t rightMid = (rightStart < rightEnd)
+        ? (uint8_t)(((uint16_t)rightStart + (uint16_t)(rightEnd - 1)) / 2)
+        : rightStart;
+
+    xs_storeGreenBandDebug(COLOR_ROW,
+                           leftStart, leftEnd,
+                           rightStart, rightEnd,
+                           rowPixels[leftMid].hsv.h,
+                           rowPixels[leftMid].hsv.s,
+                           rowPixels[leftMid].hsv.v,
+                           rowPixels[rightMid].hsv.h,
+                           rowPixels[rightMid].hsv.s,
+                           rowPixels[rightMid].hsv.v);
+    return rawGreen;
 }
 
 void registerCrossing(LineCounts& out, int idx, int len) {
@@ -841,7 +837,6 @@ void modeLineFollowRun(camera_fb_t* fb, YacheEncodedSerial& teensy) {
     float colorCom;
     uint8_t colorBlack, redCount;
     scanColorRow(fb, colorCom, colorBlack, redCount);
-    printColorCenterSample(fb);
     const bool bottomLinePoint = hasBottomLinePoint(lc);
     const bool gapDetected = gapByCrossings(lc);
     const bool blackIntersect = colorBlack > INTERSECTION_BLACK_SAT_THRESHOLD;

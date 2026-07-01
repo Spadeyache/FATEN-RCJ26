@@ -133,7 +133,7 @@ enum XiaoMode : uint8_t {
 
 // EVAC shared tuning — used by BOTH EVAC_SearchDeploy (approach stop) AND
 // VictimManager (grab self-confirm), so it stays here.
-#define EVAC_GRAB_STOP_HEIGHT_PX     140.0f
+#define EVAC_GRAB_STOP_HEIGHT_PX     123.0f
 // Other EVAC tuning is now file-local: EVAC_SearchDeploy-only constants live in
 // EVAC_SearchDeploy.cpp; EVAC_MAX_BALLS lives in VictimManager.cpp.
 

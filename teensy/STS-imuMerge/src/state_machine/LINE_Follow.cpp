@@ -5,6 +5,7 @@
 
 #include "../sensors/Touch.h"
 #include "../sensors/XIAO_link.h"
+#include "../sensors/IMU.h"
 #include "../processing/XiaoDecode.h"
 #include "../actions/Drive.h"
 #include "../actions/Turn.h"
@@ -87,6 +88,7 @@ namespace {
         while (millis() - start < ms) {
             Sensors::XIAO_link::tick();
             Processing::XiaoDecode::tick();
+            Sensors::IMU::tick();
             delay(2);
         }
     }
@@ -257,13 +259,15 @@ void update() {
         case FEAT_UTURN:
             if (_disableGreen) { Actions::Drive::runLinePID(); return; }
             {
+            // Captured once, before the spin: held through the post-macro
+            // suppression window so a mid-spin IMU blip can't be mistaken
+            // for the slope state changing.
             const Actions::Drive::LineFollowState lfState = Actions::Drive::lineFollowState();
             const UTurnSequence seq = uturnSequence(lfState);
             #if PRINT_ACTIONS
                         Serial.printf("Action: U-Turn (%s)\n", Actions::Drive::lineFollowStateName(lfState));
             #endif
             runUTurnSequence(seq);
-            }
 
             // After the timed U-turn, keep spinning with the same motor power
             // until XIAO's SearchLine mode sees the black line again.
@@ -275,6 +279,7 @@ void update() {
             while (Processing::XiaoDecode::command() != FEAT_SEARCH_LINE_BLACK) {
                 Sensors::XIAO_link::tick();
                 Processing::XiaoDecode::tick();
+                Sensors::IMU::tick();
                 Actions::Drive::motor(60.0f, -60.0f);
             }
 
@@ -283,6 +288,8 @@ void update() {
             pumpXiaoFor(200);
             Processing::XiaoDecode::clearFilter();
             armGreenCooldown();
+            Actions::Drive::suppressSlopeDetection(lfState);
+            }
             return;
 
         // Green turns: hardcoded straight-in then 90° spin (no continuous commit).
@@ -296,10 +303,11 @@ void update() {
             #endif
             tone(BUZZER_PIN, 9000, 300);
             runIntersectionMotion(motion);
-            }
             Actions::Drive::stop();
             Processing::XiaoDecode::clearFilter();
             armGreenCooldown();
+            Actions::Drive::suppressSlopeDetection(lfState);
+            }
             return;
 
         case FEAT_GREEN_RIGHT:
@@ -312,10 +320,11 @@ void update() {
             #endif
             tone(BUZZER_PIN, 9000, 300);
             runIntersectionMotion(motion);
-            }
             Actions::Drive::stop();
             Processing::XiaoDecode::clearFilter();
             armGreenCooldown();
+            Actions::Drive::suppressSlopeDetection(lfState);
+            }
             return;
 
         case FEAT_RED:
@@ -328,9 +337,10 @@ void update() {
             return;
 
         case FEAT_BLACK_INTERSECT:
-        
-            tone(BUZZER_PIN, 3000, 300);
+
+            tone(BUZZER_PIN, 3000, 50);
             armBlackIntersectCooldown();
+            Actions::Drive::suppressSlopeDetection(Actions::Drive::lineFollowState());
             Processing::XiaoDecode::clearFilter();
             Actions::Drive::runLinePID();
             return;

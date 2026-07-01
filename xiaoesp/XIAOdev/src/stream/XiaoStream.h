@@ -34,6 +34,11 @@ enum XiaoStreamPriority : uint8_t {
 void xs_beginSensorFrame();
 void xs_setSensorBoth(XiaoStreamClass cls, XiaoStreamPriority prio);
 void xs_setSensorSide(XiaoStreamSide side, XiaoStreamClass cls, XiaoStreamPriority prio);
+void xs_storeGreenBandDebug(uint8_t y,
+                            uint8_t leftStart, uint8_t leftEnd,
+                            uint8_t rightStart, uint8_t rightEnd,
+                            uint16_t leftH, uint8_t leftS, uint8_t leftV,
+                            uint16_t rightH, uint8_t rightS, uint8_t rightV);
 
 void xs_storeLineDebug(const LineCounts& lc, const LineClass& cls, int focusedOut,
                        int errByte, float errPx);

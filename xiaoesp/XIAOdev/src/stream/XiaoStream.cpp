@@ -77,6 +77,18 @@ SensorSlot s_sensor[2] = {
     { XS_WHITE, XS_PRIO_NONE },
 };
 bool s_sensorValid = false;
+bool s_greenBandValid = false;
+uint8_t s_greenBandY = 0;
+uint8_t s_greenLeftStart = 0;
+uint8_t s_greenLeftEnd = 0;
+uint8_t s_greenRightStart = 0;
+uint8_t s_greenRightEnd = 0;
+uint16_t s_greenLeftH = 0;
+uint8_t s_greenLeftS = 0;
+uint8_t s_greenLeftV = 0;
+uint16_t s_greenRightH = 0;
+uint8_t s_greenRightS = 0;
+uint8_t s_greenRightV = 0;
 StreamEvent s_events[EVENT_QUEUE_SIZE] = {};
 uint8_t s_eventHead = 0;
 uint8_t s_eventTail = 0;
@@ -125,6 +137,7 @@ void xs_beginSensorFrame() {
     s_sensor[XS_LEFT]  = { XS_WHITE, XS_PRIO_NONE };
     s_sensor[XS_RIGHT] = { XS_WHITE, XS_PRIO_NONE };
     s_sensorValid = true;
+    s_greenBandValid = false;
 }
 
 void xs_setSensorBoth(XiaoStreamClass cls, XiaoStreamPriority prio) {
@@ -135,6 +148,25 @@ void xs_setSensorBoth(XiaoStreamClass cls, XiaoStreamPriority prio) {
 void xs_setSensorSide(XiaoStreamSide side, XiaoStreamClass cls, XiaoStreamPriority prio) {
     if (side > XS_RIGHT) return;
     setSlot(s_sensor[side], cls, prio);
+}
+
+void xs_storeGreenBandDebug(uint8_t y,
+                            uint8_t leftStart, uint8_t leftEnd,
+                            uint8_t rightStart, uint8_t rightEnd,
+                            uint16_t leftH, uint8_t leftS, uint8_t leftV,
+                            uint16_t rightH, uint8_t rightS, uint8_t rightV) {
+    s_greenBandValid = true;
+    s_greenBandY = y;
+    s_greenLeftStart = leftStart;
+    s_greenLeftEnd = leftEnd;
+    s_greenRightStart = rightStart;
+    s_greenRightEnd = rightEnd;
+    s_greenLeftH = leftH;
+    s_greenLeftS = leftS;
+    s_greenLeftV = leftV;
+    s_greenRightH = rightH;
+    s_greenRightS = rightS;
+    s_greenRightV = rightV;
 }
 
 void xs_storeLineDebug(const LineCounts& lc, const LineClass& cls, int focusedOut,
@@ -336,9 +368,26 @@ int xs_formatEvacTapeDebug(char* buf, int bufLen) {
 
 int xs_formatSensorRow(char* buf, int bufLen) {
     if (!s_sensorValid || bufLen < 24) return 0;
-    return snprintf(buf, bufLen, "[ROW] l=%s r=%s\n",
+    if (!s_greenBandValid) {
+        return snprintf(buf, bufLen, "[ROW] l=%s r=%s\n",
+            className(s_sensor[XS_LEFT].cls),
+            className(s_sensor[XS_RIGHT].cls));
+    }
+    return snprintf(buf, bufLen,
+        "[ROW] l=%s r=%s y=%u lb=%u,%u rb=%u,%u lh=%u,%u,%u rh=%u,%u,%u\n",
         className(s_sensor[XS_LEFT].cls),
-        className(s_sensor[XS_RIGHT].cls));
+        className(s_sensor[XS_RIGHT].cls),
+        s_greenBandY,
+        s_greenLeftStart,
+        s_greenLeftEnd,
+        s_greenRightStart,
+        s_greenRightEnd,
+        s_greenLeftH,
+        s_greenLeftS,
+        s_greenLeftV,
+        s_greenRightH,
+        s_greenRightS,
+        s_greenRightV);
 }
 
 int xs_formatEvent(char* buf, int bufLen) {

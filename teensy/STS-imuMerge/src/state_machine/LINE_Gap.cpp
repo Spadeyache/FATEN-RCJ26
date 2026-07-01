@@ -210,7 +210,7 @@ void update() {
         updateXiaoNow();
         if (firstGapPass && Processing::XiaoDecode::gapBothRowsFlag()) {
             returnToLineFollow();
-            tone(BUZZER_PIN, 7000, 3000);
+            // tone(BUZZER_PIN, 7000, 3000);
             return;
         }
         firstGapPass = false;

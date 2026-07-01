@@ -58,8 +58,25 @@ private:
     int32_t mean_ax, mean_ay, mean_az, mean_gx, mean_gy, mean_gz;
     int16_t axRaw, ayRaw, azRaw, gxRaw, gyRaw, gzRaw;
 
+    // Last accel sample whose magnitude looked like gravity-only (no spin/
+    // bump). Fed to the filter in place of a corrupted sample -- see
+    // gateAccelForSpin().
+    float32_t _lastGoodAx = 0.0f, _lastGoodAy = 0.0f, _lastGoodAz = 1.0f;
+    static constexpr float ACCEL_GATE_DEVIATION_G = 0.15f;
+
     static float convertRawAccel(int16_t a) { return (float)a / 16384.0f; }
     static float convertRawGyro (int16_t g) { return (float)g / 131.0f;   }
+
+    // A fast spin (U-turn / intersection turn) adds centripetal/tangential
+    // acceleration on top of gravity, so |accel| drifts away from 1g. Madgwick
+    // uses accel as its gravity reference for correcting drift -- feeding it
+    // a corrupted reading during a spin pulls the fused attitude off true,
+    // which is what causes a flat run to read as a slope right after a turn.
+    // Root fix: while |accel|-1g exceeds the gate, hold the last known-good
+    // sample instead, so the filter falls back to pure gyro integration
+    // (accurate over the few hundred ms a turn takes) until accel is trustworthy
+    // again.
+    void gateAccelForSpin(float &ax, float &ay, float &az);
 
     void applyOffsets();
     void meansensors();

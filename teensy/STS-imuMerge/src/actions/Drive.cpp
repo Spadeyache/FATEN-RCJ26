@@ -117,6 +117,17 @@ constexpr float TILT_GATE_DEG   = 17.0f;
 constexpr float FRIC_SPEED_FLAT = LINE_FOLLOW_BASE_SPEED_FLAT;    // flat-ground base speed
 constexpr float FRIC_SPEED_TILT = LINE_FOLLOW_BASE_SPEED_SLOPE;   // base speed once tilted past the gate
 
+// --- Post-macro slope suppression --------------------------------------------
+// Madgwick fuses accel + gyro; a fast spin (U-turn/intersection turn) leaves a
+// transient error in the fused attitude that hasn't decayed yet the instant
+// LINE_Follow resumes, even though the robot's actual tilt hasn't changed.
+// Rather than forcing FLAT (wrong if we entered the macro mid-slope), hold
+// whatever LineFollowState was true going INTO the macro for a short window
+// after it returns, so the residual IMU error can't be misread either way.
+constexpr uint32_t SLOPE_SUPPRESS_MS = 250;
+uint32_t        _slopeSuppressUntil    = 0;
+LineFollowState _slopeSuppressHoldState = LINE_FOLLOW_FLAT;
+
 LineFollowState classifyLineFollowState(float pitch, float roll) {
     const float absPitch = fabsf(pitch);
     const float absRoll  = fabsf(roll);
@@ -131,11 +142,16 @@ LineFollowState classifyLineFollowState(float pitch, float roll) {
 }
 
 void updateLineFollowState(float pitch, float roll) {
+    // NOT gated by slope-suppression: this drives wheel roll-compensation in
+    // motorSlopeProfiled/motorTurnGravityProfiled and the state read by the
+    // next macro, both of which should always see the real live tilt.
+    // Suppression only holds frictionCircAdj()'s output (base speed + the
+    // runLinePID kp/ki/kd pick), see suppressSlopeDetection().
     _lineFollowState = classifyLineFollowState(pitch, roll);
 }
 
 // --- PID (flat vs slope; selected by the gate, NOT by error sign) ------------
-constexpr float PID_KP_FLAT  = 1.5f,  PID_KI_FLAT  = 0.0f, PID_KD_FLAT  = 1.0f;
+constexpr float PID_KP_FLAT  = 1.7f,  PID_KI_FLAT  = 0.0f, PID_KD_FLAT  = 1.4f;  //1.5 1.3
 constexpr float PID_KP_SLOPE = 0.85f, PID_KI_SLOPE = 0.0f, PID_KD_SLOPE = 0.65f;
 constexpr float PID_INTEGRAL_LIMIT = 500.0f;
 
@@ -218,6 +234,8 @@ float rotAxisBias(float eNorm) {
 // grip, so drop to FRIC_SPEED_TILT; otherwise run the fast flat-ground speed.
 // The drop also triggers the *_SLOPE PID gain swap in runLinePID().
 float frictionCircAdj() {
+    if (millis() < _slopeSuppressUntil)
+        return (_slopeSuppressHoldState == LINE_FOLLOW_FLAT) ? FRIC_SPEED_FLAT : FRIC_SPEED_TILT;
     const float pitch = robotPitch();
     const float roll  = robotRoll();
     if (fabsf(pitch) > TILT_GATE_DEG || fabsf(roll) > TILT_GATE_DEG)
@@ -390,6 +408,11 @@ void runLinePID() {
 
 LineFollowState lineFollowState() {
     return _lineFollowState;
+}
+
+void suppressSlopeDetection(LineFollowState holdAs) {
+    _slopeSuppressHoldState = holdAs;
+    _slopeSuppressUntil     = millis() + SLOPE_SUPPRESS_MS;
 }
 
 const char* lineFollowStateName(LineFollowState state) {

@@ -3,6 +3,7 @@
 #include "../../config.h"
 #include "../../pins_teensy.h"
 #include "../sensors/XIAO_link.h"
+#include "../sensors/IMU.h"
 #include "../processing/XiaoDecode.h"
 
 #include <Arduino.h>
@@ -34,6 +35,11 @@ void turnImpl(float angle_deg, float speed, bool useGravityProfile) {
     const unsigned long start = millis();
     unsigned long lastComms   = 0;
     while (millis() - start < duration) {
+        // Keep the IMU filter fed during the spin -- without this it goes
+        // stale for the whole turn, and the next tick() after we return
+        // integrates one gyro sample over the entire elapsed gap, producing
+        // a bogus attitude jump that reads as a false slope.
+        Sensors::IMU::tick();
         if (millis() - lastComms >= 20) {
             Sensors::XIAO_link::tick();
             Processing::XiaoDecode::tick();

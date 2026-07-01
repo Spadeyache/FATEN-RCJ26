@@ -27,7 +27,7 @@
 #include "src/state_machine/StateMachine.h"
 
 // Debug force-start. Set FORCE_START_STATE to 0 before normal runs.
-#define FORCE_START_STATE 1
+#define FORCE_START_STATE 0
 #define FORCE_STATE_TARGET StateMachine::EVAC_EXIT
 
 FLASHMEM void setup() {
