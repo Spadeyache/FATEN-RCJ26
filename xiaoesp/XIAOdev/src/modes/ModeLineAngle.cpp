@@ -23,8 +23,13 @@ static constexpr uint8_t LA_CIRCLE_MIN_RUN = 2;    // min contiguous black sampl
 static constexpr uint8_t LA_FINE_ROW_FAR   = 35;   // fixed rows for precise final alignment
 static constexpr uint8_t LA_FINE_ROW_NEAR  = 70;
 static constexpr uint8_t LA_FINE_MIN_RUN   = LC_RUN_MIN_LEN;
+static constexpr uint8_t LA_RED_ROW        = 65;
+static constexpr uint8_t LA_RED_THRESHOLD  = 8;
+static constexpr uint8_t LA_RED_FRAMES     = 3;
 
 static constexpr float   LA_RAD2DEG        = 57.2957795f;
+
+static uint8_t s_redFrames = 0;
 
 static bool hasBottomLinePoint(const LineCounts& lc) {
     for (uint8_t i = 0; i < lc.count; i++) {
@@ -128,6 +133,14 @@ static bool findRowRunCenter(camera_fb_t* fb, uint8_t y, uint8_t& xOut, uint8_t&
     return true;
 }
 
+static bool scanRedRow(camera_fb_t* fb) {
+    uint8_t redCount = 0;
+    for (uint8_t x = LC_ROI_X_MIN; x <= LC_ROI_X_MAX; x++) {
+        if (isRed(updateRawGrayHSV(fb, x, LA_RED_ROW))) redCount++;
+    }
+    return redCount >= LA_RED_THRESHOLD;
+}
+
 static bool twoRowFineAngle(camera_fb_t* fb, float& angleOut,
                             uint8_t& farXOut, uint8_t& nearXOut,
                             uint8_t& farWOut, uint8_t& nearWOut) {
@@ -146,6 +159,10 @@ static bool twoRowFineAngle(camera_fb_t* fb, float& angleOut,
 // =============================================================================
 //  modeLineAngleRun — called every frame while in MODE_LINE_ANGLE
 // =============================================================================
+void modeLineAngleReset() {
+    s_redFrames = 0;
+}
+
 void modeLineAngleRun(camera_fb_t* fb, YacheEncodedSerial& teensy) {
     // ── Point detection (no in/out classification) ─────────────────────────────
     LineCounts lc;
@@ -205,6 +222,13 @@ void modeLineAngleRun(camera_fb_t* fb, YacheEncodedSerial& teensy) {
         (int)roundf((float)LA_ANGLE_CENTER + fineAngleDeg), 0, 254);
 
     // ── Flags: bit0 = at least one point, bit1 = two or more points, bit2 = bottom point
+    if (scanRedRow(fb)) {
+        if (s_redFrames < LA_RED_FRAMES) s_redFrames++;
+    } else {
+        s_redFrames = 0;
+    }
+    const bool redConfirmed = s_redFrames >= LA_RED_FRAMES;
+
     uint8_t flag = 0;
     if (haveAny) flag |= XIAO_FLAG_COMMIT;
     if (haveTwoDetected) flag |= XIAO_FLAG_TIGHT_SLOW;
@@ -216,6 +240,7 @@ void modeLineAngleRun(camera_fb_t* fb, YacheEncodedSerial& teensy) {
     teensy.send(XIAO_REG_FLAG,  flag);
     teensy.send(XIAO_REG_COM,   avgYByte);
     teensy.send(XIAO_REG_FINE_ANGLE, encodedFineAngle);
+    teensy.send(XIAO_REG_FEATURE, redConfirmed ? FEAT_RED : FEAT_NONE);
 
     LineClass dbgCls = {};
     dbgCls.inIndex = -1;

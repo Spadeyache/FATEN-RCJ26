@@ -152,6 +152,7 @@ void loop() {
     static uint8_t s_prevMode = 255;
     if (mode != s_prevMode) {
         if (mode == MODE_LINEFOLLOW) modeLineFollowReset();
+        if (mode == MODE_LINE_ANGLE) modeLineAngleReset();
         s_prevMode = mode;
     }
 

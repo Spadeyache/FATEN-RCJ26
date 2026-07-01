@@ -29,6 +29,15 @@ namespace {
     constexpr float PID_KD = 1.57f;
     constexpr float INTEGRAL_LIMIT = 200.0f;
 
+    // Slew-limits the correction itself (mm/s of allowed change), not the
+    // gains: right after reset() (fresh wall-follow, post-turn, post
+    // -recovery) s_lastCorrection starts at 0, so a big real error ramps in
+    // over a couple of ticks instead of slamming the motors on the very
+    // first one. At typical tick rates this reaches full authority within
+    // ~1-2 ticks, so normal tracking speed isn't noticeably affected - it
+    // only holds back a correction that's trying to jump a lot in one tick.
+    constexpr float CORRECTION_SLEW_PER_SEC = 1500.0f;
+
     // 2x2 ToF block used as the right-wall distance estimate.
     constexpr uint8_t ZONE_ROW_LO = 3;
     constexpr uint8_t ZONE_ROW_HI = 4;
@@ -48,6 +57,7 @@ namespace {
 
     float         s_integral = 0.0f;
     float         s_lastError = 0.0f;
+    float         s_lastCorrection = 0.0f;
     unsigned long s_lastTime = 0;
     uint8_t       s_walledFrames = 0;
     uint8_t       s_farFrames = 0;
@@ -163,13 +173,20 @@ namespace {
         s_integral += error * dt;
         s_integral = constrain(s_integral, -INTEGRAL_LIMIT, INTEGRAL_LIMIT);
 
-        return PID_KP * error + PID_KI * s_integral + PID_KD * derivative;
+        float correction = PID_KP * error + PID_KI * s_integral + PID_KD * derivative;
+
+        const float maxStep = CORRECTION_SLEW_PER_SEC * dt;
+        correction = constrain(correction, s_lastCorrection - maxStep, s_lastCorrection + maxStep);
+        s_lastCorrection = correction;
+
+        return correction;
     }
 }  // namespace
 
 void reset() {
     s_integral = 0.0f;
     s_lastError = 0.0f;
+    s_lastCorrection = 0.0f;
     s_lastTime = micros();
     s_walledFrames = 0;
     s_hasLastValidDistance = false;

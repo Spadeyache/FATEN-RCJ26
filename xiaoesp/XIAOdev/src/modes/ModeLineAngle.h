@@ -23,4 +23,5 @@
 //                     bit3 = fine angle valid
 //   XIAO_REG_COM    — Y of the detected point, or average Y when two or more
 //                     detected border points are available
+void modeLineAngleReset();
 void modeLineAngleRun(camera_fb_t* fb, YacheEncodedSerial& teensy);

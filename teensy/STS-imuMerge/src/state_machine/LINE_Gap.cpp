@@ -107,13 +107,29 @@ namespace {
         Processing::XiaoDecode::tick(true);
     }
 
-    void driveForMs(float left, float right, uint16_t ms) {
+    inline bool gapRedTriggered() {
+        return Actions::Drive::lineFollowState() == Actions::Drive::LINE_FOLLOW_FLAT &&
+               !StateMachine::redSuppressed() &&
+               Sensors::XIAO_link::get(XIAO_REG_FEATURE) == FEAT_RED;
+    }
+
+    bool transitionToRedIfNeeded() {
+        if (!gapRedTriggered()) return false;
+        Actions::Drive::stop();
+        Processing::XiaoDecode::clearFilter();
+        StateMachine::transitionTo(StateMachine::STALLED_RED);
+        return true;
+    }
+
+    bool driveForMs(float left, float right, uint16_t ms) {
         const unsigned long start = millis();
         while (millis() - start < ms) {
             Actions::Drive::motor(left, right);
             delay(5);
             updateXiaoNow();
+            if (transitionToRedIfNeeded()) return true;
         }
+        return false;
     }
 
     void pumpXiaoFor(uint16_t ms) {
@@ -239,26 +255,29 @@ namespace {
         Actions::Drive::stop();
     }
 
-    void backUntilAnyGapPoint() {
+    bool backUntilAnyGapPoint() {
         const float backSpeed = gapBackSpeed();
-        driveForMs(backSpeed, backSpeed, GAP_ROUGH_BACK_BLIND_MS);
+        if (driveForMs(backSpeed, backSpeed, GAP_ROUGH_BACK_BLIND_MS)) return true;
         updateXiaoNow();
+        if (transitionToRedIfNeeded()) return true;
         while (!Processing::XiaoDecode::gapAnyPointFlag()) {
             Actions::Drive::motor(backSpeed, backSpeed);
             delay(5);
             updateXiaoNow();
+            if (transitionToRedIfNeeded()) return true;
         }
         Actions::Drive::stop();
+        return false;
     }
 
-    void roughTurnBackToGapStart(float angleDeg) {
+    bool roughTurnBackToGapStart(float angleDeg) {
         const float fwdMm = fabsf(angleDeg) * GAP_ROUGH_FWD_MM_PER_DEG;
         Actions::Forward::forward(45.0f, fwdMm,
                                   /*useIMU=*/false, /*pumpComms=*/true);
         updateXiaoNow();
         Actions::Turn::turn(-angleDeg);
         Processing::XiaoDecode::clearFilter();
-        backUntilAnyGapPoint();
+        return backUntilAnyGapPoint();
     }
 
     inline void returnToLineFollow() {
@@ -285,11 +304,13 @@ void update() {
     while (true) {
         // Reverse until XIAO sees at least one usable line point.
         updateXiaoNow();
+        if (transitionToRedIfNeeded()) return;
         const float backSpeed = gapBackSpeed();
         Actions::Drive::motor(backSpeed, backSpeed);
         while (!Processing::XiaoDecode::gapAnyPointFlag()) {
             delay(5);
             updateXiaoNow();
+            if (transitionToRedIfNeeded()) return;
         }
         pumpXiaoFor(GAP_REVERSE_SETTLE_MS);
         
@@ -327,7 +348,7 @@ void update() {
             returnToLineFollow();
             return;
         }
-        roughTurnBackToGapStart(savedAngleError);               //tight turn adjustment
+        if (roughTurnBackToGapStart(savedAngleError)) return;   //tight turn adjustment
 
     }
 }

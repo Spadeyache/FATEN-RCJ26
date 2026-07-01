@@ -23,6 +23,7 @@ namespace {
     constexpr unsigned long RED_STALL_MS = 6150;
     constexpr unsigned long RED_SUPPRESS_MS = 15000;
     constexpr unsigned long RED_CMD_SAMPLE_MS = 20;
+    constexpr unsigned long RED_CLEAR_ARM_MS = 150;
     constexpr uint8_t RED_CLEAR_FRAMES = 5;
 
     RobotState _current = LINE_FOLLOW;
@@ -93,7 +94,8 @@ void tick() {
         case STALLED_RED:
             // Fixed red pause, then ignore red long enough to drive clear.
             Actions::Drive::stop();
-            if (millis() - _redLastCmdSample >= RED_CMD_SAMPLE_MS) {
+            if (millis() - _redStallStart >= RED_CLEAR_ARM_MS &&
+                millis() - _redLastCmdSample >= RED_CMD_SAMPLE_MS) {
                 _redLastCmdSample = millis();
                 if (Processing::XiaoDecode::command() == FEAT_RED) {
                     _redClearFrames = 0;
