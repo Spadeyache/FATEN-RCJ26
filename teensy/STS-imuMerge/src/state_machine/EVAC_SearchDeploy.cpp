@@ -35,9 +35,8 @@ namespace {
     constexpr int16_t  VICTIM_BACK_MIN_Y2         = K230_FRAME_H - 65;  // ...and bottom y2 >= this (415) -> back up
     // Collection / deploy policy:
     constexpr uint32_t EVAC_SEARCH_TIMEOUT_MS     = 60000UL;  // 1-min search/deploy window
-    constexpr uint32_t SPIN_SEARCH_MS             = 10000UL;  // spin in place this long with no victim, then roam forward
-    constexpr uint32_t ROAM_FORWARD_MS            = 4000UL;   // forward-roam phase length between spins
     constexpr float    ROAM_TURN_SPEED            = 50.0f;    // turn speed used by the bump recovery
+    constexpr uint32_t VICTIM_SEARCH_SPIN_MS      = 8000UL;   // spin this long for a victim before wall-follow search
     constexpr uint32_t DEPLOY_POINT_SPIN_MS       = 8000UL;   // spin this long for a point before wall-follow search
     constexpr float    DEPLOY_WALL_TARGET_MM      = 100.0f;   // same wall-follow shape as EVAC_Entry
     constexpr float    DEPLOY_WALL_BASE_SPEED     = 60.0f;
@@ -477,7 +476,8 @@ void onEnter() {
 }
 
 void update() {
-    uint32_t lastSeen = millis();   // last time a victim was in view (roam timer)
+    uint32_t noVictimSpinStart = 0;     // mini timer for the capped victim-search spin
+    bool     victimWallSearch  = false; // true once the no-victim search switches to wall-follow
 
     // Collect-and-deploy loop. The 1-min timer never interrupts an in-progress
     // grab/approach; it is only checked here, between whole actions.
@@ -506,7 +506,8 @@ void update() {
             digitalWrite(LED_BUILTIN, HIGH);
             if (VictimManager::liveHeld() > 0) deployGreen();  // driveToColorCorner(GREEN)
             if (VictimManager::deadHeld() > 0) deployRed();    // driveToColorCorner(RED)
-            lastSeen = millis();   // fresh search window after disposing
+            noVictimSpinStart = 0;  // fresh mini spin after disposing
+            victimWallSearch = false;
             continue;
         }
 
@@ -514,7 +515,8 @@ void update() {
 
         // closestCenterVictim is already filtered to types we still want.
         if (closestCenterVictim() != nullptr) {
-            lastSeen = millis();                 // reset roam timer: something in view
+            noVictimSpinStart = 0;              // reset mini spin timer: something in view
+            victimWallSearch = false;
             const int type = approachVictim();   // runs to completion (reach or lose)
             if (type >= 0) {
                 const bool grabbed = VictimManager::tryGrab((uint8_t)type);  // grab + self-confirm
@@ -531,19 +533,35 @@ void update() {
                 // front of it) instead of re-grabbing straight away.
             }
         } else {
-            // Roam to find victims. A front-bumper hit at any moment triggers a
-            // bump recovery. Otherwise: spin in place for SPIN_SEARCH_MS to sweep,
-            // then roam forward for ROAM_FORWARD_MS, and repeat. lastSeen resets on
-            // victim/deploy/recover, so it always restarts on the spin phase.
-            Sensors::Touch::tick();
-            if (Sensors::Touch::front()) {
-                bumpRecover();
-                lastSeen = millis();                 // recovered -> restart spin timer
+            // Search for victims after an attempt/loss: spin for a capped mini
+            // timer, then use the same wall-follow drive-around shape as entry.
+            if (noVictimSpinStart == 0) {
+                noVictimSpinStart = millis();
+                victimWallSearch = false;
+            }
+
+            if (!victimWallSearch &&
+                (uint32_t)(millis() - noVictimSpinStart) >= VICTIM_SEARCH_SPIN_MS) {
+                Serial.println("[search] no victim after spin - wall-follow search");
+                Actions::WallFollow::reset();
+                victimWallSearch = true;
+            }
+
+            if (victimWallSearch) {
+                Sensors::Touch::tick();
+                Sensors::ToF::tick();
+                Actions::WallFollow::tick(DEPLOY_WALL_TARGET_MM, DEPLOY_WALL_BASE_SPEED,
+                                          DEPLOY_WALL_FAR_MM, /*detectSudden=*/false);
+                delayMicroseconds(10000);
             } else {
-                const uint32_t phase =
-                    (millis() - lastSeen) % (SPIN_SEARCH_MS + ROAM_FORWARD_MS);
-                if (phase < SPIN_SEARCH_MS) Actions::Drive::motor(50, -50);  // spin sweep
-                else                        Actions::Drive::motor(60, 60);   // roam forward
+                Sensors::Touch::tick();
+                if (Sensors::Touch::front()) {
+                    bumpRecover();
+                    noVictimSpinStart = 0;       // recovered -> restart mini spin
+                    victimWallSearch = false;
+                } else {
+                    Actions::Drive::motor(50, -50);  // spin sweep, capped by VICTIM_SEARCH_SPIN_MS
+                }
             }
         }
     }
