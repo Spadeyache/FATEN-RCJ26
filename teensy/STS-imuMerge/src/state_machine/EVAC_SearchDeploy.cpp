@@ -7,6 +7,7 @@
 #include "../actions/Drive.h"
 #include "../actions/Arm.h"
 #include "../actions/Forward.h"
+#include "../actions/Turn.h"
 #include "../sensors/Touch.h"
 #include "../processing/K230Decode.h"
 
@@ -17,8 +18,8 @@ namespace EVAC_SearchDeploy {
 namespace {
     // --- EVAC_SearchDeploy-only tuning (moved out of config.h) -------------------
     // Approach (victim chase):
-    constexpr float    EVAC_GRAB_BASE_SPEED       = 45.0f;
-    constexpr float    EVAC_GRAB_TURN_GAIN        = 35.0f;
+    constexpr float    EVAC_GRAB_BASE_SPEED       = 75.0f;
+    constexpr float    EVAC_GRAB_TURN_GAIN        = 60.0f;
     constexpr uint8_t  EVAC_GRAB_AVG_FRAMES       = 3;        // direction moving-average window
     constexpr uint8_t  EVAC_GRAB_LOST_HOLD_FRAMES = 5;        // coast this many frames when target drops
     constexpr uint8_t  EVAC_GRAB_STOP_WINDOW      = 5;        // over-height vote window
@@ -26,6 +27,8 @@ namespace {
     // Collection / deploy policy:
     constexpr uint32_t EVAC_SEARCH_TIMEOUT_MS     = 120000UL; // 2-min collection window
     constexpr uint32_t SPIN_SEARCH_MS             = 10000UL;  // spin in place this long with no victim, then roam forward
+    constexpr uint32_t ROAM_FORWARD_MS            = 4000UL;   // forward-roam phase length between spins
+    constexpr float    ROAM_TURN_SPEED            = 50.0f;    // turn speed used by the bump recovery
     constexpr float    EVAC_POINT_STOP_WIDTH_PX   = 300.0f;   // corner-approach stop width
     constexpr float    EVAC_POINT_STOP_HEIGHT_PX  = 140.0f;    // corner-approach stop height
     constexpr uint8_t  EVAC_POINT_STOP_REQUIRED   = 5;        // consecutive close frames at the corner
@@ -38,7 +41,7 @@ namespace {
     constexpr uint32_t EVAC_POINT_ALIGN_TIMEOUT_MS  = 2500;
     constexpr uint32_t EVAC_DEPLOY_TIMEOUT_MS     = 30000UL;  // give up hunting the corner after this
     constexpr uint32_t MODEL_SWAP_MS              = 1500;     // wait for the K230 to load a model
-    constexpr int      DEPLOY_TOUCH_SPEED         = 50;       // drive-into-corner speed
+    constexpr int      DEPLOY_TOUCH_SPEED         = (int)EVAC_GRAB_BASE_SPEED;  // drive-into-corner speed = chase speed
     constexpr float    DEPLOY_TOUCH_TURN_GAIN     = 35.0f;    // keep corner centred while touching
     constexpr uint32_t DEPLOY_TOUCH_TIMEOUT_MS    = 4000;     // safety if the bumper never triggers
     constexpr uint32_t DEPLOY_TOUCH_CONFIRM_MS    = 50;       // ignore one-frame bumper noise
@@ -340,6 +343,33 @@ namespace {
         VictimManager::releaseDead();
         Actions::Forward::forward(DEPLOY_BACKOFF_SPEED, DEPLOY_BACKOFF_MM);
     }
+
+    // Drive forward `mm` at `speed` (both positive) while watching the front
+    // bumper. On a hit: stop and turn the other way (turn(-50)).
+    void forwardWatchTouch(int speed, int mm) {
+        const unsigned long duration = (unsigned long)
+            ((float)mm * FORWARD_MS_PER_MM * MAX_MOTOR_SPEED / (float)speed);
+        const unsigned long startT = millis();
+        Actions::Drive::motor(speed, speed);
+        while (millis() - startT < duration) {
+            Sensors::Touch::tick();
+            if (Sensors::Touch::front()) {
+                Actions::Drive::stop();
+                Actions::Turn::turn(-50.0f, ROAM_TURN_SPEED);
+                return;
+            }
+        }
+        Actions::Drive::stop();
+    }
+
+    // Front bumper hit while roaming: back off, turn away, nudge forward again.
+    void bumpRecover() {
+        Serial.println("[search] bump -> recover");
+        Actions::Drive::stop();
+        Actions::Forward::forward(-60, 40);            // back off
+        Actions::Turn::turn(50.0f, ROAM_TURN_SPEED);   // turn away
+        forwardWatchTouch(60, 110);                    // forward; re-hit -> stop + turn(-50)
+    }
 }
 
 void onEnter() {
@@ -373,21 +403,27 @@ void update() {
             if (type >= 0) {
                 VictimManager::tryGrab((uint8_t)type);   // grab + self-confirm
                 Actions::Drive::stop();
+                Actions::Forward::forward(-50, 70);      // back up after each grab
 
                 const uint32_t seenPacketMs = Processing::K230Decode::lastPacketMs();
                 Processing::K230Decode::waitForFreshFrameAfter(seenPacketMs, 700);
 
             }
-        } else if (millis() - lastSeen < SPIN_SEARCH_MS) {
-            // Sweep in place to find a victim.
-            Actions::Drive::motor(50, -50);
         } else {
-            // Nothing found while spinning for SPIN_SEARCH_MS: roam forward to a new
-            // spot, turning away when the front bumper hits, instead of spinning on
-            // the same blind corner.
+            // Roam to find victims. A front-bumper hit at any moment triggers a
+            // bump recovery. Otherwise: spin in place for SPIN_SEARCH_MS to sweep,
+            // then roam forward for ROAM_FORWARD_MS, and repeat. lastSeen resets on
+            // victim/deploy/recover, so it always restarts on the spin phase.
             Sensors::Touch::tick();
-            if (Sensors::Touch::front()) Actions::Drive::motor(50, -50);  // blocked -> turn in place
-            else                         Actions::Drive::motor(50, 50);   // roam forward
+            if (Sensors::Touch::front()) {
+                bumpRecover();
+                lastSeen = millis();                 // recovered -> restart spin timer
+            } else {
+                const uint32_t phase =
+                    (millis() - lastSeen) % (SPIN_SEARCH_MS + ROAM_FORWARD_MS);
+                if (phase < SPIN_SEARCH_MS) Actions::Drive::motor(50, -50);  // spin sweep
+                else                        Actions::Drive::motor(60, 60);   // roam forward
+            }
         }
     }
 

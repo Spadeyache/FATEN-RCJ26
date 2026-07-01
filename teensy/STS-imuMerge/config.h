@@ -133,7 +133,7 @@ enum XiaoMode : uint8_t {
 
 // EVAC shared tuning — used by BOTH EVAC_SearchDeploy (approach stop) AND
 // VictimManager (grab self-confirm), so it stays here.
-#define EVAC_GRAB_STOP_HEIGHT_PX     123.0f
+#define EVAC_GRAB_STOP_HEIGHT_PX     135.0f
 // Other EVAC tuning is now file-local: EVAC_SearchDeploy-only constants live in
 // EVAC_SearchDeploy.cpp; EVAC_MAX_BALLS lives in VictimManager.cpp.
 
@@ -145,8 +145,8 @@ enum XiaoMode : uint8_t {
 #define FILTER_THRESHOLD_RED      5   // red line
 #define FILTER_THRESHOLD_SILVER   4   // silver (evac entry)
 #define FILTER_THRESHOLD_LINELOST  3   // sustained line loss → gap
-#define FILTER_THRESHOLD_BLACK_INTERSECT 8  // saturated black row before/through an intersection
-#define FILTER_THRESHOLD_GREEN    8   // green left/right (matches main); u-turn = both sides build up
+#define FILTER_THRESHOLD_BLACK_INTERSECT 5  // saturated black row before/through an intersection
+#define FILTER_THRESHOLD_GREEN    5   // green left/right (matches main); u-turn = both sides build up
 
 // After firing any green turn (u-turn / left / right), ignore all green for this
 // long so the same intersection isn't re-read on the way out.

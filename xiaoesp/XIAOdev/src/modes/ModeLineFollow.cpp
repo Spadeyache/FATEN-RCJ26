@@ -72,8 +72,8 @@ constexpr uint8_t COLOR_X_MIN = ARC_LEFT_X;
 constexpr uint8_t COLOR_X_MAX = ARC_RIGHT_X;
 constexpr uint8_t RED_THRESHOLD = 30;
 constexpr uint8_t GAP_BLACK_MAX = 5;
-constexpr uint8_t GREEN_WINDOW = 25;
-constexpr uint8_t GREEN_LINE_HALF_W = 4;
+constexpr uint8_t GREEN_WINDOW = 30;
+constexpr uint8_t GREEN_LINE_HALF_W = 2;
 constexpr uint8_t GREEN_PX_THRESHOLD = 5;
 
 // Raw green reading, sent straight to the Teensy each frame (0 none, 1 u-turn /

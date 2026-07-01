@@ -20,7 +20,7 @@
 // OUTPUT_STREAM submode:
 //   1 = send camera frames + [LC]/[ROW]/[EVT] overlay text
 //   0 = send only [LC]/[ROW]/[EVT] text, no image payload
-#define STREAM_SEND_CAMERA_IMAGES 1
+#define STREAM_SEND_CAMERA_IMAGES 0
 // Debug: force XIAO to run MODE_LINE_ANGLE without Teensy/state-machine control.
 // Set back to 0 before normal robot runs.
 #define DEBUG_FORCE_LINE_ANGLE_MODE 0
@@ -83,7 +83,7 @@
 #define LF_SILVER_PixCOUNT_THRESHOLD   4    // Min silver Pixel count → report FEAT_SILVER
 #define LF_RED_PixCOUNT_THRESHOLD      30   // Min red Pixel count → report FEAT_RED
 #define LF_BLACK_PixCOUNT_THRESHOLD    35   // Min black pixels → report FEAT_BLACK_INTERSECT
-#define LF_GREEN_PixCOUNT_THRESHOLD    5    // pixels needed to confirm green
+#define LF_GREEN_PixCOUNT_THRESHOLD    4   //5 // pixels needed to confirm green
 
 // ── Mode 0b : Line Follow 2 (clean two-row CoM; no green/commit) ─────────────
 //  Row NEAR (70): black center-of-mass → line error (0..254, 127 = centre).
