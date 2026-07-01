@@ -205,9 +205,10 @@ enum XiaoMode : uint8_t {
 
 // Green turn finish:
 //   timed turn does all but this many degrees, then CENTER_POINT mode finishes
-//   by spinning until the front-arc black point is centered.
-#define INTERSECTION_GREEN_CENTER_FINISH_DEG              25.0f
-#define INTERSECTION_GREEN_CENTER_FINISH_TIMEOUT_MS       1400UL
+//   by spinning until the front-arc black point is centered. The finish is
+//   time-capped to this same degree budget, so it cannot pass the original
+//   configured turn angle (90 deg on the flat green turns).
+#define INTERSECTION_GREEN_CENTER_FINISH_DEG              35.0f
 
 
 // U-turn sequence:

@@ -223,14 +223,19 @@ namespace {
 
         const float sign = (motion.turnAngle >= 0.0f) ? 1.0f : -1.0f;
         const float absAngle = fabsf(motion.turnAngle);
-        const float timedAngle = sign * fmaxf(0.0f, absAngle - INTERSECTION_GREEN_CENTER_FINISH_DEG);
+        const float finishDeg = fminf(absAngle, INTERSECTION_GREEN_CENTER_FINISH_DEG);
+        const float timedAngle = sign * (absAngle - finishDeg);
         if (timedAngle != 0.0f) {
             Actions::Turn::turn(timedAngle, motion.turnSpeed);
         }
-        const bool centered = Actions::Turn::turnUntilCenterPoint(
-            sign, motion.turnSpeed, INTERSECTION_GREEN_CENTER_FINISH_TIMEOUT_MS);
+        const unsigned long finishTimeoutMs =
+            (unsigned long)(finishDeg * TURN_SPIN_MS_PER_DEG * MAX_MOTOR_SPEED / motion.turnSpeed);
+        const bool centered = (finishTimeoutMs > 0)
+            ? Actions::Turn::turnUntilCenterPoint(sign, motion.turnSpeed, finishTimeoutMs)
+            : false;
 #if PRINT_ACTIONS
-        Serial.printf("Green center finish: %s\n", centered ? "centered" : "timeout");
+        Serial.printf("Green center finish: %s (%.1f deg budget -> %lu ms)\n",
+                      centered ? "centered" : "timeout", finishDeg, finishTimeoutMs);
 #endif
 
         Processing::XiaoDecode::setMode(XIAO_MODE_LINE);

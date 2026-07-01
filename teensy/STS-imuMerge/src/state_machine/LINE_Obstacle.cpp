@@ -160,12 +160,6 @@ namespace {
         StateMachine::transitionTo(StateMachine::LINE_FOLLOW);
     }
 
-    inline float signedGapAngleDeg() {
-        return Processing::XiaoDecode::gapFineAngleFlag()
-            ? Processing::XiaoDecode::gapFineAngle() - 127.0f
-            : Processing::XiaoDecode::gapAngle() - 127.0f;
-    }
-
     void driveForwardUntilGapAnyPoint() {
         Actions::Drive::motor(40, 40);
         while (!Processing::XiaoDecode::gapAnyPointFlag()) {
@@ -179,6 +173,30 @@ namespace {
         Actions::Drive::stop();
         Sensors::XIAO_link::tick();
         Processing::XiaoDecode::tick(true);
+    }
+
+    bool turnWithCenterPointFinish(float angleDeg, float speed) {
+        Processing::XiaoDecode::setMode(XIAO_MODE_CENTER_POINT);
+        pumpFor(60);
+
+        const float sign = (angleDeg >= 0.0f) ? 1.0f : -1.0f;
+        const float absAngle = fabsf(angleDeg);
+        const float finishDeg = fminf(absAngle, INTERSECTION_GREEN_CENTER_FINISH_DEG);
+        const float timedAngle = sign * (absAngle - finishDeg);
+        if (timedAngle != 0.0f) {
+            Actions::Turn::turn(timedAngle, speed);
+        }
+
+        const unsigned long finishTimeoutMs =
+            (unsigned long)(finishDeg * TURN_SPIN_MS_PER_DEG * MAX_MOTOR_SPEED / speed);
+        const bool centered = (finishTimeoutMs > 0)
+            ? Actions::Turn::turnUntilCenterPoint(sign, speed, finishTimeoutMs)
+            : false;
+#if PRINT_ACTIONS
+        Serial.printf("Obstacle center finish: %s (%.1f deg budget -> %lu ms)\n",
+                      centered ? "centered" : "timeout", finishDeg, finishTimeoutMs);
+#endif
+        return centered;
     }
 }
 
@@ -269,24 +287,9 @@ void update() {
             Sensors::IMU::tick();
         }
     }
-    Actions::Turn::turn(65, 45);
-
-    if (Processing::XiaoDecode::gapBothRowsFlag()) {
-        finishToLineFollow();
-        return;
-    }
-
-    const float savedAngle = signedGapAngleDeg();
-    const uint8_t savedY = Processing::XiaoDecode::gapLineY();
-#if PRINT_STATE
-    Serial.print("OBSTACLE one-point gap angle: ");
-    Serial.println(savedAngle);
-#endif
-
-    Actions::Forward::forward(45.0f, (float)savedY * 0.25f,
-                              /*useIMU=*/false, /*pumpComms=*/true);
-    Actions::Turn::turn(savedAngle);
+    turnWithCenterPointFinish(65.0f, 45.0f);
     finishToLineFollow();
+    return;
 }
 
 }  // namespace LINE_Obstacle
