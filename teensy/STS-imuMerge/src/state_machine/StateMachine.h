@@ -20,5 +20,6 @@ void       init();
 void       tick();                 // dispatches to active state's update()
 void       transitionTo(RobotState next);
 RobotState current();
+bool       redSuppressed();
 
 }  // namespace StateMachine

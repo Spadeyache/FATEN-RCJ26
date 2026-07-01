@@ -55,6 +55,7 @@ namespace {
     float         s_lastValidDistanceMm = 0.0f;
     bool          s_hasLastValidDistance = false;
     Status        s_lastStatus = Status::NO_WALL;
+    bool          s_firstPidSample = true;
 
     float obstacleTurnDeg() {
         // Only a still-blind search (never acquired a wall / not yet
@@ -140,9 +141,22 @@ namespace {
         const unsigned long now = micros();
         float dt = (now - s_lastTime) * 1e-6f;
         s_lastTime = now;
+        // Ceiling guards a stale/first-ever s_lastTime; floor guards a call
+        // landing right on top of the previous one (e.g. right after reset())
+        // from blowing up the derivative term below.
         if (dt <= 0.0f || dt > 0.5f) dt = 0.05f;
+        if (dt < 0.005f) dt = 0.005f;
 
         const float error = distanceMm - targetMm;
+        // First sample since reset(): there's no real previous error to
+        // differentiate against, so seed it with this one instead of the
+        // reset default of 0 - otherwise a real (nonzero) error read right
+        // after reset() reads as a huge one-tick spike (a "derivative kick"),
+        // slamming the motors even though the wall hasn't actually moved.
+        if (s_firstPidSample) {
+            s_lastError = error;
+            s_firstPidSample = false;
+        }
         const float derivative = (error - s_lastError) / dt;
         s_lastError = error;
 
@@ -160,6 +174,7 @@ void reset() {
     s_walledFrames = 0;
     s_hasLastValidDistance = false;
     s_lastStatus = Status::NO_WALL;
+    s_firstPidSample = true;
     resetExitCounters();
 }
 

@@ -47,6 +47,7 @@ namespace {
     constexpr float    OBS_TOUCH_ARC_RIGHT         = 5.0f;
     constexpr float    OBS_FREE_ARC_LEFT           = -3.0f;
     constexpr float    OBS_FREE_ARC_RIGHT          = 67.0f;
+    constexpr float    OBS_CENTER_FINISH_EXTRA_DEG = 30.0f;
 
     constexpr ObstacleEntryMotion OBS_ENTRY_FLAT = {
         -55.0f, 40.0f,
@@ -187,14 +188,16 @@ namespace {
             Actions::Turn::turn(timedAngle, speed);
         }
 
+        const float timeoutDeg = finishDeg + OBS_CENTER_FINISH_EXTRA_DEG;
         const unsigned long finishTimeoutMs =
-            (unsigned long)(finishDeg * TURN_SPIN_MS_PER_DEG * MAX_MOTOR_SPEED / speed);
+            (unsigned long)(timeoutDeg * TURN_SPIN_MS_PER_DEG * MAX_MOTOR_SPEED / speed);
         const bool centered = (finishTimeoutMs > 0)
             ? Actions::Turn::turnUntilCenterPoint(sign, speed, finishTimeoutMs)
             : false;
 #if PRINT_ACTIONS
-        Serial.printf("Obstacle center finish: %s (%.1f deg budget -> %lu ms)\n",
-                      centered ? "centered" : "timeout", finishDeg, finishTimeoutMs);
+        Serial.printf("Obstacle center finish: %s (%.1f+%.1f deg timeout -> %lu ms)\n",
+                      centered ? "centered" : "timeout",
+                      finishDeg, OBS_CENTER_FINISH_EXTRA_DEG, finishTimeoutMs);
 #endif
         return centered;
     }

@@ -20,10 +20,19 @@ namespace StateMachine {
 #define DEBUG_FORCE_START_EVAC_EXIT 0
 
 namespace {
+    constexpr unsigned long RED_STALL_MS = 6150;
+    constexpr unsigned long RED_SUPPRESS_MS = 15000;
+    constexpr unsigned long RED_CMD_SAMPLE_MS = 20;
+    constexpr uint8_t RED_CLEAR_FRAMES = 5;
+
     RobotState _current = LINE_FOLLOW;
     RobotState _pending = LINE_FOLLOW;
     bool       _hasPending = false;
     bool       _justEntered = true;
+    unsigned long _redStallStart = 0;
+    unsigned long _redLastCmdSample = 0;
+    unsigned long _redSuppressUntil = 0;
+    uint8_t _redClearFrames = 0;
 }
 
 void init() {
@@ -42,6 +51,10 @@ void transitionTo(RobotState next) {
 
 RobotState current() { return _current; }
 
+bool redSuppressed() {
+    return _redSuppressUntil != 0 && (long)(millis() - _redSuppressUntil) < 0;
+}
+
 static void runOnEnter(RobotState s) {
     switch (s) {
         case LINE_FOLLOW:   LINE_Follow::onEnter();   break;
@@ -54,6 +67,9 @@ static void runOnEnter(RobotState s) {
 #if PRINT_STATE
             Serial.println("State: STALLED_RED");
 #endif
+            _redStallStart = millis();
+            _redLastCmdSample = _redStallStart;
+            _redClearFrames = 0;
             Actions::Drive::stop();
             break;
     }
@@ -75,12 +91,29 @@ void tick() {
         case EVAC_EXIT:         EVAC_Exit::update();         break;
 
         case STALLED_RED:
-            // Idle until XIAO clears the red signal.
+            // Fixed red pause, then ignore red long enough to drive clear.
             Actions::Drive::stop();
-            if (Processing::XiaoDecode::command() != FEAT_RED) {
+            if (millis() - _redLastCmdSample >= RED_CMD_SAMPLE_MS) {
+                _redLastCmdSample = millis();
+                if (Processing::XiaoDecode::command() == FEAT_RED) {
+                    _redClearFrames = 0;
+                } else if (_redClearFrames <= RED_CLEAR_FRAMES) {
+                    _redClearFrames++;
+                }
+            }
+            if (_redClearFrames > RED_CLEAR_FRAMES) {
                 Processing::XiaoDecode::clearFilter();
 #if PRINT_STATE
-                Serial.println("Red cleared â†’ LINE_FOLLOW");
+                Serial.println("Red cleared early -> LINE_FOLLOW");
+#endif
+                transitionTo(LINE_FOLLOW);
+                break;
+            }
+            if (millis() - _redStallStart >= RED_STALL_MS) {
+                Processing::XiaoDecode::clearFilter();
+                _redSuppressUntil = millis() + RED_SUPPRESS_MS;
+#if PRINT_STATE
+                Serial.println("Red pause done -> LINE_FOLLOW");
 #endif
                 transitionTo(LINE_FOLLOW);
             }

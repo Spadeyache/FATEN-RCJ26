@@ -350,6 +350,11 @@ void update() {
             return;
 
         case FEAT_RED:
+            if (StateMachine::redSuppressed()) {
+                Processing::XiaoDecode::clearFilter();
+                Actions::Drive::runLinePID();
+                return;
+            }
             StateMachine::transitionTo(StateMachine::STALLED_RED);
             return;
 

@@ -14,8 +14,8 @@ namespace {
     Servo _krs;            // KRS lift, PWM mode (pin = KRS_PWM_PIN)
 
     constexpr int KRS_PARK_US    = 800;   // parked pose at boot — TODO tune
-    constexpr int KRS_GRAB_US    = 1990;
-    constexpr int KRS_AIR_US    = 1400;
+    constexpr int KRS_GRAB_US    = 2125;
+    constexpr int KRS_AIR_US    = 1300;
     constexpr int KRS_RELEASE_US = 1650;
 
     constexpr int HS0_CLOSE_US = 2000;
