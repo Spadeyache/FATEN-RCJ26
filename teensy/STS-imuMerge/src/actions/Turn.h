@@ -17,6 +17,9 @@ namespace Turn {
 
 void turn(float angle_deg, float speed = 65.0f);
 void turnRaw(float angle_deg, float speed = 65.0f);
+bool turnUntilCenterPoint(float angleSign,
+                          float speed = 65.0f,
+                          unsigned long timeoutMs = 1400UL);
 
 }  // namespace Turn
 }  // namespace Actions

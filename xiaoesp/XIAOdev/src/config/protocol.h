@@ -30,6 +30,7 @@
 #define FEAT_GREEN_RIGHT   8
 
 // FEATURE byte: other modes.
+#define FEAT_CENTER_POINT_BLACK 1
 #define FEAT_SEARCH_LINE_SILVER 5
 #define FEAT_SEARCH_LINE_BLACK  6
 #define FEAT_NOGI_INTERSECT     6
@@ -41,3 +42,4 @@
 #define MODE_LINE_ANGLE    3
 #define MODE_OBSTACLE      4
 #define MODE_EVAC_COLOR_MASK  5
+#define MODE_CENTER_POINT  6

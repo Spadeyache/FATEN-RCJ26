@@ -12,6 +12,7 @@
 #include "../actions/Forward.h"
 
 #include <Arduino.h>
+#include <math.h>
 
 // =============================================================================
 //  LINE_Follow — default driving state.
@@ -216,7 +217,23 @@ namespace {
             Actions::Forward::forward(motion.forwardSpeed, motion.forwardMm,
                                       /*useIMU=*/false, /*pumpComms=*/true);
         }
-        Actions::Turn::turn(motion.turnAngle, motion.turnSpeed);
+
+        Processing::XiaoDecode::setMode(XIAO_MODE_CENTER_POINT);
+        pumpXiaoFor(60);
+
+        const float sign = (motion.turnAngle >= 0.0f) ? 1.0f : -1.0f;
+        const float absAngle = fabsf(motion.turnAngle);
+        const float timedAngle = sign * fmaxf(0.0f, absAngle - INTERSECTION_GREEN_CENTER_FINISH_DEG);
+        if (timedAngle != 0.0f) {
+            Actions::Turn::turn(timedAngle, motion.turnSpeed);
+        }
+        const bool centered = Actions::Turn::turnUntilCenterPoint(
+            sign, motion.turnSpeed, INTERSECTION_GREEN_CENTER_FINISH_TIMEOUT_MS);
+#if PRINT_ACTIONS
+        Serial.printf("Green center finish: %s\n", centered ? "centered" : "timeout");
+#endif
+
+        Processing::XiaoDecode::setMode(XIAO_MODE_LINE);
     }
 
     void runForwardIfNeeded(float speed, float mm) {

@@ -60,5 +60,37 @@ void turnRaw(float angle_deg, float speed) {
     turnImpl(angle_deg, speed, false);
 }
 
+bool turnUntilCenterPoint(float angleSign, float speed, unsigned long timeoutMs) {
+    const float l = (angleSign > 0) ?  speed : -speed;
+    const float r = (angleSign > 0) ? -speed :  speed;
+    const float turnNorm = (angleSign > 0) ? 1.0f : -1.0f;
+
+#if PRINT_ACTIONS
+    Serial.printf("TurnCenterPoint: sign %.0f @ speed %.0f timeout %lu ms\n",
+                  turnNorm, speed, timeoutMs);
+#endif
+
+    const unsigned long start = millis();
+    unsigned long lastComms = 0;
+    Drive::motorTurnGravityProfiled(l, r, turnNorm);
+
+    while (millis() - start < timeoutMs) {
+        if (millis() - lastComms >= 20) {
+            Sensors::XIAO_link::tick();
+            Processing::XiaoDecode::tick(true);
+            Drive::motorTurnGravityProfiled(l, r, turnNorm);
+
+            if (Sensors::XIAO_link::get(XIAO_REG_FEATURE) == FEAT_CENTER_POINT_BLACK) {
+                Drive::stop();
+                return true;
+            }
+            lastComms = millis();
+        }
+    }
+
+    Drive::stop();
+    return false;
+}
+
 }  // namespace Turn
 }  // namespace Actions

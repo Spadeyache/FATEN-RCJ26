@@ -8,7 +8,9 @@
 #include "../actions/Arm.h"
 #include "../actions/Forward.h"
 #include "../actions/Turn.h"
+#include "../actions/WallFollow.h"
 #include "../sensors/Touch.h"
+#include "../sensors/ToF.h"
 #include "../processing/K230Decode.h"
 
 #include <Arduino.h>
@@ -36,9 +38,13 @@ namespace {
     constexpr uint32_t SPIN_SEARCH_MS             = 10000UL;  // spin in place this long with no victim, then roam forward
     constexpr uint32_t ROAM_FORWARD_MS            = 4000UL;   // forward-roam phase length between spins
     constexpr float    ROAM_TURN_SPEED            = 50.0f;    // turn speed used by the bump recovery
+    constexpr uint32_t DEPLOY_POINT_SPIN_MS       = 8000UL;   // spin this long for a point before wall-follow search
+    constexpr float    DEPLOY_WALL_TARGET_MM      = 100.0f;   // same wall-follow shape as EVAC_Entry
+    constexpr float    DEPLOY_WALL_BASE_SPEED     = 60.0f;
+    constexpr float    DEPLOY_WALL_FAR_MM         = 200.0f;
     constexpr float    EVAC_POINT_STOP_WIDTH_PX   = 450.0f;   // corner-approach stop width
     constexpr float    EVAC_POINT_STOP_HEIGHT_PX  = 140.0f;   // corner-approach stop height
-    constexpr int16_t  EVAC_POINT_STOP_MIN_BOTTOM_Y_PX = 420; // corner bottom must be below this before colour read
+    constexpr int16_t  EVAC_POINT_STOP_MIN_BOTTOM_Y_PX = 400; // corner bottom must be below this before colour read
     constexpr uint8_t  EVAC_POINT_STOP_REQUIRED   = 5;        // consecutive close frames at the corner
     constexpr int      EVAC_POINT_ALIGN_DEADBAND_PX = 30;     // centre band before colour read
     constexpr int      EVAC_POINT_ALIGN_SPEED_MIN   = 40;
@@ -247,19 +253,57 @@ namespace {
         return false;
     }
 
+    bool deployTimedOut(uint32_t startMs) {
+        return (uint32_t)(millis() - startMs) >= EVAC_DEPLOY_TIMEOUT_MS;
+    }
+
+    bool driveAroundUntilPoint(uint32_t deployStartMs) {
+        Serial.println("[deploy] no point after spin - wall-follow search");
+        Actions::WallFollow::reset();
+        while (!deployTimedOut(deployStartMs) && !searchTimedOut()) {
+            Processing::K230Decode::tick();
+            if (closestCenterPoint() != nullptr) {
+                Actions::Drive::stop();
+                Serial.println("[deploy] point seen -> approach");
+                return true;
+            }
+
+            Sensors::Touch::tick();
+            Sensors::ToF::tick();
+            Actions::WallFollow::tick(DEPLOY_WALL_TARGET_MM, DEPLOY_WALL_BASE_SPEED,
+                                      DEPLOY_WALL_FAR_MM, /*detectSudden=*/false);
+            delayMicroseconds(10000);
+        }
+        Actions::Drive::stop();
+        return false;
+    }
+
     // Spin + drive to the nearest POINT (victims model) until close. true if reached.
     bool approachPoint(bool allowExtraLiveGrab) {
         const uint32_t start = millis();
+        uint32_t noPointSpinStart = 0;
         uint8_t hits = 0;
-        while (millis() - start < EVAC_DEPLOY_TIMEOUT_MS && !searchTimedOut()) {
+        while (!deployTimedOut(start) && !searchTimedOut()) {
             Processing::K230Decode::drainDelay(50);
             if (allowExtraLiveGrab && tryGrabExtraLiveDuringGreenDeploy()) {
                 hits = 0;
+                noPointSpinStart = 0;
                 continue;
             }
 
             const K230DBox* corner = closestCenterPoint();
-            if (corner == nullptr) { hits = 0; Actions::Drive::spinDecay(60, 400); continue; }
+            if (corner == nullptr) {
+                hits = 0;
+                if (noPointSpinStart == 0) noPointSpinStart = millis();
+                if ((uint32_t)(millis() - noPointSpinStart) >= DEPLOY_POINT_SPIN_MS) {
+                    if (!driveAroundUntilPoint(start)) return false;
+                    noPointSpinStart = 0;
+                } else {
+                    Actions::Drive::motor(60, -60);
+                }
+                continue;
+            }
+            noPointSpinStart = 0;
             if (boxWidthPx(*corner) > EVAC_POINT_STOP_WIDTH_PX &&
                 boxHeightPx(*corner) >= EVAC_POINT_STOP_HEIGHT_PX &&
                 corner->y2 > EVAC_POINT_STOP_MIN_BOTTOM_Y_PX) {

@@ -11,6 +11,7 @@
 #include "src/modes/ModeLineAngle.h"
 #include "src/modes/ModeObstacle.h"
 #include "src/modes/ModeEvacColorMask.h"
+#include "src/modes/ModeCenterPoint.h"
 #include "src/stream/XiaoStream.h"
 // #include "src/drivers/wifi_config.h"
 
@@ -170,6 +171,7 @@ void loop() {
         case MODE_LINE_ANGLE:  modeLineAngleRun(fb, teensy);   break;
         case MODE_OBSTACLE:    modeObstacleRun(fb, teensy);    break;
         case MODE_EVAC_COLOR_MASK: modeEvacColorMaskRun(fb, teensy); break;
+        case MODE_CENTER_POINT: modeCenterPointRun(fb, teensy); break;
         default:               modeLineFollowRun(fb, teensy);  break;
     }
 

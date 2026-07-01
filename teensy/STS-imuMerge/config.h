@@ -56,6 +56,7 @@
 #define FEAT_GREEN_RIGHT    8   // XIAO GreenFilter-confirmed right turn (hardcoded fwd+turn)
 
 // FEATURE byte — mode-scoped codes for SEARCH_LINE / NOGI modes (separate code space):
+#define FEAT_CENTER_POINT_BLACK 1   // CENTER_POINT mode: front-arc black point centered
 #define FEAT_SEARCH_LINE_SILVER 5   // SEARCH_LINE mode: silver tape
 #define FEAT_SEARCH_LINE_BLACK  6   // SEARCH_LINE mode: black return line (LINE_Obstacle waits on this)
 
@@ -66,6 +67,7 @@ enum XiaoMode : uint8_t {
     XIAO_MODE_LINE_ANGLE  = 3,   // line slope + point flags/Y during gap traversal
     XIAO_MODE_OBSTACLE    = 4,   // obstacle re-acquire: arc see-line flag + line tilt angle
     XIAO_MODE_EVAC_COLOR_MASK = 5,   // evac entry/exit: silver side scan + row-45 black flag
+    XIAO_MODE_CENTER_POINT = 6,      // front arc: feature=1 when black point is centered
 };
 
 // =============================================================================
@@ -200,6 +202,12 @@ enum XiaoMode : uint8_t {
 #define INTERSECTION_GREEN_RIGHT_FLAT_FORWARD_MM          52.0f
 #define INTERSECTION_GREEN_RIGHT_FLAT_TURN_ANGLE          90.0f
 #define INTERSECTION_GREEN_RIGHT_FLAT_TURN_SPEED          60.0f
+
+// Green turn finish:
+//   timed turn does all but this many degrees, then CENTER_POINT mode finishes
+//   by spinning until the front-arc black point is centered.
+#define INTERSECTION_GREEN_CENTER_FINISH_DEG              25.0f
+#define INTERSECTION_GREEN_CENTER_FINISH_TIMEOUT_MS       1400UL
 
 
 // U-turn sequence:
