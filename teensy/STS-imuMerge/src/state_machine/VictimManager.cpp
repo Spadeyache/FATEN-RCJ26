@@ -159,6 +159,9 @@ namespace {
         Actions::Drive::motor(35, 35);     // lunge in
         Processing::K230Decode::drainDelay(700);
         if (side == SIDE_LEFT) Actions::Arm::grabLeft(true); else Actions::Arm::grabRight(true);
+        Actions::Drive::motor(-50, -50);   // back off
+        Processing::K230Decode::drainDelay(300);
+
         Actions::Arm::liftCarry();
         Processing::K230Decode::drainDelay(CARRY_MS - 600);
         Actions::Drive::stop();
@@ -275,6 +278,9 @@ void releaseLive() {
 
 // The dead ball only ever sits in the right arm.
 void releaseDead() {
+    Actions::Arm::liftRelease();
+    Processing::K230Decode::drainDelay(300);
+    
     if (_rightCount > 0 && _rightStack[0] == K230_CLASS_DEAD) {
         Actions::Arm::releaseRight();
         _rightCount = 0;

@@ -20,10 +20,17 @@ namespace {
     // Approach (victim chase):
     constexpr float    EVAC_GRAB_BASE_SPEED       = 75.0f;
     constexpr float    EVAC_GRAB_TURN_GAIN        = 60.0f;
+    constexpr float    CHASE_SPEED_FAR            = 65.0f;   // far (small box height) chase speed
+    constexpr float    CHASE_SPEED_NEAR           = 45.0f;   // near (box at stop height) chase speed
     constexpr uint8_t  EVAC_GRAB_AVG_FRAMES       = 3;        // direction moving-average window
     constexpr uint8_t  EVAC_GRAB_LOST_HOLD_FRAMES = 5;        // coast this many frames when target drops
     constexpr uint8_t  EVAC_GRAB_STOP_WINDOW      = 5;        // over-height vote window
     constexpr uint8_t  EVAC_GRAB_STOP_REQUIRED    = 3;        // ...hits needed (3 of 5)
+    // Overshoot guard: a tiny box hugging the frame bottom means the ball is too
+    // close / under the camera. Back up until it returns to a grabbable view.
+    constexpr int16_t  K230_FRAME_H               = 480;      // K230 sensor height (== SENSOR_H)
+    constexpr int16_t  VICTIM_BACK_MAX_HEIGHT     = 60;       // box height <= this ...
+    constexpr int16_t  VICTIM_BACK_MIN_Y2         = K230_FRAME_H - 65;  // ...and bottom y2 >= this (415) -> back up
     // Collection / deploy policy:
     constexpr uint32_t EVAC_SEARCH_TIMEOUT_MS     = 120000UL; // 2-min collection window
     constexpr uint32_t SPIN_SEARCH_MS             = 10000UL;  // spin in place this long with no victim, then roam forward
@@ -32,9 +39,9 @@ namespace {
     constexpr float    EVAC_POINT_STOP_WIDTH_PX   = 300.0f;   // corner-approach stop width
     constexpr float    EVAC_POINT_STOP_HEIGHT_PX  = 140.0f;    // corner-approach stop height
     constexpr uint8_t  EVAC_POINT_STOP_REQUIRED   = 5;        // consecutive close frames at the corner
-    constexpr int      EVAC_POINT_ALIGN_DEADBAND_PX = 25;     // centre band before colour read
-    constexpr int      EVAC_POINT_ALIGN_SPEED_MIN   = 30;
-    constexpr int      EVAC_POINT_ALIGN_SPEED_MAX   = 50;
+    constexpr int      EVAC_POINT_ALIGN_DEADBAND_PX = 30;     // centre band before colour read
+    constexpr int      EVAC_POINT_ALIGN_SPEED_MIN   = 40;
+    constexpr int      EVAC_POINT_ALIGN_SPEED_MAX   = 60;
     constexpr int      EVAC_POINT_ALIGN_MOVEMS_MIN  = 20;
     constexpr int      EVAC_POINT_ALIGN_MOVEMS_MAX  = 150;
     constexpr long     EVAC_POINT_ALIGN_MOVEMS_K    = 130;
@@ -109,9 +116,18 @@ namespace {
         return best;
     }
 
-    void driveTowardDirection(float dir) {
+    // Chase speed scales with distance: far (small box height) -> CHASE_SPEED_FAR,
+    // slowing linearly to CHASE_SPEED_NEAR as the box height reaches stopHeightPx.
+    float chaseSpeed(float heightPx, float stopHeightPx) {
+        float t = heightPx / stopHeightPx;
+        if (t < 0.0f) t = 0.0f;
+        if (t > 1.0f) t = 1.0f;
+        return CHASE_SPEED_FAR + (CHASE_SPEED_NEAR - CHASE_SPEED_FAR) * t;
+    }
+
+    void driveTowardDirection(float dir, float baseSpeed) {
         const float turn  = dir * EVAC_GRAB_TURN_GAIN;
-        Actions::Drive::motor(EVAC_GRAB_BASE_SPEED + turn, EVAC_GRAB_BASE_SPEED - turn);
+        Actions::Drive::motor(baseSpeed + turn, baseSpeed - turn);
     }
 
     // --- approach: drive at the nearest victim until close. ---
@@ -142,11 +158,19 @@ namespace {
                     Actions::Drive::stop();
                     return -1;
                 }
-                driveTowardDirection(smoothedDir);   // coast on last smoothed dir
+                driveTowardDirection(smoothedDir, CHASE_SPEED_FAR);   // coast fast on last dir
                 delay(20);
                 continue;
             }
             lost = 0;
+
+            // Overshoot: tiny box at the very bottom -> ball too close / under the
+            // camera. Back up until it comes back into a grabbable view.
+            if (boxHeightPx(*t) <= VICTIM_BACK_MAX_HEIGHT && t->y2 >= VICTIM_BACK_MIN_Y2) {
+                Actions::Drive::motor(-EVAC_GRAB_BASE_SPEED, -EVAC_GRAB_BASE_SPEED);
+                delay(20);
+                continue;
+            }
 
             // stop vote: push this frame's over-height result into the ring.
             stopWin[stopIdx] = (boxHeightPx(*t) >= EVAC_GRAB_STOP_HEIGHT_PX);
@@ -167,7 +191,7 @@ namespace {
             for (uint8_t i = 0; i < dirCnt; i++) sum += dirWin[i];
             smoothedDir = sum / (float)dirCnt;
 
-            driveTowardDirection(smoothedDir);
+            driveTowardDirection(smoothedDir, chaseSpeed(boxHeightPx(*t), EVAC_GRAB_STOP_HEIGHT_PX));
             delay(20);
         }
     }
@@ -227,7 +251,7 @@ namespace {
                 Actions::Drive::stop();
             } else {
                 hits = 0;
-                driveTowardDirection(directionFor(*corner));
+                driveTowardDirection(directionFor(*corner), chaseSpeed(boxHeightPx(*corner), EVAC_POINT_STOP_HEIGHT_PX));
             }
         }
         return false;
@@ -401,13 +425,18 @@ void update() {
             lastSeen = millis();                 // reset roam timer: something in view
             const int type = approachVictim();   // run and stop at front of victim.
             if (type >= 0) {
-                VictimManager::tryGrab((uint8_t)type);   // grab + self-confirm
+                const bool grabbed = VictimManager::tryGrab((uint8_t)type);  // grab + self-confirm
                 Actions::Drive::stop();
-                Actions::Forward::forward(-50, 70);      // back up after each grab
+                Actions::Forward::forward(-50, 70);      // back up either way
 
-                const uint32_t seenPacketMs = Processing::K230Decode::lastPacketMs();
-                Processing::K230Decode::waitForFreshFrameAfter(seenPacketMs, 700);
-
+                if (grabbed) {
+                    // Booked: wait a fresh frame so the now-held ball isn't re-detected.
+                    const uint32_t seenPacketMs = Processing::K230Decode::lastPacketMs();
+                    Processing::K230Decode::waitForFreshFrameAfter(seenPacketMs, 700);
+                }
+                // On fail: count stays as-is (tryGrab didn't record). The loop then
+                // re-detects the ball and goes back to approachVictim (moving in
+                // front of it) instead of re-grabbing straight away.
             }
         } else {
             // Roam to find victims. A front-bumper hit at any moment triggers a

@@ -4,6 +4,7 @@
 
 #include "../actions/Drive.h"
 #include "../actions/Forward.h"
+#include "../actions/Arm.h"
 #include "../actions/Turn.h"
 #include "../actions/WallFollow.h"
 #include "../processing/XiaoDecode.h"
@@ -236,6 +237,11 @@ void onEnter() {
 #if PRINT_STATE
     Serial.println("State: EVAC_EXIT");
 #endif
+    Actions::Drive::stop();
+    Actions::Arm::grabLeft(true);
+    Actions::Arm::grabRight(true);
+    Actions::Arm::liftPark();
+
     pinMode(LED_BUILTIN, OUTPUT);
     setDetectionLed(true);
     Processing::XiaoDecode::setMode(XIAO_MODE_EVAC_COLOR_MASK);
