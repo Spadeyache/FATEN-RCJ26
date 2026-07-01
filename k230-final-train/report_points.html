@@ -1,0 +1,52 @@
+<!doctype html><html lang="ja"><head><meta charset="utf-8">
+<title>K230D YOLOv8n パイプライン レポート</title>
+<style>
+ body{font-family:'Segoe UI',Meiryo,system-ui,sans-serif;margin:0;background:#0f172a;color:#e2e8f0}
+ .wrap{max-width:960px;margin:0 auto;padding:32px}
+ h1{font-size:24px;margin:0 0 4px} h2{font-size:18px;margin:28px 0 10px;color:#7dd3fc;border-bottom:1px solid #334155;padding-bottom:6px}
+ .sub{color:#94a3b8;font-size:13px}
+ .cards{display:flex;gap:12px;flex-wrap:wrap;margin:16px 0}
+ .card{background:#1e293b;border:1px solid #334155;border-radius:10px;padding:14px 18px;min-width:150px}
+ .card .k{color:#94a3b8;font-size:12px} .card .v{font-size:20px;font-weight:600;margin-top:4px}
+ table{width:100%;border-collapse:collapse;margin:8px 0;font-size:13px}
+ th,td{border:1px solid #334155;padding:7px 10px;text-align:left}
+ th{background:#1e293b;color:#7dd3fc} td.num{text-align:right;font-variant-numeric:tabular-nums}
+ tr.win{background:#14532d} tr.win td{color:#bbf7d0;font-weight:600}
+ .pill{display:inline-block;background:#0ea5e9;color:#001;border-radius:999px;padding:2px 10px;font-size:12px;font-weight:600}
+ .note{background:#1e293b;border-left:3px solid #0ea5e9;padding:10px 14px;border-radius:6px;font-size:13px;color:#cbd5e1;margin:10px 0}
+ code{background:#0b1220;padding:1px 6px;border-radius:4px;color:#fde68a}
+ footer{color:#64748b;font-size:12px;margin-top:30px}
+</style></head><body><div class="wrap">
+
+<h1>K230D YOLOv8n パイプライン レポート 🇯🇵</h1>
+<div class="sub">生成: 2026-07-01 13:59 ・ nncase 2.11.0 ・ target k230</div>
+
+<h2>1. データセット / Dataset</h2>
+<div class="cards">
+ <div class="card"><div class="k">クラス数 (nc)</div><div class="v">2</div></div>
+ <div class="card"><div class="k">クラス / classes</div><div class="v" style="font-size:15px">Green, Red</div></div>
+ <div class="card"><div class="k">train 画像</div><div class="v">381</div></div>
+ <div class="card"><div class="k">val 画像</div><div class="v">68</div></div>
+</div>
+<div class="note">パス: <code>/workspace/datasets/points</code></div>
+
+<h2>2. 最良の量子化設定 / Best PTQ config &nbsp;<span class="pill">v0_noclip_uint8_uint8</span></h2>
+<div class="cards">
+ <div class="card"><div class="k">cosine (vs float ONNX)</div><div class="v">0.9991</div></div>
+ <div class="card"><div class="k">conf_delta</div><div class="v">+0.000</div></div>
+ <div class="card"><div class="k">サイズ size</div><div class="v">3.40 MB</div></div>
+ <div class="card"><div class="k">compile</div><div class="v">42.4 s</div></div>
+</div>
+
+<h2>3. PTQ スイープ結果 / Sweep (ranked by cosine)</h2>
+<table><thead><tr><th>variant</th><th>opt</th><th>calib</th><th>act/w</th>
+<th>cosine↑</th><th>conf_delta↑</th><th>size MB↓</th><th>compile s↓</th><th>sim ms↓</th></tr></thead>
+<tbody><tr class=''><td>v4_kld_uint8_int16</td><td>4</td><td>Kld</td><td>uint8/int16</td><td class='num'>0.9999</td><td class='num'>-0.209</td><td class='num'>6.41</td><td class='num'>133.6</td><td class='num'>55476</td></tr><tr class=''><td>v5_kld_int16_uint8</td><td>5</td><td>Kld</td><td>int16/uint8</td><td class='num'>0.9996</td><td class='num'>-0.009</td><td class='num'>3.64</td><td class='num'>73.6</td><td class='num'>59118</td></tr><tr class=''><td>v1_noclip_uint8_int16</td><td>1</td><td>NoClip</td><td>uint8/int16</td><td class='num'>0.9995</td><td class='num'>-0.022</td><td class='num'>6.40</td><td class='num'>42.0</td><td class='num'>73592</td></tr><tr class=''><td>v3_kld_uint8_uint8</td><td>3</td><td>Kld</td><td>uint8/uint8</td><td class='num'>0.9995</td><td class='num'>-0.209</td><td class='num'>3.41</td><td class='num'>73.3</td><td class='num'>37526</td></tr><tr class='win'><td>v0_noclip_uint8_uint8 🏆</td><td>0</td><td>NoClip</td><td>uint8/uint8</td><td class='num'>0.9991</td><td class='num'>+0.000</td><td class='num'>3.40</td><td class='num'>42.4</td><td class='num'>37964</td></tr></tbody></table>
+<div class="note">cosine が高いほど float ONNX と一致（量子化劣化が小さい）。conf_delta は検出信頼度の差（0 に近いほど良い）。sim ms は CPU シミュレータ速度であり実機 KPU 速度ではない（速度比較は size と compile を参照）。</div>
+
+<h2>4. searched vs preset 比較 / Comparison</h2>
+<table><thead><tr><th>metric</th><th>searched</th><th>preset</th><th>勝ち / winner</th></tr></thead>
+<tbody><tr><td>cosine_mean</td><td class='num'>0.9992</td><td class='num'>0.9992</td><td>tie</td></tr><tr><td>conf_delta_mean</td><td class='num'>+0.009</td><td class='num'>+0.009</td><td>tie</td></tr><tr><td>sim_latency_ms</td><td class='num'>24990</td><td class='num'>24788</td><td>preset</td></tr><tr><td>kmodel_size_mb</td><td class='num'>3.41</td><td class='num'>3.41</td><td>tie</td></tr><tr><td>compile_seconds</td><td class='num'>14.3</td><td class='num'>13.0</td><td>preset</td></tr></tbody></table>
+
+<footer>k230-final-train ・ 1 スクリプト (k230_pipeline.py) + 1 ノートブック ・ venv 不使用・Docker 実行</footer>
+</div></body></html>

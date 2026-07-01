@@ -156,7 +156,9 @@ namespace {
         uint8_t stopIdx = 0;
         uint8_t stopCnt = 0;
 
-        while (!searchTimedOut()) {
+        // Not gated by the search timer: a grab in progress runs to completion
+        // (reach the ball, or lose it), and the deadline is handled by the caller.
+        while (true) {
             Processing::K230Decode::tick();
             const K230DBox* t = (onlyCls == K230_CLASS_ALIVE) ? closestCenterLiveVictim()
                                                               : closestCenterVictim();
@@ -431,8 +433,24 @@ void onEnter() {
 void update() {
     uint32_t lastSeen = millis();   // last time a victim was in view (roam timer)
 
-    // Collect-and-deploy loop for the fixed window started in onEnter().
-    while (!searchTimedOut()) {
+    // Collect-and-deploy loop. The 1-min timer never interrupts an in-progress
+    // grab/approach; it is only checked here, between whole actions.
+    while (true) {
+        // Past the deadline: stop collecting. Finish disposing whatever we still
+        // hold (live->green, dead->red, timer ignored), and only leave once both
+        // are gone.
+        if (searchTimedOut()) {
+            if (VictimManager::liveHeld() > 0) {
+                s_disposeMode = true; deployGreen(); s_disposeMode = false;
+                continue;
+            }
+            if (VictimManager::deadHeld() > 0) {
+                s_disposeMode = true; deployRed(); s_disposeMode = false;
+                continue;
+            }
+            break;   // 1 min passed AND hands empty -> exit
+        }
+
         // Deploy when we hold enough live (green trigger) OR we're already holding
         // both a live and a dead ball. Either way dispose EVERYTHING in hand:
         // live -> green corner, dead -> red corner.
@@ -441,9 +459,7 @@ void update() {
         if (VictimManager::readyToDeploy() || holdsBoth) {
             digitalWrite(LED_BUILTIN, HIGH);
             if (VictimManager::liveHeld() > 0) deployGreen();  // driveToColorCorner(GREEN)
-            if (searchTimedOut()) break;
             if (VictimManager::deadHeld() > 0) deployRed();    // driveToColorCorner(RED)
-            if (searchTimedOut()) break;
             lastSeen = millis();   // fresh search window after disposing
             continue;
         }
@@ -453,13 +469,11 @@ void update() {
         // closestCenterVictim is already filtered to types we still want.
         if (closestCenterVictim() != nullptr) {
             lastSeen = millis();                 // reset roam timer: something in view
-            const int type = approachVictim();   // run and stop at front of victim.
-            if (searchTimedOut()) break;
+            const int type = approachVictim();   // runs to completion (reach or lose)
             if (type >= 0) {
                 const bool grabbed = VictimManager::tryGrab((uint8_t)type);  // grab + self-confirm
                 Actions::Drive::stop();
                 Actions::Forward::forward(-50, 70);      // back up either way
-                if (searchTimedOut()) break;
 
                 if (grabbed) {
                     // Booked: wait a fresh frame so the now-held ball isn't re-detected.
@@ -488,14 +502,7 @@ void update() {
         }
     }
 
-    // Timer expired: stop collecting, then dispose everything still in hand
-    // (live -> green, dead -> red) ignoring the clock, and only then leave.
-    Actions::Drive::stop();
-    s_disposeMode = true;
-    if (VictimManager::liveHeld() > 0) deployGreen();
-    if (VictimManager::deadHeld() > 0) deployRed();
-    s_disposeMode = false;
-
+    // Loop only exits once timed out AND both hands are empty.
     Actions::Drive::stop();
     StateMachine::transitionTo(StateMachine::EVAC_EXIT);
 }

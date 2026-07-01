@@ -13,15 +13,19 @@
 #include "../sensors/XIAO_link.h"
 
 #include <Arduino.h>
-#include <math.h>
 
 // =============================================================================
 //  EVAC_Exit
 //
-//  1. Wall-follow along the evacuation-zone wall.
-//  2. When WallFollow reports an exit candidate, check XIAO evac color-mask.
-//  3. Black tape means the exit is confirmed; return to LINE_FOLLOW.
-//  4. Otherwise approach, turn into the candidate gap, ram, and confirm/recover.
+//  1. Wall-follow along the evacuation-zone wall (Actions::WallFollow).
+//  2. Black tape means the exit is confirmed; push through and return to
+//     LINE_FOLLOW, no matter when/where it shows up.
+//  3. Silver means a wrong-exit marker; back off, turn, and let the normal
+//     blind-search drive re-acquire the wall.
+//  4. A sudden wall-loss (real opening, not just drift) pauses forward drive
+//     for a fixed window while steering (PID) and sensors keep running, then
+//     resumes; a gradual loss just keeps driving straight (WallFollow's own
+//     blind-search behavior) until the wall, black, or silver shows up.
 // =============================================================================
 
 namespace EVAC_Exit {
@@ -35,17 +39,22 @@ namespace {
     constexpr float WALL_TARGET_MM  = 100.0f;
     constexpr float WALL_BASE_SPEED = 60.0f;
 
-    // --- Exit-confirmation motion tuning -------------------------------------
-    constexpr float RAM_SPEED       = 50.0f;
-    constexpr float RAM_APPROACH_MM = 160.0f;  // forward before the right turn
-    constexpr float RAM_DISTANCE_MM = 180.0f;  // drive into candidate gap
-    constexpr float RAM_BACKUP_MM   = 80.0f;
-    constexpr float RAM_PUSH_SPEED  = 100.0f;
-    constexpr float RAM_PUSH_MM     = 30.0f;
-    // When the ram confirmed nothing (no black, no silver, no wall hit), back out
-    // the whole ram distance instead of the short silver/wall backup.
-    constexpr float RAM_NOCOLOR_BACKUP_MM = 180.0f;
-    constexpr float RAM_TURN_SPEED  = 50.0f;
+    // --- Sudden-candidate pause ------------------------------------------------
+    // Forward drive is disabled for this long; PID steering and touch/black
+    // /silver monitoring all keep running (tick() is called with baseSpeed=0).
+    constexpr uint32_t SUDDEN_PAUSE_MS = 10000;
+
+    // --- Silver recovery -------------------------------------------------------
+    constexpr float SILVER_PUSH_SPEED   = 100.0f;
+    constexpr float SILVER_PUSH_MM      = 30.0f;
+    constexpr float SILVER_BACKUP_MM    = 80.0f;
+    constexpr float SILVER_BACKUP_SPEED = 50.0f;
+    constexpr float SILVER_TURN_ANGLE   = -90.0f;
+    constexpr float SILVER_TURN_SPEED   = 50.0f;
+
+    // --- Exit confirmation -------------------------------------------------
+    constexpr float BLACK_CONFIRM_SPEED = 50.0f;
+    constexpr float BLACK_CONFIRM_MM    = 70.0f;
 
     struct TapeFlags {
         bool silver = false;
@@ -96,47 +105,6 @@ namespace {
         }
     }
 
-    enum class DriveWatchResult {
-        DONE,
-        TOUCH,
-        BLACK,
-    };
-
-    DriveWatchResult driveStraightAndWatch(float speed, float distanceMm,
-                                           bool stopOnBlack) {
-        const unsigned long duration = (unsigned long)
-            fabsf(distanceMm * FORWARD_MS_PER_MM * MAX_MOTOR_SPEED / fabsf(speed));
-        const unsigned long start = millis();
-        unsigned long lastComms = 0;
-
-        Serial.printf("[EXIT] drive %.0fmm @ %.0f (%lums)\n",
-                      distanceMm, speed, duration);
-
-        Actions::Drive::motor(speed, speed);
-        while (millis() - start < duration) {
-            Sensors::Touch::tick();
-            if (Sensors::Touch::front()) {
-                Actions::Drive::stop();
-                Serial.println("[EXIT] touch during drive");
-                return DriveWatchResult::TOUCH;
-            }
-
-            if (millis() - lastComms >= 20) {
-                refreshTapeFlags();
-                if (stopOnBlack && s_tape.black) {
-                    Actions::Drive::stop();
-                    Serial.println("[EXIT] black seen during approach");
-                    return DriveWatchResult::BLACK;
-                }
-                lastComms = millis();
-            }
-        }
-
-        Actions::Drive::stop();
-        refreshTapeFlags();
-        return DriveWatchResult::DONE;
-    }
-
     void returnToLineFollow() {
         Actions::Drive::stop();
         tone(BUZZER_PIN, 9000, 4000);
@@ -146,96 +114,50 @@ namespace {
         StateMachine::transitionTo(StateMachine::LINE_FOLLOW);
     }
 
-    void recoverToWallFollow(float backupMm = RAM_BACKUP_MM,
-                             bool pushBeforeBackup = true) {
-        Serial.printf("[EXIT] recover: back %.0fmm, left 90\n", backupMm);
-        if (pushBeforeBackup) {
-            Actions::Forward::forward(RAM_PUSH_SPEED, RAM_PUSH_MM);
-        }
-        Actions::Forward::forward(-RAM_SPEED, backupMm);
-        Actions::Turn::turn(-90.0f, RAM_TURN_SPEED);
+    // Exit confirmed: push through the line (touch is intentionally ignored —
+    // this is the one case where we drive over/through no matter what) and
+    // hand off to LINE_FOLLOW.
+    void finishExit() {
+        Serial.println("[EXIT] black confirmed -> LINE_FOLLOW");
+        Actions::Drive::stop();
+        Actions::Forward::forward(BLACK_CONFIRM_SPEED, BLACK_CONFIRM_MM);
+        returnToLineFollow();
+    }
+
+    // Wrong-exit marker: back off, turn away from the wall, and reset
+    // WallFollow. The next tick()s naturally blind-search forward until the
+    // wall, black, or silver shows up again — no separate drive loop needed.
+    void recoverFromSilver() {
+        Serial.println("[EXIT] silver -> recover");
+        Actions::Forward::forward(SILVER_PUSH_SPEED, SILVER_PUSH_MM);
+        Actions::Forward::forward(-SILVER_BACKUP_SPEED, SILVER_BACKUP_MM);
+        Actions::Turn::turn(SILVER_TURN_ANGLE, SILVER_TURN_SPEED);
         refreshTapeFlags();
         Actions::WallFollow::reset();
     }
 
-    bool finishIfBlackSeen(const char* where) {
-        refreshTapeFlags();
-        if (!s_tape.black) return false;
+    // A sudden wall-loss (likely a real opening, not just drift): disable
+    // forward drive for a fixed window. PID steering keeps running (tick() is
+    // called with baseSpeed=0, so any correction just pivots in place) and
+    // touch/black/silver are all still watched. Only touch/black/silver end
+    // the pause early; simply seeing the wall again does not - we wait out
+    // the full window regardless, then let forward drive resume next tick().
+    void handleSuddenPause() {
+        Serial.println("[EXIT] sudden wall-loss -> 10s steer-only pause");
+        const uint32_t end = millis() + SUDDEN_PAUSE_MS;
+        while ((int32_t)(end - millis()) > 0) {
+            refreshTapeFlags();
+            if (s_tape.black) { finishExit(); return; }
+            if (s_tape.silver) { recoverFromSilver(); return; }
 
-        Serial.printf("[EXIT] black confirmed at %s -> LINE_FOLLOW\n", where);
-        returnToLineFollow();
-        return true;
-    }
-
-    bool approachCandidateOpening() {
-        Serial.printf("[EXIT] approach %.0fmm before turn\n", RAM_APPROACH_MM);
-        waitWithSensors(200);
-        const DriveWatchResult result =
-            driveStraightAndWatch(RAM_SPEED, RAM_APPROACH_MM, true);
-
-        if (result == DriveWatchResult::BLACK) {
-            returnToLineFollow();
-            return true;
+            if (Actions::WallFollow::tick(WALL_TARGET_MM, 0.0f) ==
+                Actions::WallFollow::Status::TOUCH) {
+                Serial.println("[EXIT] touch during pause -> recovered");
+                return;
+            }
+            delayMicroseconds(10000);
         }
-        if (result == DriveWatchResult::TOUCH) {
-            recoverToWallFollow();
-            return true;
-        }
-        return false;
-    }
-
-    DriveWatchResult ramCandidateOpening() {
-        Serial.println("[EXIT] turn right 90 into candidate");
-        waitWithSensors(200);
-        Actions::Turn::turn(90.0f, RAM_TURN_SPEED);
-
-        Serial.printf("[EXIT] ram %.0fmm\n", RAM_DISTANCE_MM);
-        waitWithSensors(200);
-        // Watch black for the whole straight ram, not just at the end, so a line
-        // crossed mid-ram is caught immediately.
-        const DriveWatchResult result =
-            driveStraightAndWatch(RAM_SPEED, RAM_DISTANCE_MM, true);
-        if (result == DriveWatchResult::BLACK) return result;
-        waitWithSensors(200);
-        return result;
-    }
-
-    void handleRamResult(bool hitSomething) {
-        refreshTapeFlags();
-
-        if (hitSomething) {
-            Serial.println("[EXIT] ram hit wall/obstacle -> recover");
-            waitWithSensors(200);
-            recoverToWallFollow();
-            return;
-        }
-
-        if (s_tape.silver) {
-            Serial.println("[EXIT] silver/wrong exit -> recover");
-            waitWithSensors(200);
-            recoverToWallFollow();
-            return;
-        }
-
-        if (finishIfBlackSeen("ram")) return;
-
-        Serial.println("[EXIT] no color confirmed -> recover (full back-out)");
-        waitWithSensors(200);
-        recoverToWallFollow(RAM_NOCOLOR_BACKUP_MM, false);
-    }
-
-    void handleExitCandidate() {
-        if (finishIfBlackSeen("candidate")) return;
-
-        // Silver is intentionally ignored here for now; after the ram it is
-        // treated as a wrong exit and recovered.
-        if (approachCandidateOpening()) return;
-        const DriveWatchResult ramResult = ramCandidateOpening();
-        if (ramResult == DriveWatchResult::BLACK) {
-            returnToLineFollow();
-            return;
-        }
-        handleRamResult(ramResult == DriveWatchResult::TOUCH);
+        Serial.println("[EXIT] pause elapsed -> forward re-enabled");
     }
 }  // namespace
 
@@ -259,24 +181,19 @@ void update() {
     // Keep the latest XIAO evac color-mask flags cached before making decisions.
     // Mode 5 reports:
     //   black  -> correct exit line found
-    //   silver -> wrong-exit marker, handled after the ram check
+    //   silver -> wrong-exit marker
     refreshTapeFlags();
 
     // The exit line can appear under the camera at any time during wall-follow,
     // not only at a side-ToF opening. If black is seen, the exit is found, so
-    // return to line follow immediately instead of driving over it.
+    // finish immediately instead of driving over it.
     if (s_tape.black) {
-        Serial.println("[EXIT] black seen during wall-follow -> LINE_FOLLOW");
-        Actions::Forward::forward(50,50);
-        returnToLineFollow();
+        finishExit();
         return;
     }
 
-    // Silver during wall-follow = wrong-exit marker: back up and turn away,
-    // same recover as after a ram.
     if (s_tape.silver) {
-        Serial.println("[EXIT] silver seen during wall-follow -> recover");
-        recoverToWallFollow();
+        recoverFromSilver();
         return;
     }
 
@@ -285,17 +202,13 @@ void update() {
     if (EXIT_DEBUG_LOOP_PAUSE_MS > 0) waitWithSensors(EXIT_DEBUG_LOOP_PAUSE_MS);
     if (EXIT_DEBUG_PRINT_TOF) Sensors::ToF::printFL();
 
-    // Normal behavior: WallFollow owns the motors while it sees the wall.
-    // If the side ToF suddenly sees far/invalid space after a stable wall, that
-    // is a potential exit opening, so we pause wall-follow and verify with XIAO.
+    // WallFollow owns the motors: PID-follow while the wall is visible, blind
+    // -search forward while it's gradually/never been found, or report a
+    // sudden loss for us to pause on. Touch is handled internally by
+    // WallFollow (TOUCH status) - nothing more to do here for that case.
     const auto status = Actions::WallFollow::tick(WALL_TARGET_MM, WALL_BASE_SPEED);
-    if (status == Actions::WallFollow::Status::EXIT_CANDIDATE) {
-        // Verification flow:
-        //   1. If black is already visible, finish and return to LINE_FOLLOW.
-        //   2. Otherwise drive forward while watching XIAO for black.
-        //   3. If still not confirmed, turn/ram into the candidate and decide
-        //      whether to recover or return to LINE_FOLLOW.
-        handleExitCandidate();
+    if (status == Actions::WallFollow::Status::EXIT_CANDIDATE_SUDDEN) {
+        handleSuddenPause();
     }
 }
 

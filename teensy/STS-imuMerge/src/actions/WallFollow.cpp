@@ -13,10 +13,14 @@ namespace WallFollow {
 namespace {
     constexpr bool DEBUG_WALL_FOLLOW = false;
 
-    // Obstacle recovery when the front touch sensor fires.
+    // Obstacle recovery when the front touch sensor fires. The turn angle
+    // depends on what we were doing when it fired: a wide turn while an
+    // established wall/pause was active, a narrower one while still blind
+    // -searching for the wall (see obstacleTurnDeg() / s_lastStatus below).
     constexpr float OBSTACLE_BACKUP_MM    = 48.0f;
     constexpr float OBSTACLE_BACKUP_SPEED = 40.0f;
-    constexpr float OBSTACLE_TURN_DEG     = -45.0f;//90
+    constexpr float OBSTACLE_TURN_DEG     = -90.0f;
+    constexpr float SEARCH_TURN_DEG       = -50.0f;
     constexpr float OBSTACLE_TURN_SPEED   = 60.0f;
 
     // PID: error = measured wall distance - target distance.
@@ -32,10 +36,16 @@ namespace {
     constexpr uint8_t ZONE_COL_HI = 3;
 
     // Exit candidate signal once a wall has been acquired.
-    constexpr float   EXIT_FAR_MM         = 200.0f;
+    constexpr float   EXIT_FAR_MM         = 230.0f;
     constexpr uint8_t EXIT_FAR_FRAMES     = 1;
     constexpr uint8_t EXIT_INVALID_FRAMES = 1;
     constexpr uint8_t WALL_ACQUIRE_FRAMES = 5;
+
+    // A real opening jumps the reading a lot in one frame (straight to
+    // invalid, or out to 300-500mm from a ~100mm wall lock); a gradual drift
+    // creeps across EXIT_FAR_MM a little at a time. This threshold has a lot
+    // of margin between the two.
+    constexpr float SUDDEN_JUMP_MM = 100.0f;
 
     float         s_integral = 0.0f;
     float         s_lastError = 0.0f;
@@ -43,11 +53,22 @@ namespace {
     uint8_t       s_walledFrames = 0;
     uint8_t       s_farFrames = 0;
     uint8_t       s_invalidFrames = 0;
+    float         s_lastValidDistanceMm = 0.0f;
+    bool          s_hasLastValidDistance = false;
+    Status        s_lastStatus = Status::NO_WALL;
+
+    float obstacleTurnDeg() {
+        // Only a still-blind search (never acquired a wall / not yet
+        // re-acquired one) gets the narrower search turn; anything else
+        // (actively following, or paused on a sudden candidate) gets the
+        // normal wide turn.
+        return (s_lastStatus == Status::NO_WALL) ? SEARCH_TURN_DEG : OBSTACLE_TURN_DEG;
+    }
 
     void handleObstacle() {
         Drive::stop();
         Forward::forward(-OBSTACLE_BACKUP_SPEED, OBSTACLE_BACKUP_MM);
-        Turn::turn(OBSTACLE_TURN_DEG, OBSTACLE_TURN_SPEED);
+        Turn::turn(obstacleTurnDeg(), OBSTACLE_TURN_SPEED);
     }
 
     bool readWallDistanceMm(float& out) {
@@ -89,8 +110,19 @@ namespace {
             s_farFrames >= EXIT_FAR_FRAMES ||
             s_invalidFrames >= EXIT_INVALID_FRAMES;
 
-        const Status status = (armed && candidate) ? Status::EXIT_CANDIDATE
-                                                   : Status::NO_WALL;
+        Status status = Status::NO_WALL;
+        if (armed && candidate) {
+            // No numeric reading to compare for a dropout -> always sudden.
+            // Otherwise compare against the last locked-on distance: a big
+            // one-frame jump is sudden, anything smaller falls back to the
+            // ordinary blind-search (NO_WALL) drive.
+            bool sudden = !valid;
+            if (valid && s_hasLastValidDistance) {
+                sudden = (distanceMm - s_lastValidDistanceMm) >= SUDDEN_JUMP_MM;
+            }
+            if (sudden) status = Status::EXIT_CANDIDATE_SUDDEN;
+        }
+
         if (DEBUG_WALL_FOLLOW) {
             Serial.printf("[WF] no-wall valid=%d dist=%.0f wall=%u far=%u inv=%u st=%d\n",
                           valid ? 1 : 0, distanceMm,
@@ -100,9 +132,11 @@ namespace {
         return status;
     }
 
-    void updateWallAcquired() {
+    void updateWallAcquired(float distanceMm) {
         if (s_walledFrames < WALL_ACQUIRE_FRAMES) ++s_walledFrames;
         resetExitCounters();
+        s_lastValidDistanceMm = distanceMm;
+        s_hasLastValidDistance = true;
     }
 
     float pidCorrection(float distanceMm, float targetMm) {
@@ -127,6 +161,8 @@ void reset() {
     s_lastError = 0.0f;
     s_lastTime = micros();
     s_walledFrames = 0;
+    s_hasLastValidDistance = false;
+    s_lastStatus = Status::NO_WALL;
     resetExitCounters();
 }
 
@@ -135,7 +171,7 @@ Status tick(float targetMm, float baseSpeed) {
         if (DEBUG_WALL_FOLLOW) Serial.println("[WF] touch recovery");
         handleObstacle();
         reset();
-        return Status::NO_WALL;
+        return Status::TOUCH;
     }
 
     float distanceMm = 0.0f;
@@ -144,18 +180,20 @@ Status tick(float targetMm, float baseSpeed) {
 
     if (noWall) {
         const Status status = classifyNoWall(valid, distanceMm);
-        if (status == Status::EXIT_CANDIDATE) {
+        if (status == Status::EXIT_CANDIDATE_SUDDEN) {
             Drive::stop();
         } else {
             Drive::motor(baseSpeed, baseSpeed);
         }
+        s_lastStatus = status;
         return status;
     }
 
-    updateWallAcquired();
+    updateWallAcquired(distanceMm);
 
     const float correction = pidCorrection(distanceMm, targetMm);
     Drive::motor(baseSpeed + correction, baseSpeed - correction);
+    s_lastStatus = Status::FOLLOWING;
     return Status::FOLLOWING;
 }
 

@@ -66,11 +66,13 @@ constexpr uint8_t SILVER_ROW_MIN = LF_SILVER_ROW_MIN;
 constexpr uint8_t SILVER_ROW_MAX = LF_SILVER_ROW_MAX;
 constexpr uint8_t SILVER_THRESHOLD = 6; //num of px
 
-// Row-25 color processing. Bounds follow the arc ROI side walls, not the full image.
+// Color processing. Bounds follow the arc ROI side walls, not the full image.
 constexpr uint8_t COLOR_ROW = 45;
 constexpr uint8_t COLOR_X_MIN = ARC_LEFT_X;
 constexpr uint8_t COLOR_X_MAX = ARC_RIGHT_X;
-constexpr uint8_t RED_THRESHOLD = 30;
+constexpr uint8_t RED_ROW = 25;
+constexpr uint8_t RED_SAMPLE_W = 10;
+constexpr uint8_t RED_THRESHOLD = 6;
 constexpr uint8_t GAP_BLACK_MAX = 5;
 constexpr uint8_t GREEN_WINDOW = 37;
 constexpr uint8_t GREEN_LINE_HALF_W = 2;
@@ -380,18 +382,40 @@ uint8_t countSilverOnColumn(camera_fb_t* fb, uint8_t col) {
     return count;
 }
 
-void scanColorRow(camera_fb_t* fb, float& blackCom, uint8_t& blackCount, uint8_t& redCount) {
+void scanColorRow(camera_fb_t* fb, float& blackCom, uint8_t& blackCount) {
     cameraData rowPixels[160] = {};
     scanRow(fb, COLOR_ROW, COLOR_X_MIN, COLOR_X_MAX, rowPixels);
 
     int32_t weighted = 0;
     blackCount = 0;
-    redCount = 0;
     for (uint8_t x = COLOR_X_MIN; x <= COLOR_X_MAX; x++) {
         if (isBlack(rowPixels[x])) { weighted += x; blackCount++; }
-        if (isRed(rowPixels[x])) redCount++;
     }
     blackCom = blackCount ? (float)weighted / blackCount : (COLOR_X_MIN + COLOR_X_MAX) * 0.5f;
+}
+
+uint8_t countRedWindow(camera_fb_t* fb, uint8_t xStart) {
+    uint8_t redCount = 0;
+    for (uint8_t i = 0; i < RED_SAMPLE_W; i++) {
+        const uint8_t x = xStart + i;
+        if (x > COLOR_X_MAX) break;
+        if (isRed(updateRawGrayHSV(fb, x, RED_ROW))) redCount++;
+    }
+    return redCount;
+}
+
+uint8_t scanRedRow(camera_fb_t* fb) {
+    const uint8_t center = (COLOR_X_MIN + COLOR_X_MAX) / 2;
+    const uint8_t half = RED_SAMPLE_W / 2;
+    const uint8_t leftStart = COLOR_X_MIN;
+    const uint8_t centerStart = (center > half) ? (uint8_t)(center - half) : COLOR_X_MIN;
+    const uint8_t rightStart = (COLOR_X_MAX >= RED_SAMPLE_W - 1)
+        ? (uint8_t)(COLOR_X_MAX - (RED_SAMPLE_W - 1))
+        : COLOR_X_MIN;
+
+    return countRedWindow(fb, leftStart)
+         + countRedWindow(fb, centerStart)
+         + countRedWindow(fb, rightStart);
 }
 
 bool hasBottomLinePoint(const LineCounts& lc) {
@@ -845,8 +869,9 @@ void modeLineFollowRun(camera_fb_t* fb, YacheEncodedSerial& teensy) {
     const uint8_t silverRight = countSilverOnColumn(fb, SILVER_COL_RIGHT);
     const bool silverDetected = silverLeft > SILVER_THRESHOLD || silverRight > SILVER_THRESHOLD;
     float colorCom;
-    uint8_t colorBlack, redCount;
-    scanColorRow(fb, colorCom, colorBlack, redCount);
+    uint8_t colorBlack;
+    scanColorRow(fb, colorCom, colorBlack);
+    const uint8_t redCount = scanRedRow(fb);
     const bool bottomLinePoint = hasBottomLinePoint(lc);
     const bool gapDetected = gapByCrossings(lc);
     const bool blackIntersect = colorBlack > INTERSECTION_BLACK_SAT_THRESHOLD;
@@ -909,7 +934,7 @@ void modeLineFollowRun(camera_fb_t* fb, YacheEncodedSerial& teensy) {
     if (greenCmd == 3) featureId = FEAT_GREEN_RIGHT;
     if (blackIntersect && greenCmd == 0) featureId = FEAT_BLACK_INTERSECT;
     if (gapDetected) featureId = FEAT_LINE_LOST;
-    if (redCount > RED_THRESHOLD) featureId = FEAT_RED;
+    if (redCount >= RED_THRESHOLD) featureId = FEAT_RED;
     if (silverDetected) featureId = FEAT_SILVER;
     updateCommitSettle(cls, lc.count);
     updateCurveRelease(fresh, s_lastAngle, steerOut);
@@ -932,7 +957,7 @@ void modeLineFollowRun(camera_fb_t* fb, YacheEncodedSerial& teensy) {
     if (greenRight > GREEN_PX_THRESHOLD) {
         xs_setSensorSide(XS_RIGHT, XS_GREEN, XS_PRIO_GREEN);
     }
-    if (redCount > RED_THRESHOLD) {
+    if (redCount >= RED_THRESHOLD) {
         xs_setSensorBoth(XS_RED, XS_PRIO_RED);
     }
     if (silverLeft > SILVER_THRESHOLD) {
