@@ -61,6 +61,13 @@ uint32_t scaledLinePidMs(uint32_t flatMs, uint32_t minMs, uint32_t maxMs);
 LineFollowState lineFollowState();
 const char* lineFollowStateName(LineFollowState state);
 
+// Hold the given LineFollowState (ignore live IMU tilt) for a short window.
+// Call right after any turn macro / obstacle exit returns control to
+// LINE_Follow, passing the state that was true going INTO the macro: a fast
+// spin leaves a transient error in the fused IMU attitude that can misread
+// as a slope change for a few frames even though actual tilt hasn't moved.
+void suppressSlopeDetection(LineFollowState holdAs);
+
 // Per-wheel gain accessors (read by Processing::Mapping for unicycle model).
 float32_t frontLeftGain();
 float32_t frontRightGain();

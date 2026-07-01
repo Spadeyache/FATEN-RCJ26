@@ -7,6 +7,7 @@
 #include "../actions/Drive.h"
 #include "../actions/Arm.h"
 #include "../actions/Forward.h"
+#include "../actions/Turn.h"
 #include "../sensors/Touch.h"
 #include "../processing/K230Decode.h"
 
@@ -17,31 +18,51 @@ namespace EVAC_SearchDeploy {
 namespace {
     // --- EVAC_SearchDeploy-only tuning (moved out of config.h) -------------------
     // Approach (victim chase):
-    constexpr float    EVAC_GRAB_BASE_SPEED       = 45.0f;
-    constexpr float    EVAC_GRAB_TURN_GAIN        = 35.0f;
+    constexpr float    EVAC_GRAB_BASE_SPEED       = 75.0f;
+    constexpr float    EVAC_GRAB_TURN_GAIN        = 60.0f;
+    constexpr float    CHASE_SPEED_FAR            = 65.0f;   // far (small box height) chase speed
+    constexpr float    CHASE_SPEED_NEAR           = 45.0f;   // near (box at stop height) chase speed
     constexpr uint8_t  EVAC_GRAB_AVG_FRAMES       = 3;        // direction moving-average window
     constexpr uint8_t  EVAC_GRAB_LOST_HOLD_FRAMES = 5;        // coast this many frames when target drops
     constexpr uint8_t  EVAC_GRAB_STOP_WINDOW      = 5;        // over-height vote window
     constexpr uint8_t  EVAC_GRAB_STOP_REQUIRED    = 3;        // ...hits needed (3 of 5)
+    // Overshoot guard: a tiny box hugging the frame bottom means the ball is too
+    // close / under the camera. Back up until it returns to a grabbable view.
+    constexpr int16_t  K230_FRAME_H               = 480;      // K230 sensor height (== SENSOR_H)
+    constexpr int16_t  VICTIM_BACK_MAX_HEIGHT     = 60;       // box height <= this ...
+    constexpr int16_t  VICTIM_BACK_MIN_Y2         = K230_FRAME_H - 65;  // ...and bottom y2 >= this (415) -> back up
     // Collection / deploy policy:
-    constexpr uint32_t EVAC_SEARCH_TIMEOUT_MS     = 120000UL; // 2-min collection window
-    constexpr float    EVAC_POINT_STOP_WIDTH_PX   = 300.0f;   // corner-approach stop width
+    constexpr uint32_t EVAC_SEARCH_TIMEOUT_MS     = 60000UL;  // 1-min search/deploy window
+    constexpr uint32_t SPIN_SEARCH_MS             = 10000UL;  // spin in place this long with no victim, then roam forward
+    constexpr uint32_t ROAM_FORWARD_MS            = 4000UL;   // forward-roam phase length between spins
+    constexpr float    ROAM_TURN_SPEED            = 50.0f;    // turn speed used by the bump recovery
+    constexpr float    EVAC_POINT_STOP_WIDTH_PX   = 450.0f;   // corner-approach stop width
+    constexpr float    EVAC_POINT_STOP_HEIGHT_PX  = 140.0f;   // corner-approach stop height
+    constexpr int16_t  EVAC_POINT_STOP_MIN_BOTTOM_Y_PX = 420; // corner bottom must be below this before colour read
     constexpr uint8_t  EVAC_POINT_STOP_REQUIRED   = 5;        // consecutive close frames at the corner
-    constexpr int      EVAC_POINT_ALIGN_DEADBAND_PX = 25;     // centre band before colour read
-    constexpr int      EVAC_POINT_ALIGN_SPEED_MIN   = 30;
-    constexpr int      EVAC_POINT_ALIGN_SPEED_MAX   = 50;
+    constexpr int      EVAC_POINT_ALIGN_DEADBAND_PX = 30;     // centre band before colour read
+    constexpr int      EVAC_POINT_ALIGN_SPEED_MIN   = 40;
+    constexpr int      EVAC_POINT_ALIGN_SPEED_MAX   = 60;
     constexpr int      EVAC_POINT_ALIGN_MOVEMS_MIN  = 20;
     constexpr int      EVAC_POINT_ALIGN_MOVEMS_MAX  = 150;
     constexpr long     EVAC_POINT_ALIGN_MOVEMS_K    = 130;
     constexpr uint32_t EVAC_POINT_ALIGN_TIMEOUT_MS  = 2500;
     constexpr uint32_t EVAC_DEPLOY_TIMEOUT_MS     = 30000UL;  // give up hunting the corner after this
     constexpr uint32_t MODEL_SWAP_MS              = 1500;     // wait for the K230 to load a model
-    constexpr int      DEPLOY_TOUCH_SPEED         = 50;       // drive-into-corner speed
+    constexpr int      DEPLOY_TOUCH_SPEED         = (int)EVAC_GRAB_BASE_SPEED;  // drive-into-corner speed = chase speed
     constexpr float    DEPLOY_TOUCH_TURN_GAIN     = 35.0f;    // keep corner centred while touching
     constexpr uint32_t DEPLOY_TOUCH_TIMEOUT_MS    = 4000;     // safety if the bumper never triggers
     constexpr uint32_t DEPLOY_TOUCH_CONFIRM_MS    = 50;       // ignore one-frame bumper noise
     constexpr int      DEPLOY_BACKOFF_SPEED       = -50;      // back off after release / wrong colour
     constexpr int      DEPLOY_BACKOFF_MM          = 100;
+
+    uint32_t s_searchStartMs = 0;
+    bool     s_disposeMode   = false;   // final drop-all after the timer: ignore the clock
+
+    bool searchTimedOut() {
+        if (s_disposeMode) return false;   // final disposal runs to completion
+        return (uint32_t)(millis() - s_searchStartMs) >= EVAC_SEARCH_TIMEOUT_MS;
+    }
     // (EVAC_GRAB_STOP_HEIGHT_PX stays in config.h — shared with VictimManager.)
 
     // --- direction / size helpers (image frame) ---
@@ -104,9 +125,18 @@ namespace {
         return best;
     }
 
-    void driveTowardDirection(float dir) {
+    // Chase speed scales with distance: far (small box height) -> CHASE_SPEED_FAR,
+    // slowing linearly to CHASE_SPEED_NEAR as the box height reaches stopHeightPx.
+    float chaseSpeed(float heightPx, float stopHeightPx) {
+        float t = heightPx / stopHeightPx;
+        if (t < 0.0f) t = 0.0f;
+        if (t > 1.0f) t = 1.0f;
+        return CHASE_SPEED_FAR + (CHASE_SPEED_NEAR - CHASE_SPEED_FAR) * t;
+    }
+
+    void driveTowardDirection(float dir, float baseSpeed) {
         const float turn  = dir * EVAC_GRAB_TURN_GAIN;
-        Actions::Drive::motor(EVAC_GRAB_BASE_SPEED + turn, EVAC_GRAB_BASE_SPEED - turn);
+        Actions::Drive::motor(baseSpeed + turn, baseSpeed - turn);
     }
 
     // --- approach: drive at the nearest victim until close. ---
@@ -127,6 +157,8 @@ namespace {
         uint8_t stopIdx = 0;
         uint8_t stopCnt = 0;
 
+        // Not gated by the search timer: a grab in progress runs to completion
+        // (reach the ball, or lose it), and the deadline is handled by the caller.
         while (true) {
             Processing::K230Decode::tick();
             const K230DBox* t = (onlyCls == K230_CLASS_ALIVE) ? closestCenterLiveVictim()
@@ -137,11 +169,19 @@ namespace {
                     Actions::Drive::stop();
                     return -1;
                 }
-                driveTowardDirection(smoothedDir);   // coast on last smoothed dir
+                driveTowardDirection(smoothedDir, CHASE_SPEED_FAR);   // coast fast on last dir
                 delay(20);
                 continue;
             }
             lost = 0;
+
+            // Overshoot: tiny box at the very bottom -> ball too close / under the
+            // camera. Back up until it comes back into a grabbable view.
+            if (boxHeightPx(*t) <= VICTIM_BACK_MAX_HEIGHT && t->y2 >= VICTIM_BACK_MIN_Y2) {
+                Actions::Drive::motor(-EVAC_GRAB_BASE_SPEED, -EVAC_GRAB_BASE_SPEED);
+                delay(20);
+                continue;
+            }
 
             // stop vote: push this frame's over-height result into the ring.
             stopWin[stopIdx] = (boxHeightPx(*t) >= EVAC_GRAB_STOP_HEIGHT_PX);
@@ -162,9 +202,11 @@ namespace {
             for (uint8_t i = 0; i < dirCnt; i++) sum += dirWin[i];
             smoothedDir = sum / (float)dirCnt;
 
-            driveTowardDirection(smoothedDir);
+            driveTowardDirection(smoothedDir, chaseSpeed(boxHeightPx(*t), EVAC_GRAB_STOP_HEIGHT_PX));
             delay(20);
         }
+        Actions::Drive::stop();
+        return -1;
     }
 
     // After switching to the points model, vote the corner colour over a few
@@ -172,6 +214,7 @@ namespace {
     int classifyPointColor() {
         int red = 0, green = 0;
         for (uint8_t i = 0; i < 8; i++) {
+            if (searchTimedOut()) return -1;
             Processing::K230Decode::drainDelay(100);
             const int16_t c = Processing::K230Decode::dominantClass();
             if      (c == K230_POINT_RED)   red++;
@@ -188,6 +231,7 @@ namespace {
     }
 
     bool tryGrabExtraLiveDuringGreenDeploy() {
+        if (searchTimedOut()) return false;
         if (!canGrabExtraLiveDuringGreenDeploy()) return false;
         if (closestCenterLiveVictim() == nullptr) return false;
 
@@ -207,7 +251,7 @@ namespace {
     bool approachPoint(bool allowExtraLiveGrab) {
         const uint32_t start = millis();
         uint8_t hits = 0;
-        while (millis() - start < EVAC_DEPLOY_TIMEOUT_MS) {
+        while (millis() - start < EVAC_DEPLOY_TIMEOUT_MS && !searchTimedOut()) {
             Processing::K230Decode::drainDelay(50);
             if (allowExtraLiveGrab && tryGrabExtraLiveDuringGreenDeploy()) {
                 hits = 0;
@@ -216,20 +260,23 @@ namespace {
 
             const K230DBox* corner = closestCenterPoint();
             if (corner == nullptr) { hits = 0; Actions::Drive::spinDecay(60, 400); continue; }
-            if (boxWidthPx(*corner) > EVAC_POINT_STOP_WIDTH_PX) {
+            if (boxWidthPx(*corner) > EVAC_POINT_STOP_WIDTH_PX &&
+                boxHeightPx(*corner) >= EVAC_POINT_STOP_HEIGHT_PX &&
+                corner->y2 > EVAC_POINT_STOP_MIN_BOTTOM_Y_PX) {
                 if (++hits >= EVAC_POINT_STOP_REQUIRED) { Actions::Drive::stop(); return true; }
                 Actions::Drive::stop();
             } else {
                 hits = 0;
-                driveTowardDirection(directionFor(*corner));
+                driveTowardDirection(directionFor(*corner), chaseSpeed(boxHeightPx(*corner), EVAC_POINT_STOP_HEIGHT_PX));
             }
         }
+        Actions::Drive::stop();
         return false;
     }
 
     bool alignPointToCenter(float* outDir = nullptr) {
         const uint32_t start = millis();
-        while (millis() - start < EVAC_POINT_ALIGN_TIMEOUT_MS) {
+        while (millis() - start < EVAC_POINT_ALIGN_TIMEOUT_MS && !searchTimedOut()) {
             Processing::K230Decode::drainDelay(50);
             const K230DBox* corner = closestCenterPoint();
             if (corner == nullptr) {
@@ -262,6 +309,7 @@ namespace {
 
     // Swap to the points model, classify the corner colour, swap back to victims.
     int readCornerColor() {
+        if (searchTimedOut()) return -1;
         Processing::K230Decode::setModel(Processing::K230Decode::MODEL_POINTS);
         Processing::K230Decode::drainDelay(MODEL_SWAP_MS);
         const int color = classifyPointColor();
@@ -274,7 +322,7 @@ namespace {
     void driveToTouch(float startDir) {
         const uint32_t t0 = millis();
         float driveDir = startDir;
-        while (millis() - t0 < DEPLOY_TOUCH_TIMEOUT_MS) {
+        while (millis() - t0 < DEPLOY_TOUCH_TIMEOUT_MS && !searchTimedOut()) {
             Sensors::Touch::tick();
             if (Sensors::Touch::front()) {
                 Actions::Drive::stop();
@@ -300,7 +348,7 @@ namespace {
     // backed away from and the search continues. Returns true once parked at one.
     bool driveToColorCorner(int targetColor) {
         const uint32_t start = millis();
-        while (millis() - start < EVAC_DEPLOY_TIMEOUT_MS) {
+        while (millis() - start < EVAC_DEPLOY_TIMEOUT_MS && !searchTimedOut()) {
             if (!approachPoint(targetColor == K230_POINT_GREEN)) return false;
             float pointDir = 0.0f;
             if (!alignPointToCenter(&pointDir)) continue;
@@ -311,31 +359,68 @@ namespace {
             if (color == targetColor) {
                 if (!alignPointToCenter(&pointDir)) continue;
                 driveToTouch(pointDir);
+                if (searchTimedOut()) return false;
                 Actions::Forward::forward(100, 80);
                 return true;
             }
             // wrong corner -> back off + spin, look for another one.
+            if (searchTimedOut()) return false;
             Actions::Forward::forward(-60, 50);
+            if (searchTimedOut()) return false;
             Actions::Drive::spinDecay(70, 2000);
+            if (searchTimedOut()) return false;
             Actions::Forward::forward(60, 200);
         }
+        Actions::Drive::stop();
         return false;
     }
 
     // Deposit live balls at the GREEN corner, then back off.
-    void deployGreen() {
+    bool deployGreen() {
         Serial.println("[deploy] GREEN (live)");
-        driveToColorCorner(K230_POINT_GREEN);   
+        if (!driveToColorCorner(K230_POINT_GREEN) || searchTimedOut()) return false;
         VictimManager::releaseLive();
         Actions::Forward::forward(DEPLOY_BACKOFF_SPEED, DEPLOY_BACKOFF_MM);
+        return true;
     }
 
     // Deposit the dead ball at the RED corner, then back off.
-    void deployRed() {
+    bool deployRed() {
         Serial.println("[deploy] RED (dead)");
-        driveToColorCorner(K230_POINT_RED);
+        if (!driveToColorCorner(K230_POINT_RED) || searchTimedOut()) return false;
         VictimManager::releaseDead();
         Actions::Forward::forward(DEPLOY_BACKOFF_SPEED, DEPLOY_BACKOFF_MM);
+        return true;
+    }
+
+    // Drive forward `mm` at `speed` (both positive) while watching the front
+    // bumper. On a hit: stop and turn the other way (turn(-50)).
+    void forwardWatchTouch(int speed, int mm) {
+        const unsigned long duration = (unsigned long)
+            ((float)mm * FORWARD_MS_PER_MM * MAX_MOTOR_SPEED / (float)speed);
+        const unsigned long startT = millis();
+        Actions::Drive::motor(speed, speed);
+        while (millis() - startT < duration && !searchTimedOut()) {
+            Sensors::Touch::tick();
+            if (Sensors::Touch::front()) {
+                Actions::Drive::stop();
+                Actions::Turn::turn(-50.0f, ROAM_TURN_SPEED);
+                return;
+            }
+        }
+        Actions::Drive::stop();
+    }
+
+    // Front bumper hit while roaming: back off, turn away, nudge forward again.
+    void bumpRecover() {
+        if (searchTimedOut()) return;
+        Serial.println("[search] bump -> recover");
+        Actions::Drive::stop();
+        Actions::Forward::forward(-60, 40);            // back off
+        if (searchTimedOut()) return;
+        Actions::Turn::turn(50.0f, ROAM_TURN_SPEED);   // turn away
+        if (searchTimedOut()) return;
+        forwardWatchTouch(60, 110);                    // forward; re-hit -> stop + turn(-50)
     }
 }
 
@@ -344,18 +429,40 @@ void onEnter() {
     Serial.println("State: EVAC_SEARCH_DEPLOY");
 #endif
     VictimManager::reset();
+    s_searchStartMs = millis();
 }
 
 void update() {
-    const uint32_t start = millis();
+    uint32_t lastSeen = millis();   // last time a victim was in view (roam timer)
 
-    // Collect-and-deploy loop for the 2-minute window.
-    while (millis() - start < EVAC_SEARCH_TIMEOUT_MS) {
-        // >= 2 live held -> drop them at the green corner, then keep collecting.
-        // (A dead ball, if held, is carried until the timer triggers a red deploy.)
-        if (VictimManager::readyToDeploy()) {
-            digitalWrite(LED_BUILTIN, HIGH); 
-            deployGreen();  // calls driveToColorCorner(int targetcolor)
+    // Collect-and-deploy loop. The 1-min timer never interrupts an in-progress
+    // grab/approach; it is only checked here, between whole actions.
+    while (true) {
+        // Past the deadline: stop collecting. Finish disposing whatever we still
+        // hold (live->green, dead->red, timer ignored), and only leave once both
+        // are gone.
+        if (searchTimedOut()) {
+            if (VictimManager::liveHeld() > 0) {
+                s_disposeMode = true; deployGreen(); s_disposeMode = false;
+                continue;
+            }
+            if (VictimManager::deadHeld() > 0) {
+                s_disposeMode = true; deployRed(); s_disposeMode = false;
+                continue;
+            }
+            break;   // 1 min passed AND hands empty -> exit
+        }
+
+        // Deploy when we hold enough live (green trigger) OR we're already holding
+        // both a live and a dead ball. Either way dispose EVERYTHING in hand:
+        // live -> green corner, dead -> red corner.
+        const bool holdsBoth =
+            VictimManager::liveHeld() > 0 && VictimManager::deadHeld() > 0;
+        if (VictimManager::readyToDeploy() || holdsBoth) {
+            digitalWrite(LED_BUILTIN, HIGH);
+            if (VictimManager::liveHeld() > 0) deployGreen();  // driveToColorCorner(GREEN)
+            if (VictimManager::deadHeld() > 0) deployRed();    // driveToColorCorner(RED)
+            lastSeen = millis();   // fresh search window after disposing
             continue;
         }
 
@@ -363,25 +470,41 @@ void update() {
 
         // closestCenterVictim is already filtered to types we still want.
         if (closestCenterVictim() != nullptr) {
-            const int type = approachVictim();   // run and stop at front of victim.
+            lastSeen = millis();                 // reset roam timer: something in view
+            const int type = approachVictim();   // runs to completion (reach or lose)
             if (type >= 0) {
-                VictimManager::tryGrab((uint8_t)type);   // grab + self-confirm
+                const bool grabbed = VictimManager::tryGrab((uint8_t)type);  // grab + self-confirm
                 Actions::Drive::stop();
+                Actions::Forward::forward(-50, 70);      // back up either way
 
-                const uint32_t seenPacketMs = Processing::K230Decode::lastPacketMs();
-                Processing::K230Decode::waitForFreshFrameAfter(seenPacketMs, 700);
-            
+                if (grabbed) {
+                    // Booked: wait a fresh frame so the now-held ball isn't re-detected.
+                    const uint32_t seenPacketMs = Processing::K230Decode::lastPacketMs();
+                    Processing::K230Decode::waitForFreshFrameAfter(seenPacketMs, 700);
+                }
+                // On fail: count stays as-is (tryGrab didn't record). The loop then
+                // re-detects the ball and goes back to approachVictim (moving in
+                // front of it) instead of re-grabbing straight away.
             }
         } else {
-            // Actions::Drive::spinDecay(60, 400);          // sweep for a ball
-            Actions::Drive::motor(50,-50);
+            // Roam to find victims. A front-bumper hit at any moment triggers a
+            // bump recovery. Otherwise: spin in place for SPIN_SEARCH_MS to sweep,
+            // then roam forward for ROAM_FORWARD_MS, and repeat. lastSeen resets on
+            // victim/deploy/recover, so it always restarts on the spin phase.
+            Sensors::Touch::tick();
+            if (Sensors::Touch::front()) {
+                bumpRecover();
+                lastSeen = millis();                 // recovered -> restart spin timer
+            } else {
+                const uint32_t phase =
+                    (millis() - lastSeen) % (SPIN_SEARCH_MS + ROAM_FORWARD_MS);
+                if (phase < SPIN_SEARCH_MS) Actions::Drive::motor(50, -50);  // spin sweep
+                else                        Actions::Drive::motor(60, 60);   // roam forward
+            }
         }
     }
 
-    // Timer expired: drop whatever we still hold (live->green, dead->red), leave.
-    if (VictimManager::liveHeld() > 0) deployGreen();
-    if (VictimManager::deadHeld() > 0) deployRed();
-
+    // Loop only exits once timed out AND both hands are empty.
     Actions::Drive::stop();
     StateMachine::transitionTo(StateMachine::EVAC_EXIT);
 }

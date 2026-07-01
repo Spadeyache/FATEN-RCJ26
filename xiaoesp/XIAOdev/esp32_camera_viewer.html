@@ -261,21 +261,22 @@ canvas { display: block; image-rendering: pixelated; }
   margin: 2px 0 0 2px;
 }
 .row55-bar {
-  display: flex; width: 320px; height: 16px;
+  display: flex; width: 320px; height: 24px;
   margin-top: 3px; overflow: hidden;
   border: 1px solid var(--border); border-radius: 4px;
   background: #111; box-shadow: inset 0 1px 3px rgba(0,0,0,0.4);
 }
 .row55-half {
   flex: 1; position: relative; height: 100%;
-  color: #f4f4f4; font: 700 9px/14px monospace;
+  color: #f4f4f4; font: 700 9px/1.2 monospace;
   text-shadow: 0 1px 2px rgba(0,0,0,0.8);
 }
 .row55-half span {
-  position: absolute; top: 0; left: 5px;
+  position: absolute; top: 3px; left: 5px; right: 5px;
   pointer-events: none;
+  white-space: pre;
 }
-.row55-half.right span { left: auto; right: 5px; }
+.row55-half.right span { text-align: right; }
 .row55-half + .row55-half { border-left: 1px solid rgba(0,0,0,0.65); }
 
 .fps-overlay {
@@ -1410,7 +1411,21 @@ const ROW55_COLORS = {
   silver: '#c0c0c0',
   black:  '#222222',
 };
-let row55Data = { left: 'white', right: 'white' };
+let row55Data = {
+  left: 'white',
+  right: 'white',
+  y: null,
+  com: null,
+  black: null,
+  red: null,
+  greenLeft: null,
+  greenRight: null,
+  leftBand: null,
+  rightBand: null,
+  leftHsv: null,
+  rightHsv: null,
+  comHsv: null
+};
 
 function row55Color(name) {
   return ROW55_COLORS[name] || ROW55_COLORS.white;
@@ -1419,15 +1434,114 @@ function row55Color(name) {
 function updateRow55Bar() {
   row55LeftEl.style.background = row55Color(row55Data.left);
   row55RightEl.style.background = row55Color(row55Data.right);
-  row55LeftEl.title = 'L: ' + row55Data.left;
-  row55RightEl.title = 'R: ' + row55Data.right;
+  const lh = row55Data.leftHsv ? 'H ' + row55Data.leftHsv.join(',') : 'H --,--,--';
+  const rh = row55Data.rightHsv ? 'H ' + row55Data.rightHsv.join(',') : 'H --,--,--';
+  const ch = row55Data.comHsv ? ' COM ' + row55Data.comHsv.join(',') : '';
+  const counts = (row55Data.black !== null)
+    ? ' blk ' + row55Data.black + ' red ' + row55Data.red + ' g ' + row55Data.greenLeft + '/' + row55Data.greenRight
+    : '';
+  row55LeftEl.querySelector('span').textContent = 'L ' + row55Data.left + '\n' + lh;
+  row55RightEl.querySelector('span').textContent = 'R ' + row55Data.right + '\n' + rh;
+  row55LeftEl.title = 'L: ' + row55Data.left + ' ' + lh + ch + counts;
+  row55RightEl.title = 'R: ' + row55Data.right + ' ' + rh + ch + counts;
+}
+
+function parseTriplet(text, key) {
+  const m = text.match(new RegExp('\\b' + key + '=([\\d]+),([\\d]+),([\\d]+)\\b'));
+  return m ? [Number(m[1]), Number(m[2]), Number(m[3])] : null;
+}
+
+function parseBand(text, key) {
+  const m = text.match(new RegExp('\\b' + key + '=([\\d]+),([\\d]+)\\b'));
+  return m ? [Number(m[1]), Number(m[2])] : null;
+}
+
+function parseNumber(text, key) {
+  const m = text.match(new RegExp('\\b' + key + '=(-?\\d+(?:\\.\\d+)?)\\b'));
+  return m ? Number(m[1]) : null;
+}
+
+function drawGreenBands() {
+  if (!lcOverlayOn || row55Data.y === null) return;
+  const bands = [
+    { side: 'L', band: row55Data.leftBand, hsv: row55Data.leftHsv },
+    { side: 'R', band: row55Data.rightBand, hsv: row55Data.rightHsv },
+  ];
+
+  octx.save();
+  octx.font = '7px monospace';
+  octx.lineWidth = 1.2;
+  for (const item of bands) {
+    if (!item.band) continue;
+    const [x0, x1] = item.band;
+    const y = row55Data.y;
+    const w = Math.max(1, x1 - x0);
+    const h = 5;
+    octx.fillStyle = 'rgba(46,204,113,0.16)';
+    octx.strokeStyle = 'rgba(46,204,113,0.95)';
+    octx.fillRect(x0 + .5, y - 2 + .5, w, h);
+    octx.strokeRect(x0 + .5, y - 2 + .5, w, h);
+    if (item.hsv) {
+      const label = item.side + ' ' + item.hsv.join(',');
+      const tx = item.side === 'L' ? Math.max(1, x0 - 4) : Math.min(x0 + 1, overlay.width - 40);
+      const ty = Math.max(8, y - 5);
+      octx.fillStyle = 'rgba(0,0,0,0.68)';
+      octx.fillRect(tx - 1, ty - 7, 42, 9);
+      octx.fillStyle = '#8ff0ad';
+      octx.fillText(label, tx, ty);
+    }
+  }
+  if (row55Data.com !== null && Number.isFinite(row55Data.com)) {
+    const row = STREAM_GUIDES.colorLine;
+    const x = Math.max(row.x0, Math.min(row.x1, row55Data.com));
+    const y = row55Data.y;
+    const label = [
+      'ccom ' + row55Data.com.toFixed(1),
+      row55Data.comHsv ? 'HSV ' + row55Data.comHsv.join(',') : null,
+      row55Data.black !== null ? 'blk ' + row55Data.black + ' red ' + row55Data.red : null,
+      row55Data.greenLeft !== null ? 'g ' + row55Data.greenLeft + '/' + row55Data.greenRight : null,
+    ].filter(Boolean);
+    octx.strokeStyle = '#ffffff';
+    octx.lineWidth = 1.2;
+    octx.beginPath();
+    octx.moveTo(x + .5, y - 8 + .5);
+    octx.lineTo(x + .5, y + 8 + .5);
+    octx.stroke();
+    octx.fillStyle = 'rgba(0,0,0,0.72)';
+    const tx = Math.min(Math.max(2, x + 5), overlay.width - 72);
+    const ty = Math.min(y + 13, overlay.height - 31);
+    octx.fillRect(tx - 1, ty - 8, 72, label.length * 8 + 2);
+    octx.fillStyle = '#ffffff';
+    label.forEach((line, i) => octx.fillText(line, tx, ty + i * 8));
+  }
+  octx.restore();
 }
 
 function parseROW(text) {
   const l = text.match(/\bl=(white|green|red|silver|black)\b/);
   const r = text.match(/\br=(white|green|red|silver|black)\b/);
+  const y = text.match(/\by=(\d+)\b/);
   if (l) row55Data.left = l[1];
   if (r) row55Data.right = r[1];
+  if (y) row55Data.y = Number(y[1]);
+  const ccom = parseNumber(text, 'ccom');
+  if (ccom !== null) {
+    row55Data.com = ccom;
+    colorComX = ccom;
+  }
+  const black = parseNumber(text, 'blk');
+  const red = parseNumber(text, 'red');
+  const greenLeft = parseNumber(text, 'gL');
+  const greenRight = parseNumber(text, 'gR');
+  if (black !== null) row55Data.black = black;
+  if (red !== null) row55Data.red = red;
+  if (greenLeft !== null) row55Data.greenLeft = greenLeft;
+  if (greenRight !== null) row55Data.greenRight = greenRight;
+  row55Data.leftBand = parseBand(text, 'lb') || row55Data.leftBand;
+  row55Data.rightBand = parseBand(text, 'rb') || row55Data.rightBand;
+  row55Data.leftHsv = parseTriplet(text, 'lh') || row55Data.leftHsv;
+  row55Data.rightHsv = parseTriplet(text, 'rh') || row55Data.rightHsv;
+  row55Data.comHsv = parseTriplet(text, 'ch') || row55Data.comHsv;
   updateRow55Bar();
   markDirty();
 }
@@ -1443,6 +1557,7 @@ function drawOverlay() {
   drawLcOverlay();
   drawLaOverlay();
   drawSaOverlay();
+  drawGreenBands();
   for (const { visible, x, y, w, h, color } of markers) {
     if (!visible) continue;
     octx.fillStyle = 'rgba(255,255,255,0.12)';

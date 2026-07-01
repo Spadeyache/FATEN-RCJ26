@@ -1,0 +1,25 @@
+{
+  "categories": [
+    {
+      "id": 0,
+      "name": "Dead"
+    },
+    {
+      "id": 1,
+      "name": "Green"
+    },
+    {
+      "id": 2,
+      "name": "Live"
+    },
+    {
+      "id": 3,
+      "name": "Red"
+    }
+  ],
+  "info": {
+    "year": 2026,
+    "version": "1.0",
+    "contributor": "Label Studio"
+  }
+}

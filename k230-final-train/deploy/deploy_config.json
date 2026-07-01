@@ -1,0 +1,45 @@
+{
+  "model_type": "AnchorFreeDet",
+  "kmodel_path": "best.kmodel",
+  "categories": [
+    "Dead",
+    "Live",
+    "Point"
+  ],
+  "num_classes": 3,
+  "img_size": [
+    640,
+    480
+  ],
+  "confidence_threshold": 0.3,
+  "nms_threshold": 0.45,
+  "preprocess": {
+    "layout": "NCHW",
+    "input_type": "uint8",
+    "input_range": [
+      0,
+      1
+    ],
+    "mean": [
+      0,
+      0,
+      0
+    ],
+    "std": [
+      1,
+      1,
+      1
+    ],
+    "swapRB": false,
+    "resize": "direct (no letterbox)"
+  },
+  "_meta": {
+    "source_mode": "preset",
+    "ptq": {
+      "ptq_option": 0,
+      "calibrate_method": "NoClip",
+      "quant_type": "uint8",
+      "w_quant_type": "uint8"
+    }
+  }
+}

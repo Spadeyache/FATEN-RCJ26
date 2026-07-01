@@ -66,7 +66,7 @@
 #define GREEN_HUE_MIN      80
 #define GREEN_HUE_MAX      165
 #define GREEN_SAT_MIN      150
-#define GREEN_VAL_MIN      135
+#define GREEN_VAL_MIN      60
 
 #define RED_SAT_MIN        80
 #define RED_VAL_MIN        40
@@ -83,7 +83,7 @@
 #define LF_SILVER_PixCOUNT_THRESHOLD   4    // Min silver Pixel count → report FEAT_SILVER
 #define LF_RED_PixCOUNT_THRESHOLD      30   // Min red Pixel count → report FEAT_RED
 #define LF_BLACK_PixCOUNT_THRESHOLD    35   // Min black pixels → report FEAT_BLACK_INTERSECT
-#define LF_GREEN_PixCOUNT_THRESHOLD    5    // pixels needed to confirm green
+#define LF_GREEN_PixCOUNT_THRESHOLD    4   //5 // pixels needed to confirm green
 
 // ── Mode 0b : Line Follow 2 (clean two-row CoM; no green/commit) ─────────────
 //  Row NEAR (70): black center-of-mass → line error (0..254, 127 = centre).
@@ -103,7 +103,7 @@
 #define LF_SILVER_SIDE_COL_RIGHT      135   // 160 - 15
 #define LF_SILVER_SIDE_ROW_MIN          0
 #define LF_SILVER_SIDE_ROW_MAX         70
-#define LF_SILVER_SIDE_THRESHOLD       12   // hits in either side column -> FEAT_SILVER
+#define LF_SILVER_SIDE_THRESHOLD       7  //12 // hits in either side column -> FEAT_SILVER
 
 // ── Mode 1 : SearchLine ──────────────────────────────────────────────────────
 // Rectangular scan region (inclusive). Frame is 160 x 120.

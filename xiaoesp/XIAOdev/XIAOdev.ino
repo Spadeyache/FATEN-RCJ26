@@ -200,7 +200,7 @@ static void sendStreamDebugOnly() {
     char lcLine[384];
     char laLine[256];
     char saLine[1024];
-    char rowLine[48];
+    char rowLine[192];
     char evtLine[96];
     int lcLen = xs_formatLineDebug(lcLine, sizeof(lcLine));
     int laLen = xs_formatLineAngleDebug(laLine, sizeof(laLine));
@@ -245,7 +245,7 @@ void streamTask(void* pvParameters) {
         char lcLine[384];
         char laLine[256];
         char saLine[1024];
-        char rowLine[48];
+        char rowLine[192];
         char evtLine[96];
         int  lcLen = xs_formatLineDebug(lcLine, sizeof(lcLine));
         int  laLen = xs_formatLineAngleDebug(laLine, sizeof(laLine));

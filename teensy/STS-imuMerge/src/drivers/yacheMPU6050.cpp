@@ -32,12 +32,22 @@ void yacheMPU6050::begin() {
     Serial.printf("IMU+Madgwick ready @ %.1f Hz.\n", IMU_SAMPLE_HZ);
 }
 
+void yacheMPU6050::gateAccelForSpin(float &ax, float &ay, float &az) {
+    const float norm = sqrtf(ax * ax + ay * ay + az * az);
+    if (fabsf(norm - 1.0f) > ACCEL_GATE_DEVIATION_G) {
+        ax = _lastGoodAx; ay = _lastGoodAy; az = _lastGoodAz;
+        return;
+    }
+    _lastGoodAx = ax; _lastGoodAy = ay; _lastGoodAz = az;
+}
+
 void yacheMPU6050::sampleAndFilterOnce() {
     while ((int32_t)(micros() - _microsPrevious) < (int32_t)_microsPerReading) { /* spin */ }
 
     _mpu.getMotion6(&axRaw, &ayRaw, &azRaw, &gxRaw, &gyRaw, &gzRaw);
     float ax = convertRawAccel(axRaw), ay = convertRawAccel(ayRaw), az = convertRawAccel(azRaw);
     float gx = convertRawGyro (gxRaw), gy = convertRawGyro (gyRaw), gz = convertRawGyro (gzRaw);
+    gateAccelForSpin(ax, ay, az);
     // Axis remap + 180° flip about sensor-Y (this mount = IMU-01 rotated 180°, X
     // reversed). Negate the X and Z feeds on BOTH gyro and accel: two sign flips
     // keep the frame right-handed (negating X alone would NOT), and this puts
@@ -68,6 +78,7 @@ FASTRUN void yacheMPU6050::update() {
     _mpu.getMotion6(&axRaw, &ayRaw, &azRaw, &gxRaw, &gyRaw, &gzRaw);
     float ax = convertRawAccel(axRaw), ay = convertRawAccel(ayRaw), az = convertRawAccel(azRaw);
     float gx = convertRawGyro (gxRaw), gy = convertRawGyro (gyRaw), gz = convertRawGyro (gzRaw);
+    gateAccelForSpin(ax, ay, az);
 
 #if PRINT_IMU
     // TEMP mount-check: at rest, the axis reading ~±16384 is the gravity axis.

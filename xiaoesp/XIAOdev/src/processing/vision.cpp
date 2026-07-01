@@ -14,7 +14,7 @@ const uint8_t B_D = 0;
 #else
 
 const float R_Gain = 1.98598130841;     // 1.98598130841
-const float G_Gain = 1.55265017668;     // 2.25265017668
+const float G_Gain = 1.70265017668;     // 2.25265017668   //.55
 const float B_Gain = 3.1;     // 4.0
 
 const uint8_t R_D = 12.4 * 0.8;       // avgR_Black : 0.8 is the safety margin
@@ -308,7 +308,7 @@ bool isSilverRaw(const RawRgb& d) {
 bool isGreen(const cameraData& d) {
     return (d.hsv.h >= GREEN_HUE_MIN && d.hsv.h <= GREEN_HUE_MAX)
         && (((d.hsv.s >= GREEN_SAT_MIN) && (d.hsv.v >= GREEN_VAL_MIN))
-            || ((d.hsv.s >= 215) && (d.hsv.v >= 5)));
+            || ((d.hsv.s >= 200) && (d.hsv.v >= 3) & (d.hsv.v <= 50)));//215->175
 }
 
 bool isRed(const cameraData& d) {

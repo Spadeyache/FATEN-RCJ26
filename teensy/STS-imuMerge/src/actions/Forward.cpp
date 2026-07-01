@@ -26,16 +26,17 @@ void forward(float speed, float distance_mm, bool useIMU, bool pumpComms) {
 
     if (!useIMU) {
         Drive::motor(speed, speed);
-        if (pumpComms) {
-            while (millis() - start < duration) {
-                if (millis() - lastComms >= 20) {
-                    Sensors::XIAO_link::tick();
-                    Processing::XiaoDecode::tick();
-                    lastComms = millis();
-                }
+        // Always loop (never a blind delay()) so the IMU filter keeps getting
+        // fed -- otherwise it goes stale for the whole move and the next
+        // tick() after this returns integrates over the entire elapsed gap,
+        // producing a bogus attitude jump. pumpComms only gates XIAO/decode.
+        while (millis() - start < duration) {
+            Sensors::IMU::tick();
+            if (pumpComms && millis() - lastComms >= 20) {
+                Sensors::XIAO_link::tick();
+                Processing::XiaoDecode::tick();
+                lastComms = millis();
             }
-        } else {
-            delay(duration);
         }
         Drive::stop();
         return;

@@ -79,6 +79,7 @@ namespace {
         const uint32_t start = millis();
         uint32_t lastComms = 0;
         while (millis() - start < ms) {
+            Sensors::IMU::tick();
             if (millis() - lastComms >= 20) {
                 Sensors::XIAO_link::tick();
                 Processing::XiaoDecode::tick(true);
@@ -103,6 +104,7 @@ namespace {
     }
 
     Actions::Drive::LineFollowState obstacleSlopeState() {
+        Sensors::IMU::tick();
         const float pitch = Sensors::IMU::getRoll();    // + = nose up
         const float roll  = -Sensors::IMU::getPitch();  // + = left side down
         const float absPitch = fabsf(pitch);
@@ -138,11 +140,29 @@ namespace {
                                   /*useIMU=*/false, /*pumpComms=*/true);
     }
 
+    void printObstacleEntryMotion(Actions::Drive::LineFollowState state,
+                                  const ObstacleEntryMotion& motion) {
+#if PRINT_STATE
+        const float pitch = Sensors::IMU::getRoll();
+        const float roll  = -Sensors::IMU::getPitch();
+        Serial.printf("Obstacle entry %s pitch:%.1f roll:%.1f back %.0f/%.0f turn %.0f/%.0f fwd %.0f/%.0f\n",
+                      Actions::Drive::lineFollowStateName(state),
+                      pitch, roll,
+                      motion.backSpeed, motion.backMm,
+                      motion.turnAngle, motion.turnSpeed,
+                      motion.forwardSpeed, motion.forwardMm);
+#endif
+    }
+
     void finishToLineFollow() {
         Actions::Drive::stop();
         Processing::XiaoDecode::setMode(XIAO_MODE_LINE);
         pumpFor(200);
         Processing::XiaoDecode::clearFilter();
+        // Hold whatever slope state was last tracked during the obstacle
+        // traversal (continuously updated by motorSlopeProfiled) so the spin
+        // back onto the line can't flip it via a transient IMU blip.
+        Actions::Drive::suppressSlopeDetection(Actions::Drive::lineFollowState());
         StateMachine::transitionTo(StateMachine::LINE_FOLLOW);
     }
 
@@ -157,6 +177,7 @@ namespace {
         while (!Processing::XiaoDecode::gapAnyPointFlag()) {
             Sensors::XIAO_link::tick();
             Processing::XiaoDecode::tick(true);
+            Sensors::IMU::tick();
             Actions::Drive::motor(40, 40);
             delay(5);
         }
@@ -179,6 +200,7 @@ void update() {
 
     if (!Sensors::Touch::front()) {
         Processing::XiaoDecode::clearFilter();
+        Actions::Drive::suppressSlopeDetection(Actions::Drive::lineFollowState());
         StateMachine::transitionTo(StateMachine::LINE_FOLLOW);
         return;
     }
@@ -186,7 +208,9 @@ void update() {
     Processing::XiaoDecode::setMode(XIAO_MODE_LINE_ANGLE);
     // pumpFor(200);
     const Actions::Drive::LineFollowState obsState = obstacleSlopeState();
-    runObstacleEntryMotion(obstacleEntryMotion(obsState));
+    const ObstacleEntryMotion& entryMotion = obstacleEntryMotion(obsState);
+    printObstacleEntryMotion(obsState, entryMotion);
+    runObstacleEntryMotion(entryMotion);
     
     Processing::XiaoDecode::clearFilter();
 
@@ -195,6 +219,7 @@ void update() {
     while (millis() - start < 700) {
         Sensors::XIAO_link::tick();
         Processing::XiaoDecode::tick(true);
+        Sensors::IMU::tick();
         Sensors::Touch::tick();
 
         if (Sensors::Touch::front()) {
@@ -209,6 +234,7 @@ void update() {
     while (!Processing::XiaoDecode::gapAnyPointFlag()) {
         Sensors::XIAO_link::tick();
         Processing::XiaoDecode::tick(true);
+        Sensors::IMU::tick();
         Sensors::Touch::tick();
 
         if (Sensors::Touch::front()) {
@@ -227,6 +253,7 @@ void update() {
     start = millis();
     lastComms = 0;
     while (millis() - start < 700) {
+        Sensors::IMU::tick();
         if (millis() - lastComms >= 20) {
             Sensors::XIAO_link::tick();
             Processing::XiaoDecode::tick(true);
@@ -240,7 +267,14 @@ void update() {
     Actions::Turn::turn(25, 45);
     driveForwardUntilGapAnyPoint();
     Actions::Drive::motor(50, 50);
-    delay(790);
+    {
+        // Replaces a blind delay(790) -- keeps the IMU filter fed through
+        // this straight run instead of letting it go stale.
+        const uint32_t holdStart = millis();
+        while (millis() - holdStart < 790) {
+            Sensors::IMU::tick();
+        }
+    }
     Actions::Turn::turn(65, 45);
 
     if (Processing::XiaoDecode::gapBothRowsFlag()) {

@@ -7,7 +7,7 @@
 #define WIFI_SSID         "Spadeyache32"
 #define WIFI_PASSWORD     "pkxc9kvozip2"
 
-#define WIFI_TIMEOUT_MS   10000
+#define WIFI_TIMEOUT_MS   750
 
 // Function declaration
 bool WiFi_Init();

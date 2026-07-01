@@ -20,7 +20,7 @@ constexpr uint8_t SILVER_COL_LEFT = LF_SILVER_COL_LEFT;
 constexpr uint8_t SILVER_COL_RIGHT = LF_SILVER_COL_RIGHT;
 constexpr uint8_t SILVER_ROW_MIN = LF_SILVER_ROW_MIN;
 constexpr uint8_t SILVER_ROW_MAX = LF_SILVER_ROW_MAX;
-constexpr uint8_t SILVER_THRESHOLD = 6;
+constexpr uint8_t SILVER_THRESHOLD = 9;  // evac-only; line-follow keeps its own
 
 constexpr uint8_t BLACK_ROW = 45;
 // Inset from the arc edges: at row 45 the extreme columns fall in the dark
@@ -30,7 +30,7 @@ constexpr uint8_t BLACK_ROW = 45;
 constexpr uint8_t BLACK_EDGE_MARGIN = 12;
 constexpr uint8_t BLACK_X_MIN = LF_ARC_LEFT_X + BLACK_EDGE_MARGIN;   // 40
 constexpr uint8_t BLACK_X_MAX = LF_ARC_RIGHT_X - BLACK_EDGE_MARGIN;  // 120
-constexpr uint8_t BLACK_THRESHOLD = 5;
+constexpr uint8_t BLACK_THRESHOLD = 40;
 
 uint8_t countSilverOnColumn(camera_fb_t* fb, uint8_t col) {
     uint8_t count = 0;

@@ -76,7 +76,7 @@ enum XiaoMode : uint8_t {
 // Shared line-follow base speeds. Drive.cpp uses these for PID base speed;
 // LINE_Follow.cpp intersection forward moves use the same values by state.
 #define LINE_FOLLOW_BASE_SPEED_FLAT   70.0f
-#define LINE_FOLLOW_BASE_SPEED_SLOPE  45.0f
+#define LINE_FOLLOW_BASE_SPEED_SLOPE  55.0f //
 
 // =============================================================================
 //  IMU
@@ -96,12 +96,12 @@ enum XiaoMode : uint8_t {
 // #define IMU_GY_OFFSET          54
 // #define IMU_GZ_OFFSET           2
 
-#define IMU_AX_OFFSET       -897
-#define IMU_AY_OFFSET        -1901
-#define IMU_AZ_OFFSET         1060
-#define IMU_GX_OFFSET          203
-#define IMU_GY_OFFSET          -49
-#define IMU_GZ_OFFSET           -59
+#define IMU_AX_OFFSET       -894
+#define IMU_AY_OFFSET        -1913
+#define IMU_AZ_OFFSET         1031
+#define IMU_GX_OFFSET          207
+#define IMU_GY_OFFSET          -46
+#define IMU_GZ_OFFSET           -52
 
 // =============================================================================
 //  Robot geometry — shared unit reference for Forward and Turn
@@ -133,7 +133,7 @@ enum XiaoMode : uint8_t {
 
 // EVAC shared tuning — used by BOTH EVAC_SearchDeploy (approach stop) AND
 // VictimManager (grab self-confirm), so it stays here.
-#define EVAC_GRAB_STOP_HEIGHT_PX     140.0f
+#define EVAC_GRAB_STOP_HEIGHT_PX     135.0f
 // Other EVAC tuning is now file-local: EVAC_SearchDeploy-only constants live in
 // EVAC_SearchDeploy.cpp; EVAC_MAX_BALLS lives in VictimManager.cpp.
 
@@ -146,7 +146,7 @@ enum XiaoMode : uint8_t {
 #define FILTER_THRESHOLD_SILVER   4   // silver (evac entry)
 #define FILTER_THRESHOLD_LINELOST  3   // sustained line loss → gap
 #define FILTER_THRESHOLD_BLACK_INTERSECT 8  // saturated black row before/through an intersection
-#define FILTER_THRESHOLD_GREEN    8   // green left/right (matches main); u-turn = both sides build up
+#define FILTER_THRESHOLD_GREEN    6   // green left/right (matches main); u-turn = both sides build up
 
 // After firing any green turn (u-turn / left / right), ignore all green for this
 // long so the same intersection isn't re-read on the way out.
