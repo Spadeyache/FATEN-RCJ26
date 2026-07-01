@@ -38,6 +38,8 @@ namespace {
     constexpr float GAP_FORWARD_SPEED    = 45.0f;
     constexpr float GAP_ROUGH_FWD_MM_PER_DEG = 1.3f;
     constexpr uint16_t GAP_ROUGH_BACK_BLIND_MS = 180;
+    constexpr uint16_t GAP_REVERSE_SETTLE_MS = 80;
+    constexpr uint16_t GAP_ANGLE_SETTLE_MS = 100;
     constexpr uint8_t GAP_BOTTOM_LOST_FRAMES  = 5;
     constexpr uint8_t GAP_BOTTOM_FOUND_FRAMES = 3;
     // constexpr uint16_t GAP_AFTER_LOST_BLIND_MS = 150;
@@ -203,8 +205,7 @@ void update() {
             delay(5);
             updateXiaoNow();
         }
-        // driveForMs(GAP_BACK_SPEED, GAP_BACK_SPEED, GAP_BACK_SETTLE_MS);
-        pumpXiaoFor(375);//stop reverting to the line above
+        pumpXiaoFor(GAP_REVERSE_SETTLE_MS);
         
 // Line lost detection
         updateXiaoNow();
@@ -220,9 +221,8 @@ void update() {
         const float savedAngle = savedFineOk ? signedFineAngleDeg() : signedAngleDeg();
 
         
-        Serial.println(savedAngle);
         Actions::Drive::stop();
-        pumpXiaoFor(1500);
+        pumpXiaoFor(GAP_ANGLE_SETTLE_MS);
 
 
         Processing::XiaoDecode::clearFilter();

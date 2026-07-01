@@ -38,11 +38,13 @@ namespace {
     // --- Exit-confirmation motion tuning -------------------------------------
     constexpr float RAM_SPEED       = 50.0f;
     constexpr float RAM_APPROACH_MM = 160.0f;  // forward before the right turn
-    constexpr float RAM_DISTANCE_MM = 250.0f;  // drive into candidate gap
-    constexpr float RAM_BACKUP_MM   = 60.0f;
+    constexpr float RAM_DISTANCE_MM = 180.0f;  // drive into candidate gap
+    constexpr float RAM_BACKUP_MM   = 80.0f;
+    constexpr float RAM_PUSH_SPEED  = 100.0f;
+    constexpr float RAM_PUSH_MM     = 30.0f;
     // When the ram confirmed nothing (no black, no silver, no wall hit), back out
     // the whole ram distance instead of the short silver/wall backup.
-    constexpr float RAM_NOCOLOR_BACKUP_MM = 250.0f;
+    constexpr float RAM_NOCOLOR_BACKUP_MM = 180.0f;
     constexpr float RAM_TURN_SPEED  = 50.0f;
 
     struct TapeFlags {
@@ -144,8 +146,12 @@ namespace {
         StateMachine::transitionTo(StateMachine::LINE_FOLLOW);
     }
 
-    void recoverToWallFollow(float backupMm = RAM_BACKUP_MM) {
+    void recoverToWallFollow(float backupMm = RAM_BACKUP_MM,
+                             bool pushBeforeBackup = true) {
         Serial.printf("[EXIT] recover: back %.0fmm, left 90\n", backupMm);
+        if (pushBeforeBackup) {
+            Actions::Forward::forward(RAM_PUSH_SPEED, RAM_PUSH_MM);
+        }
         Actions::Forward::forward(-RAM_SPEED, backupMm);
         Actions::Turn::turn(-90.0f, RAM_TURN_SPEED);
         refreshTapeFlags();
@@ -215,7 +221,7 @@ namespace {
 
         Serial.println("[EXIT] no color confirmed -> recover (full back-out)");
         waitWithSensors(200);
-        recoverToWallFollow(RAM_NOCOLOR_BACKUP_MM);
+        recoverToWallFollow(RAM_NOCOLOR_BACKUP_MM, false);
     }
 
     void handleExitCandidate() {

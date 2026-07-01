@@ -76,7 +76,7 @@ enum XiaoMode : uint8_t {
 // Shared line-follow base speeds. Drive.cpp uses these for PID base speed;
 // LINE_Follow.cpp intersection forward moves use the same values by state.
 #define LINE_FOLLOW_BASE_SPEED_FLAT   70.0f
-#define LINE_FOLLOW_BASE_SPEED_SLOPE  45.0f
+#define LINE_FOLLOW_BASE_SPEED_SLOPE  55.0f //
 
 // =============================================================================
 //  IMU
@@ -96,12 +96,12 @@ enum XiaoMode : uint8_t {
 // #define IMU_GY_OFFSET          54
 // #define IMU_GZ_OFFSET           2
 
-#define IMU_AX_OFFSET       -897
-#define IMU_AY_OFFSET        -1901
-#define IMU_AZ_OFFSET         1060
-#define IMU_GX_OFFSET          203
-#define IMU_GY_OFFSET          -49
-#define IMU_GZ_OFFSET           -59
+#define IMU_AX_OFFSET       -894
+#define IMU_AY_OFFSET        -1913
+#define IMU_AZ_OFFSET         1031
+#define IMU_GX_OFFSET          207
+#define IMU_GY_OFFSET          -46
+#define IMU_GZ_OFFSET           -52
 
 // =============================================================================
 //  Robot geometry — shared unit reference for Forward and Turn

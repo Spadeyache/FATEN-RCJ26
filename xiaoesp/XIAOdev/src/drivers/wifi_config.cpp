@@ -4,7 +4,9 @@
 bool WiFi_Init() {
     // Set WiFi to station mode and disconnect from any previous AP
     WiFi.mode(WIFI_STA);
-    WiFi.disconnect();
+    WiFi.disconnect(false, false);
+    WiFi.setAutoReconnect(false);
+    WiFi.persistent(false);
 
     // Attempt to connect to WiFi network
     WiFi.begin(WIFI_SSID, WIFI_PASSWORD);

@@ -14,15 +14,15 @@ namespace {
     constexpr bool DEBUG_WALL_FOLLOW = false;
 
     // Obstacle recovery when the front touch sensor fires.
-    constexpr float OBSTACLE_BACKUP_MM    = 60.0f;
+    constexpr float OBSTACLE_BACKUP_MM    = 48.0f;
     constexpr float OBSTACLE_BACKUP_SPEED = 40.0f;
-    constexpr float OBSTACLE_TURN_DEG     = -90.0f;
+    constexpr float OBSTACLE_TURN_DEG     = -45.0f;//90
     constexpr float OBSTACLE_TURN_SPEED   = 60.0f;
 
     // PID: error = measured wall distance - target distance.
-    constexpr float PID_KP = 0.3f;
+    constexpr float PID_KP = 3.0f;
     constexpr float PID_KI = 0.0f;
-    constexpr float PID_KD = 0.0f;
+    constexpr float PID_KD = 1.57f;
     constexpr float INTEGRAL_LIMIT = 200.0f;
 
     // 2x2 ToF block used as the right-wall distance estimate.

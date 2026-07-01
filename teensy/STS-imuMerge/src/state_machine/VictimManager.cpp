@@ -153,11 +153,11 @@ namespace {
         // const int tFwd  = (side == SIDE_LEFT) ? LEFT_FWD_MS  : RIGHT_FWD_MS;
 
         if (side == SIDE_LEFT) Actions::Arm::grabLeft(false); else Actions::Arm::grabRight(false);
-        Actions::Drive::motor(-20, -20);   // back off
+        Actions::Drive::motor(-18, -18);   // back off
         Actions::Arm::liftDown();
-        Processing::K230Decode::drainDelay(600);
-        Actions::Drive::motor(35, 35);     // lunge in
-        Processing::K230Decode::drainDelay(700);
+        Processing::K230Decode::drainDelay(570);
+        Actions::Drive::motor(50, 50);     // lunge in
+        Processing::K230Decode::drainDelay(615);
         if (side == SIDE_LEFT) Actions::Arm::grabLeft(true); else Actions::Arm::grabRight(true);
         Actions::Drive::motor(-50, -50);   // back off
         Processing::K230Decode::drainDelay(300);
@@ -280,7 +280,7 @@ void releaseLive() {
 void releaseDead() {
     Actions::Arm::liftRelease();
     Processing::K230Decode::drainDelay(300);
-    
+
     if (_rightCount > 0 && _rightStack[0] == K230_CLASS_DEAD) {
         Actions::Arm::releaseRight();
         _rightCount = 0;

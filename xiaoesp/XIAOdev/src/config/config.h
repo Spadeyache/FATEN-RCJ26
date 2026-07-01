@@ -103,7 +103,7 @@
 #define LF_SILVER_SIDE_COL_RIGHT      135   // 160 - 15
 #define LF_SILVER_SIDE_ROW_MIN          0
 #define LF_SILVER_SIDE_ROW_MAX         70
-#define LF_SILVER_SIDE_THRESHOLD       12   // hits in either side column -> FEAT_SILVER
+#define LF_SILVER_SIDE_THRESHOLD       7  //12 // hits in either side column -> FEAT_SILVER
 
 // ── Mode 1 : SearchLine ──────────────────────────────────────────────────────
 // Rectangular scan region (inclusive). Frame is 160 x 120.
