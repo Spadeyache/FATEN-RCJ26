@@ -43,6 +43,7 @@ namespace {
     constexpr uint16_t OBS_AFTER_POINT_EXTRA_MS   = 120;
     constexpr float    OBS_STATE_TILT_GATE_DEG    = 17.0f;
     constexpr float    OBS_ARC_ROTAXIS_PITCH_DEG  = 18.0f;
+    constexpr float    OBS_SLOPE_ARC_SCALE         = 0.7f;   // slope: slow the go-around (anti-slide)
     constexpr float    OBS_TOUCH_ARC_LEFT          = 60.0f;
     constexpr float    OBS_TOUCH_ARC_RIGHT         = 5.0f;
     constexpr float    OBS_FREE_ARC_LEFT           = -3.0f;
@@ -54,24 +55,24 @@ namespace {
          55.0f, 10.0f
     };
     constexpr ObstacleEntryMotion OBS_ENTRY_NOSE_UP = {
-        -55.0f, 40.0f,
-         80.0f, 40.0f,
-         55.0f, 10.0f
+        -55.0f, 27.0f,   // back off DOWN the slope -> gravity assists, shorter (was 40)
+         53.0f, 27.0f,   // uphill turn angle -> ~2/3 to avoid over-turning (was 80)
+         45.0f, 20.0f     // post-turn straight: speed, distance(mm) - tune up from 0
     };
     constexpr ObstacleEntryMotion OBS_ENTRY_NOSE_DOWN = {
-        -55.0f, 40.0f,
-         80.0f, 40.0f,
-         55.0f, 10.0f
+        -65.0f, 55.0f,   // back off UP the slope -> more distance, gravity eats it (was 40)
+         60.0f, 30.0f,   // downhill turn angle -> 3/4 to avoid over-turning (was 80)
+         35.0f, 12.0f     // post-turn straight: speed, distance(mm) - tune up from 0
     };
     constexpr ObstacleEntryMotion OBS_ENTRY_LEFT_DOWN = {
-        -55.0f, 40.0f,
-         80.0f, 40.0f,
-         55.0f, 10.0f
+        -45.0f, 20.0f,
+         53.0f, 38.0f,
+         47.0f, 55.0f
     };
     constexpr ObstacleEntryMotion OBS_ENTRY_RIGHT_DOWN = {
-        -55.0f, 40.0f,
-         80.0f, 40.0f,
-         55.0f, 10.0f
+        -50.0f, 25.0f,
+         27.0f, 37.0f,
+         45.0f, 25.0f
     };
 
     void pumpFor(uint32_t ms) {
@@ -87,8 +88,13 @@ namespace {
     }
 
     void driveObstacleArc(float left, float right) {
-        const float robotPitch = Sensors::IMU::getRoll();  // + = nose up for this IMU mount
-        if (robotPitch > OBS_ARC_ROTAXIS_PITCH_DEG) {
+        const float pitch = Sensors::IMU::getRoll();    // + = nose up for this IMU mount
+        const float roll  = -Sensors::IMU::getPitch();  // + = left side down
+        // Any tilt past the gate (up / down / sideways) routes through the
+        // slope profile so downhill braking + upper-wheel de-rating apply too.
+        if (fabsf(pitch) > OBS_ARC_ROTAXIS_PITCH_DEG || fabsf(roll) > OBS_ARC_ROTAXIS_PITCH_DEG) {
+            left  *= OBS_SLOPE_ARC_SCALE;   // slow the go-around on slopes (anti-slide)
+            right *= OBS_SLOPE_ARC_SCALE;
             const float turnNorm = constrain((left - right) / (float)MAX_MOTOR_SPEED, -1.0f, 1.0f);
             Actions::Drive::motorSlopeProfiled(left, right, turnNorm);
         } else {

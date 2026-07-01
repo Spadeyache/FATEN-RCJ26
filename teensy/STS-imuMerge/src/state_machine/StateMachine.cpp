@@ -17,7 +17,7 @@ namespace StateMachine {
 // DEBUG: boot straight into EVAC_EXIT to bench-test the evac color-mask
 // black/silver -> beep path without driving the full course. Pair with the
 // XIAO's DEBUG_FORCE_EVAC_COLOR_MASK_MODE. Set back to 0 for normal runs.
-#define DEBUG_FORCE_START_EVAC_EXIT 1
+#define DEBUG_FORCE_START_EVAC_EXIT 0
 
 namespace {
     RobotState _current = LINE_FOLLOW;
