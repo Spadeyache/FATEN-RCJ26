@@ -36,8 +36,9 @@ namespace {
     constexpr uint32_t SPIN_SEARCH_MS             = 10000UL;  // spin in place this long with no victim, then roam forward
     constexpr uint32_t ROAM_FORWARD_MS            = 4000UL;   // forward-roam phase length between spins
     constexpr float    ROAM_TURN_SPEED            = 50.0f;    // turn speed used by the bump recovery
-    constexpr float    EVAC_POINT_STOP_WIDTH_PX   = 300.0f;   // corner-approach stop width
-    constexpr float    EVAC_POINT_STOP_HEIGHT_PX  = 140.0f;    // corner-approach stop height
+    constexpr float    EVAC_POINT_STOP_WIDTH_PX   = 450.0f;   // corner-approach stop width
+    constexpr float    EVAC_POINT_STOP_HEIGHT_PX  = 140.0f;   // corner-approach stop height
+    constexpr int16_t  EVAC_POINT_STOP_MIN_BOTTOM_Y_PX = 420; // corner bottom must be below this before colour read
     constexpr uint8_t  EVAC_POINT_STOP_REQUIRED   = 5;        // consecutive close frames at the corner
     constexpr int      EVAC_POINT_ALIGN_DEADBAND_PX = 30;     // centre band before colour read
     constexpr int      EVAC_POINT_ALIGN_SPEED_MIN   = 40;
@@ -260,7 +261,8 @@ namespace {
             const K230DBox* corner = closestCenterPoint();
             if (corner == nullptr) { hits = 0; Actions::Drive::spinDecay(60, 400); continue; }
             if (boxWidthPx(*corner) > EVAC_POINT_STOP_WIDTH_PX &&
-                boxHeightPx(*corner) >= EVAC_POINT_STOP_HEIGHT_PX) {
+                boxHeightPx(*corner) >= EVAC_POINT_STOP_HEIGHT_PX &&
+                corner->y2 > EVAC_POINT_STOP_MIN_BOTTOM_Y_PX) {
                 if (++hits >= EVAC_POINT_STOP_REQUIRED) { Actions::Drive::stop(); return true; }
                 Actions::Drive::stop();
             } else {

@@ -1,0 +1,43 @@
+{
+  "mode": "preset",
+  "onnx": "/workspace/models/best_640x480.onnx",
+  "input_width": 640,
+  "input_height": 480,
+  "num_calib_samples": 50,
+  "ptq": {
+    "ptq_option": 0,
+    "calibrate_method": "NoClip",
+    "quant_type": "uint8",
+    "w_quant_type": "uint8"
+  },
+  "compile_options": {
+    "input_range": [
+      0,
+      1
+    ],
+    "mean": [
+      0,
+      0,
+      0
+    ],
+    "std": [
+      1,
+      1,
+      1
+    ],
+    "swapRB": false,
+    "input_layout": "NCHW",
+    "input_type": "uint8",
+    "target": "k230"
+  },
+  "metrics": {
+    "images": 20,
+    "cosine_mean": 0.9991235575914568,
+    "cosine_min": 0.9971079840762022,
+    "conf_delta_mean": 0.0004612550139427185,
+    "conf_delta_worst": -0.2018568515777588,
+    "sim_latency_ms_mean": 39177.6292681694,
+    "kmodel_size_mb": 3.4010162353515625,
+    "compile_seconds": 43.00428009033203
+  }
+}

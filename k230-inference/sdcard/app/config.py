@@ -19,8 +19,8 @@
 # ============================================================================
 MODELS_DIR         = "/data/models"
 DEPLOY_CONFIG_PATH = MODELS_DIR + "/victim_deploy_config.json"   # victims model (Dead/Live/Point)
-POINTS_DEPLOY_CONFIG = MODELS_DIR + "/point_deploy_config.json"  # points model (corner colour)
-LABELS_PATH        = MODELS_DIR + "/victimlabels.txt"
+POINTS_DEPLOY_CONFIG = MODELS_DIR + "/points_deploy_config.json"  # points model (corner colour)
+LABELS_PATH        = MODELS_DIR + "/victim_labels.txt"
 KMODEL_DEFAULT     = MODELS_DIR + "/victim.kmodel"   # used only if deploy_config absent
 
 CAPTURE_DIR        = "/data/captures"
