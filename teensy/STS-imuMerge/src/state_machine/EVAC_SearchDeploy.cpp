@@ -42,7 +42,7 @@ namespace {
     constexpr float    TOUCH_RECOVER_TURN_DEG     = 50.0f;
     constexpr float    EVAC_POINT_STOP_WIDTH_PX   = 450.0f;   // corner-approach stop width
     constexpr float    EVAC_POINT_STOP_HEIGHT_PX  = 140.0f;   // corner-approach stop height
-    constexpr int16_t  EVAC_POINT_STOP_MIN_BOTTOM_Y_PX = 400; // corner bottom must be below this before colour read
+    constexpr int16_t  EVAC_POINT_STOP_MIN_BOTTOM_Y_PX = 370; // corner bottom must be below this before colour read
     constexpr uint8_t  EVAC_POINT_STOP_REQUIRED   = 5;        // consecutive close frames at the corner
     constexpr int      EVAC_POINT_ALIGN_DEADBAND_PX = 30;     // centre band before colour read
     constexpr int      EVAC_POINT_ALIGN_SPEED_MIN   = 40;
@@ -59,6 +59,10 @@ namespace {
     constexpr uint32_t DEPLOY_TOUCH_CONFIRM_MS    = 50;       // ignore one-frame bumper noise
     constexpr int      DEPLOY_BACKOFF_SPEED       = -50;      // back off after release / wrong colour
     constexpr int      DEPLOY_BACKOFF_MM          = 100;
+    constexpr uint8_t  POINT_COLOR_SCORE_MIN      = 77;       // 0..255, ~0.30 confidence
+    constexpr uint8_t  POINT_COLOR_SAMPLE_FRAMES  = 5;
+    constexpr int      POINT_COLOR_BACK_SPEED     = -45;
+    constexpr int      POINT_COLOR_BACK_MM        = 50;
 
     uint32_t s_searchStartMs = 0;
     bool     s_disposeMode   = false;   // final drop-all after the timer: ignore the clock
@@ -217,19 +221,44 @@ namespace {
         return -1;
     }
 
-    // After switching to the points model, vote the corner colour over a few
-    // frames. Returns K230_POINT_GREEN / K230_POINT_RED, or -1 if undecided.
-    int classifyPointColor() {
-        int red = 0, green = 0;
-        for (uint8_t i = 0; i < 8; i++) {
+    bool pointClassSeen(uint8_t cls, uint8_t minScore) {
+        const K230DBox* boxes = Processing::K230Decode::boxes();
+        const uint8_t n = Processing::K230Decode::boxCount();
+        for (uint8_t i = 0; i < n; i++) {
+            if (boxes[i].cls == cls && boxes[i].score >= minScore) return true;
+        }
+        return false;
+    }
+
+    bool greenPointSeen(uint8_t frames) {
+        for (uint8_t i = 0; i < frames; i++) {
+            if (searchTimedOut()) return false;
+            Processing::K230Decode::drainDelay(100);
+            if (pointClassSeen(K230_POINT_GREEN, POINT_COLOR_SCORE_MIN)) return true;
+        }
+        return false;
+    }
+
+    int redPointVote(uint8_t frames) {
+        uint8_t red = 0;
+        for (uint8_t i = 0; i < frames; i++) {
             if (searchTimedOut()) return -1;
             Processing::K230Decode::drainDelay(100);
-            const int16_t c = Processing::K230Decode::dominantClass();
-            if      (c == K230_POINT_RED)   red++;
-            else if (c == K230_POINT_GREEN) green++;
+            if (pointClassSeen(K230_POINT_RED, POINT_COLOR_SCORE_MIN)) red++;
         }
-        if (red == 0 && green == 0) return -1;
-        return (green >= red) ? K230_POINT_GREEN : K230_POINT_RED;
+        return red > 0 ? K230_POINT_RED : -1;
+    }
+
+    // Green has priority: if any confident green exists immediately after the
+    // model swap, or after a small back-up, classify the point as green.
+    int classifyPointColor() {
+        if (greenPointSeen(POINT_COLOR_SAMPLE_FRAMES)) return K230_POINT_GREEN;
+        if (searchTimedOut()) return -1;
+
+        Actions::Forward::forward(POINT_COLOR_BACK_SPEED, POINT_COLOR_BACK_MM);
+        if (greenPointSeen(POINT_COLOR_SAMPLE_FRAMES)) return K230_POINT_GREEN;
+
+        return redPointVote(POINT_COLOR_SAMPLE_FRAMES);
     }
 
     bool canGrabExtraLiveDuringGreenDeploy() {
