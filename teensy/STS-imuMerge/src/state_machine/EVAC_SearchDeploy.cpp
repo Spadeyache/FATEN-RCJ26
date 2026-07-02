@@ -1,6 +1,7 @@
 #include "EVAC_SearchDeploy.h"
 #include "StateMachine.h"
 #include "VictimManager.h"
+#include "EVAC_Entry.h"
 #include "../../config.h"
 #include "../../pins_teensy.h"
 
@@ -59,7 +60,11 @@ namespace {
     constexpr uint32_t DEPLOY_TOUCH_CONFIRM_MS    = 50;       // ignore one-frame bumper noise
     constexpr int      DEPLOY_BACKOFF_SPEED       = -50;      // back off after release / wrong colour
     constexpr int      DEPLOY_BACKOFF_MM          = 100;
+    constexpr int      TIMEOUT_GREEN_TO_RED_BACK_SPEED = -55;
+    constexpr int      TIMEOUT_GREEN_TO_RED_BACK_MM    = 60;
+    constexpr float    TIMEOUT_GREEN_TO_RED_TURN_DEG   = 120.0f;
     constexpr uint8_t  POINT_COLOR_SCORE_MIN      = 77;       // 0..255, ~0.30 confidence
+    constexpr uint8_t  POINT_RED_SCORE_MIN        = 179;      // 0..255, ~0.70 confidence
     constexpr uint8_t  POINT_COLOR_SAMPLE_FRAMES  = 5;
     constexpr int      POINT_COLOR_BACK_SPEED     = -45;
     constexpr int      POINT_COLOR_BACK_MM        = 50;
@@ -69,6 +74,11 @@ namespace {
 
     bool searchTimedOut() {
         if (s_disposeMode) return false;   // final disposal runs to completion
+        // Global evac-wide clock (from EVAC_Entry::onEnter()) takes priority
+        // over the local search/deploy window - whichever runs out first.
+        if ((unsigned long)(millis() - EVAC_Entry::startMs()) >= EVAC_Entry::GLOBAL_TIMEOUT_MS) {
+            return true;
+        }
         return (uint32_t)(millis() - s_searchStartMs) >= EVAC_SEARCH_TIMEOUT_MS;
     }
 
@@ -230,35 +240,32 @@ namespace {
         return false;
     }
 
-    bool greenPointSeen(uint8_t frames) {
+    void samplePointColorWindow(uint8_t frames, bool& greenSeen, bool& redSeenHigh) {
+        greenSeen = false;
+        redSeenHigh = false;
         for (uint8_t i = 0; i < frames; i++) {
-            if (searchTimedOut()) return false;
+            if (searchTimedOut()) return;
             Processing::K230Decode::drainDelay(100);
-            if (pointClassSeen(K230_POINT_GREEN, POINT_COLOR_SCORE_MIN)) return true;
+            if (pointClassSeen(K230_POINT_GREEN, POINT_COLOR_SCORE_MIN)) greenSeen = true;
+            if (pointClassSeen(K230_POINT_RED, POINT_RED_SCORE_MIN)) redSeenHigh = true;
         }
-        return false;
     }
 
-    int redPointVote(uint8_t frames) {
-        uint8_t red = 0;
-        for (uint8_t i = 0; i < frames; i++) {
-            if (searchTimedOut()) return -1;
-            Processing::K230Decode::drainDelay(100);
-            if (pointClassSeen(K230_POINT_RED, POINT_COLOR_SCORE_MIN)) red++;
-        }
-        return red > 0 ? K230_POINT_RED : -1;
-    }
-
-    // Green has priority: if any confident green exists immediately after the
-    // model swap, or after a small back-up, classify the point as green.
+    // Green has priority across two looks. Red only wins if both looks see a
+    // high-confidence red point and neither look sees green.
     int classifyPointColor() {
-        if (greenPointSeen(POINT_COLOR_SAMPLE_FRAMES)) return K230_POINT_GREEN;
+        bool greenSeen = false;
+        bool redFirstSeenHigh = false;
+        samplePointColorWindow(POINT_COLOR_SAMPLE_FRAMES, greenSeen, redFirstSeenHigh);
+        if (greenSeen) return K230_POINT_GREEN;
         if (searchTimedOut()) return -1;
 
         Actions::Forward::forward(POINT_COLOR_BACK_SPEED, POINT_COLOR_BACK_MM);
-        if (greenPointSeen(POINT_COLOR_SAMPLE_FRAMES)) return K230_POINT_GREEN;
+        bool redSecondSeenHigh = false;
+        samplePointColorWindow(POINT_COLOR_SAMPLE_FRAMES, greenSeen, redSecondSeenHigh);
+        if (greenSeen) return K230_POINT_GREEN;
 
-        return redPointVote(POINT_COLOR_SAMPLE_FRAMES);
+        return (redFirstSeenHigh && redSecondSeenHigh) ? K230_POINT_RED : -1;
     }
 
     bool canGrabExtraLiveDuringGreenDeploy() {
@@ -430,6 +437,10 @@ namespace {
         Actions::Drive::stop();
     }
 
+    bool shouldDropAllOnGreenDeploy(int targetColor) {
+        return targetColor == K230_POINT_GREEN && VictimManager::count() >= 3;
+    }
+
     // Find a corner of `targetColor` and drive into it. Wrong-colour corners are
     // backed away from and the search continues. Returns true once parked at one.
     bool driveToColorCorner(int targetColor) {
@@ -438,6 +449,13 @@ namespace {
             if (!approachPoint(targetColor == K230_POINT_GREEN)) return false;
             float pointDir = 0.0f;
             if (!alignPointToCenter(&pointDir)) continue;
+            if (shouldDropAllOnGreenDeploy(targetColor)) {
+                Serial.println("[deploy] GREEN full - drop all at this point");
+                driveToTouch(pointDir);
+                if (searchTimedOut()) return false;
+                Actions::Forward::forward(100, 80);
+                return true;
+            }
             const int color = readCornerColor();
             Serial.printf("[deploy] corner=%s want=%s\n",
                           color == K230_POINT_GREEN ? "GREEN" : color == K230_POINT_RED ? "RED" : "?",
@@ -465,7 +483,9 @@ namespace {
     bool deployGreen() {
         Serial.println("[deploy] GREEN (live)");
         if (!driveToColorCorner(K230_POINT_GREEN) || searchTimedOut()) return false;
+        const bool dropAll = VictimManager::count() >= 3;
         VictimManager::releaseLive();
+        if (dropAll && VictimManager::deadHeld() > 0) VictimManager::releaseDead();
         Actions::Forward::forward(DEPLOY_BACKOFF_SPEED, DEPLOY_BACKOFF_MM);
         return true;
     }
@@ -509,7 +529,15 @@ void update() {
                     timeoutDeploySignaled = true;
                 }
                 s_disposeMode = true;
-                if (VictimManager::liveHeld() > 0) deployGreen();
+                bool greenDeployed = false;
+                if (VictimManager::liveHeld() > 0) {
+                    greenDeployed = deployGreen();
+                }
+                if (greenDeployed && VictimManager::deadHeld() > 0) {
+                    Actions::Forward::forward(TIMEOUT_GREEN_TO_RED_BACK_SPEED,
+                                              TIMEOUT_GREEN_TO_RED_BACK_MM);
+                    Actions::Turn::turn(TIMEOUT_GREEN_TO_RED_TURN_DEG);
+                }
                 if (VictimManager::deadHeld() > 0) deployRed();
                 s_disposeMode = false;
                 continue;

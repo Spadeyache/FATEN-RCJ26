@@ -44,6 +44,7 @@
 #define XIAO_FLAG_TIGHT_SLOW  0x02
 #define XIAO_FLAG_BOTTOM_LINE 0x04
 #define XIAO_FLAG_FINE_ANGLE  0x08
+#define XIAO_FLAG_SIDE_LINE   0x10
 
 // FEATURE byte — LINE-follow events (the clean contract; keep in sync with XIAO):
 #define FEAT_NONE           0
@@ -78,7 +79,7 @@ enum XiaoMode : uint8_t {
 // Shared line-follow base speeds. Drive.cpp uses these for PID base speed;
 // LINE_Follow.cpp intersection forward moves use the same values by state.
 #define LINE_FOLLOW_BASE_SPEED_FLAT   70.0f
-#define LINE_FOLLOW_BASE_SPEED_SLOPE  55.0f //
+#define LINE_FOLLOW_BASE_SPEED_SLOPE  70.0f //55
 
 // =============================================================================
 //  IMU

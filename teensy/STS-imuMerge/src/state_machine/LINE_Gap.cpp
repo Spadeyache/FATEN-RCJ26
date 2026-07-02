@@ -7,8 +7,6 @@
 #include "../sensors/IMU.h"
 #include "../processing/XiaoDecode.h"
 #include "../actions/Drive.h"
-#include "../actions/Forward.h"
-#include "../actions/Turn.h"
 
 #include <Arduino.h>
 #include <math.h>
@@ -18,7 +16,8 @@
 //
 //  XIAO runs MODE_LINE_ANGLE, which sends every frame:
 //    ANGLE  - slope of the selected line points (127 = 0 deg)
-//    FLAG   - bit0: at least one point, bit1: two or more points, bit2: bottom edge point
+//    FLAG   - bit0: at least one point, bit1: two or more points,
+//             bit2: bottom edge point, bit4: side edge point
 //    COM    - point Y, or average point Y when two points are available
 //
 //  This is intentionally one blocking chunk instead of a mini state machine.
@@ -34,7 +33,6 @@ namespace {
     constexpr float GAP_ALIGN_MIN_SPEED  = 12.0f;
     constexpr float GAP_ALIGN_MAX_SPEED  = 65.0f;
     constexpr float GAP_ALIGN_DEADBAND   = 2.0f;
-    constexpr float GAP_SAFE_FINE_DEG    = 45.0f;
     constexpr float GAP_GOAL_RIGHT_DOWN_DEG = 5.0f;
     constexpr float GAP_GOAL_LEFT_DOWN_DEG  = -5.0f;
 
@@ -42,17 +40,12 @@ namespace {
     constexpr float GAP_SIDE_ARC_INNER_SPEED = 30.0f;
     constexpr float GAP_SIDE_ARC_OUTER_SPEED = 45.0f;
     constexpr float GAP_SIDE_STRAIGHT_SPEED  = 50.0f;
-    constexpr float GAP_SIDE_ARC_MS_PER_DEG  = 225.0f; //18
+    constexpr float GAP_SIDE_ARC_MS_PER_DEG  = 225.0f;
     constexpr uint16_t GAP_SIDE_ARC_MIN_MS   = 120;
     constexpr uint16_t GAP_SIDE_ARC_MAX_MS   = 700;
-    constexpr float GAP_ROUGH_FWD_MM_PER_DEG = 1.3f;
-    constexpr uint16_t GAP_ROUGH_BACK_BLIND_MS = 180;
     constexpr uint16_t GAP_REVERSE_SETTLE_MS = 375;
-    constexpr uint16_t GAP_ANGLE_SETTLE_MS = 1500;
     constexpr uint8_t GAP_BOTTOM_LOST_FRAMES  = 5;
     constexpr uint8_t GAP_BOTTOM_FOUND_FRAMES = 3;
-    constexpr float GAP_LEFT_DOWN_NEG_ANGLE_BIAS_MS_PER_DEG = 3.0f;
-    // constexpr uint16_t GAP_AFTER_LOST_BLIND_MS = 150;
 
     inline float signedAngleDeg() {
         return Processing::XiaoDecode::gapAngle() - 127.0f;
@@ -83,10 +76,6 @@ namespace {
 
     inline float gapAngleErrorDeg(float angle) {
         return angle - gapGoalAngleDeg();
-    }
-
-    inline bool needsCurvedAcquire(float angle, bool fineOk) {
-        return !fineOk || fabsf(gapAngleErrorDeg(angle)) >= GAP_SAFE_FINE_DEG;
     }
 
     inline bool sideDownGap() {
@@ -122,17 +111,6 @@ namespace {
         return true;
     }
 
-    bool driveForMs(float left, float right, uint16_t ms) {
-        const unsigned long start = millis();
-        while (millis() - start < ms) {
-            Actions::Drive::motor(left, right);
-            delay(5);
-            updateXiaoNow();
-            if (transitionToRedIfNeeded()) return true;
-        }
-        return false;
-    }
-
     void pumpXiaoFor(uint16_t ms) {
         const unsigned long start = millis();
         while (millis() - start < ms) {
@@ -141,40 +119,20 @@ namespace {
         }
     }
 
-    void driveForwardUntilBottomLostThenFound() {
-        uint8_t lowFrames = 0;
-        updateXiaoNow();
-        while (lowFrames < GAP_BOTTOM_LOST_FRAMES) {
-            Actions::Drive::motor(GAP_FORWARD_SPEED, GAP_FORWARD_SPEED);
-            delay(5);
-            updateXiaoNow();
-            if (Processing::XiaoDecode::gapBottomLineFlag()) lowFrames = 0;
-            else lowFrames++;
-        }
-
-        // driveForMs(GAP_FORWARD_SPEED, GAP_FORWARD_SPEED, GAP_AFTER_LOST_BLIND_MS);
-        pumpXiaoFor(150);
-
-        uint8_t highFrames = 0;
-        while (highFrames < GAP_BOTTOM_FOUND_FRAMES) {
-            Actions::Drive::motor(GAP_FORWARD_SPEED, GAP_FORWARD_SPEED);
-            delay(5);
-            updateXiaoNow();
-            if (Processing::XiaoDecode::gapBottomLineFlag()) highFrames++;
-            else highFrames = 0;
-        }
-        Actions::Drive::stop();
+    inline bool gapBottomAndSideWhite() {
+        return !Processing::XiaoDecode::gapBottomLineFlag() &&
+               !Processing::XiaoDecode::gapSideLineFlag();
     }
 
-    void driveForwardUntilBottomLostThenTwoPoints() {
+    void driveForwardUntilBottomAndSideLostThenTwoPoints() {
         uint8_t lowFrames = 0;
         updateXiaoNow();
         while (lowFrames < GAP_BOTTOM_LOST_FRAMES) {
             Actions::Drive::motor(GAP_FORWARD_SPEED, GAP_FORWARD_SPEED);
             delay(5);
             updateXiaoNow();
-            if (Processing::XiaoDecode::gapBottomLineFlag()) lowFrames = 0;
-            else lowFrames++;
+            if (gapBottomAndSideWhite()) lowFrames++;
+            else lowFrames = 0;
         }
 
         while (!Processing::XiaoDecode::gapBothRowsFlag()) {
@@ -225,16 +183,6 @@ namespace {
         Actions::Drive::stop();
     }
 
-    bool leftDownNegativeAngleBias(float angleDeg) {
-        if (Actions::Drive::lineFollowState() != Actions::Drive::LINE_FOLLOW_LEFT_DOWN) return false;
-        if (angleDeg >= 0.0f) return false;
-
-        const uint16_t biasMs =
-            (uint16_t)(fabsf(angleDeg) * GAP_LEFT_DOWN_NEG_ANGLE_BIAS_MS_PER_DEG + 0.5f);
-        if (biasMs == 0) return false;
-        return driveForMs(-45.0f, 0.0f, biasMs);
-    }
-
     void alignToCurrentGapAngle() {
         updateXiaoNow();
         while (true) {
@@ -266,38 +214,11 @@ namespace {
         Actions::Drive::stop();
     }
 
-    bool backUntilAnyGapPoint() {
-        const float backSpeed = gapBackSpeed();
-        if (driveForMs(backSpeed, backSpeed, GAP_ROUGH_BACK_BLIND_MS)) return true;
-        updateXiaoNow();
-        if (transitionToRedIfNeeded()) return true;
-        while (!Processing::XiaoDecode::gapAnyPointFlag()) {
-            Actions::Drive::motor(backSpeed, backSpeed);
-            delay(5);
-            updateXiaoNow();
-            if (transitionToRedIfNeeded()) return true;
-        }
-        Actions::Drive::stop();
-        return false;
-    }
-
     inline void returnToLineFollow() {
         Actions::Drive::stop();
         Processing::XiaoDecode::setMode(XIAO_MODE_LINE);
         Processing::XiaoDecode::clearFilter();
         StateMachine::transitionTo(StateMachine::LINE_FOLLOW);
-    }
-
-    bool roughTurnBackToGapStart(float angleDeg) {
-        const float fwdMm = fabsf(angleDeg) * GAP_ROUGH_FWD_MM_PER_DEG;
-        Actions::Forward::forward(45.0f, fwdMm,
-                                  /*useIMU=*/false, /*pumpComms=*/true);
-        updateXiaoNow();
-        Actions::Turn::turn(-angleDeg);
-        Processing::XiaoDecode::clearFilter();
-        if (backUntilAnyGapPoint()) return true;
-        returnToLineFollow();
-        return true;
     }
 }
 
@@ -313,58 +234,31 @@ void onEnter() {
 }
 
 void update() {
-    bool firstGapPass = true;
-    while (true) {
-        // Reverse until XIAO sees at least one usable line point.
+    updateXiaoNow();
+    if (transitionToRedIfNeeded()) return;
+
+    const float backSpeed = gapBackSpeed();
+    Actions::Drive::motor(backSpeed, backSpeed);
+    while (sideDownGap() ? !Processing::XiaoDecode::gapAnyPointFlag()
+                         : !Processing::XiaoDecode::gapBothRowsFlag()) {
+        delay(5);
         updateXiaoNow();
         if (transitionToRedIfNeeded()) return;
-        const float backSpeed = gapBackSpeed();
-        Actions::Drive::motor(backSpeed, backSpeed);
-        while (!Processing::XiaoDecode::gapAnyPointFlag()) {
-            delay(5);
-            updateXiaoNow();
-            if (transitionToRedIfNeeded()) return;
-        }
-        pumpXiaoFor(GAP_REVERSE_SETTLE_MS);
-        
-// Line lost detection
-        updateXiaoNow();
-        if (firstGapPass && Processing::XiaoDecode::gapBothRowsFlag()) {
-            returnToLineFollow();
-            // tone(BUZZER_PIN, 7000, 3000);
-            return;
-        }
-        firstGapPass = false;
-
-        // Step 1: single-point recovery. Save the angle/Y before blind motion changes the view.
-        const bool savedFineOk = Processing::XiaoDecode::gapFineAngleFlag();
-        const float savedAngle = savedFineOk ? signedFineAngleDeg() : signedAngleDeg();
-        const float savedAngleError = gapAngleErrorDeg(savedAngle);
-
-        
-        Actions::Drive::stop();
-        // pumpXiaoFor(GAP_ANGLE_SETTLE_MS);
-
-
-        Processing::XiaoDecode::clearFilter();
-
-        if (sideDownGap()) {
-            // if (leftDownNegativeAngleBias(savedAngle)) return;
-            driveSideArcThenStraightUntilBottomLostThenTwoPoints();
-            returnToLineFollow();
-            return;
-        }
-
-        if (!needsCurvedAcquire(savedAngle, savedFineOk)) {     //small tile adjustment
-            alignToCurrentGapAngle();
-            driveForwardUntilBottomLostThenTwoPoints();
-
-            returnToLineFollow();
-            return;
-        }
-        if (roughTurnBackToGapStart(savedAngleError)) return;   //tight turn adjustment
-
     }
+
+    Actions::Drive::stop();
+    pumpXiaoFor(GAP_REVERSE_SETTLE_MS);
+    Processing::XiaoDecode::clearFilter();
+
+    if (sideDownGap()) {
+        driveSideArcThenStraightUntilBottomLostThenTwoPoints();
+        returnToLineFollow();
+        return;
+    }
+
+    alignToCurrentGapAngle();
+    driveForwardUntilBottomAndSideLostThenTwoPoints();
+    returnToLineFollow();
 }
 
 }  // namespace LINE_Gap

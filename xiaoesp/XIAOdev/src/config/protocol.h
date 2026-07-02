@@ -16,6 +16,7 @@
 #define XIAO_FLAG_TIGHT_SLOW  0x02
 #define XIAO_FLAG_BOTTOM_LINE 0x04
 #define XIAO_FLAG_FINE_ANGLE  0x08
+#define XIAO_FLAG_SIDE_LINE   0x10
 
 // FEATURE byte: line-follow mode.
 #define FEAT_NONE          0

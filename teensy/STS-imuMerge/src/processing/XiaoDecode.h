@@ -27,6 +27,7 @@ bool    tightSlowFlag();  // XIAO tight-turn target is low in frame
 bool    gapAnyPointFlag();
 bool    gapBothRowsFlag();
 bool    gapBottomLineFlag();
+bool    gapSideLineFlag();
 bool    gapFineAngleFlag();
 bool    obstacleSeeLine();
 float   obstacleAngle();

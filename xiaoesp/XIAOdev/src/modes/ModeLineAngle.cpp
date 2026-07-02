@@ -38,6 +38,14 @@ static bool hasBottomLinePoint(const LineCounts& lc) {
     return false;
 }
 
+static bool hasSideLinePoint(const LineCounts& lc) {
+    for (uint8_t i = 0; i < lc.count; i++) {
+        const uint8_t edge = lc.crossings[i].edge;
+        if (edge == LC_EDGE_LEFT || edge == LC_EDGE_RIGHT) return true;
+    }
+    return false;
+}
+
 // =============================================================================
 //  Pick the two crossings with the largest width.
 //  Fills aOut/bOut (no particular order). Requires lc.count >= 2.
@@ -170,6 +178,7 @@ void modeLineAngleRun(camera_fb_t* fb, YacheEncodedSerial& teensy) {
 
     const bool haveAny = (lc.count >= 1);
     const bool bottomLinePoint = hasBottomLinePoint(lc);
+    const bool sideLinePoint = hasSideLinePoint(lc);
 
     // ── Reduce to a base + tip pair ────────────────────────────────────────────
     Crossing base = {}, tip = {};
@@ -234,6 +243,7 @@ void modeLineAngleRun(camera_fb_t* fb, YacheEncodedSerial& teensy) {
     if (haveTwoDetected) flag |= XIAO_FLAG_TIGHT_SLOW;
     if (bottomLinePoint) flag |= XIAO_FLAG_BOTTOM_LINE;
     if (fineValid) flag |= XIAO_FLAG_FINE_ANGLE;
+    if (sideLinePoint) flag |= XIAO_FLAG_SIDE_LINE;
 
     // ── Transmit ───────────────────────────────────────────────────────────────
     teensy.send(XIAO_REG_ANGLE, encodedAngle);

@@ -79,13 +79,29 @@ namespace {
         return Processing::K230Decode::checkVictim();
     }
 
+    unsigned long s_startMs = 0;
+    bool          s_skipSearch = false;  // global clock ran out before a victim ever showed up
+
+    bool globalTimedOut() {
+        return (unsigned long)(millis() - s_startMs) >= GLOBAL_TIMEOUT_MS;
+    }
+
     // While no victim is in view, wall-follow toward one. This loop is
     // blocking (doesn't return to the main Arduino loop()), so it has to
     // re-tick Touch/ToF itself the same way EVAC_Exit's blocking loops do.
-    void huntForVictim() {
+    // Returns true once a victim is in view; false if the global evac clock
+    // ran out first.
+    bool huntForVictim() {
         Serial.println("[ENTRY] hunting for victim along wall");
         setDetectionLed(true);
         while (!victimInView()) {
+            if (globalTimedOut()) {
+                Actions::Drive::stop();
+                setDetectionLed(false);
+                Serial.println("[ENTRY] global evac clock ran out -> skip search, go to EXIT");
+                return false;
+            }
+
             Sensors::Touch::tick();
             Sensors::ToF::tick();
 
@@ -104,6 +120,7 @@ namespace {
         Actions::Drive::stop();
         setDetectionLed(false);
         Serial.println("[ENTRY] victim in view -> search");
+        return true;
     }
 }  // namespace
 
@@ -111,6 +128,9 @@ void onEnter() {
 #if PRINT_STATE
     Serial.println("State: EVAC_ENTRY");
 #endif
+
+    // Mark evac zone entry: start of the 3:00 global clock (see GLOBAL_TIMEOUT_MS).
+    s_startMs = millis();
 
     // Fresh evac run: clear held counts.
     VictimManager::reset();
@@ -125,13 +145,18 @@ void onEnter() {
     Actions::Forward::forward(62, 70, /*useIMU=*/false, /*pumpComms=*/true);
     Actions::Drive::stop();
     Actions::WallFollow::reset();
-    huntForVictim();
+    s_skipSearch = !huntForVictim();
 }
 
 void update() {
     // onEnter() ran the entire entry sequence, including the wall-follow
-    // hunt. Hand off to search+deploy.
-    StateMachine::transitionTo(StateMachine::EVAC_SEARCH_DEPLOY);
+    // hunt. If the global clock already ran out before a victim ever showed
+    // up, there's no time budget left for search/deploy either - go
+    // straight to EVAC_EXIT. Otherwise hand off to search+deploy as usual.
+    StateMachine::transitionTo(s_skipSearch ? StateMachine::EVAC_EXIT
+                                             : StateMachine::EVAC_SEARCH_DEPLOY);
 }
+
+unsigned long startMs() { return s_startMs; }
 
 }  // namespace EVAC_Entry
