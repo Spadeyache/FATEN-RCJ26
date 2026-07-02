@@ -40,17 +40,18 @@ namespace {
 
     constexpr float GAP_FORWARD_SPEED    = 45.0f;
     constexpr float GAP_SIDE_ARC_INNER_SPEED = 30.0f;
-    constexpr float GAP_SIDE_ARC_OUTER_SPEED = 50.0f;
+    constexpr float GAP_SIDE_ARC_OUTER_SPEED = 45.0f;
     constexpr float GAP_SIDE_STRAIGHT_SPEED  = 50.0f;
     constexpr float GAP_SIDE_ARC_MS_PER_DEG  = 225.0f; //18
     constexpr uint16_t GAP_SIDE_ARC_MIN_MS   = 120;
     constexpr uint16_t GAP_SIDE_ARC_MAX_MS   = 700;
     constexpr float GAP_ROUGH_FWD_MM_PER_DEG = 1.3f;
     constexpr uint16_t GAP_ROUGH_BACK_BLIND_MS = 180;
-    constexpr uint16_t GAP_REVERSE_SETTLE_MS = 80;
-    constexpr uint16_t GAP_ANGLE_SETTLE_MS = 100;
+    constexpr uint16_t GAP_REVERSE_SETTLE_MS = 375;
+    constexpr uint16_t GAP_ANGLE_SETTLE_MS = 1500;
     constexpr uint8_t GAP_BOTTOM_LOST_FRAMES  = 5;
     constexpr uint8_t GAP_BOTTOM_FOUND_FRAMES = 3;
+    constexpr float GAP_LEFT_DOWN_NEG_ANGLE_BIAS_MS_PER_DEG = 3.0f;
     // constexpr uint16_t GAP_AFTER_LOST_BLIND_MS = 150;
 
     inline float signedAngleDeg() {
@@ -224,6 +225,16 @@ namespace {
         Actions::Drive::stop();
     }
 
+    bool leftDownNegativeAngleBias(float angleDeg) {
+        if (Actions::Drive::lineFollowState() != Actions::Drive::LINE_FOLLOW_LEFT_DOWN) return false;
+        if (angleDeg >= 0.0f) return false;
+
+        const uint16_t biasMs =
+            (uint16_t)(fabsf(angleDeg) * GAP_LEFT_DOWN_NEG_ANGLE_BIAS_MS_PER_DEG + 0.5f);
+        if (biasMs == 0) return false;
+        return driveForMs(-45.0f, 0.0f, biasMs);
+    }
+
     void alignToCurrentGapAngle() {
         updateXiaoNow();
         while (true) {
@@ -270,6 +281,13 @@ namespace {
         return false;
     }
 
+    inline void returnToLineFollow() {
+        Actions::Drive::stop();
+        Processing::XiaoDecode::setMode(XIAO_MODE_LINE);
+        Processing::XiaoDecode::clearFilter();
+        StateMachine::transitionTo(StateMachine::LINE_FOLLOW);
+    }
+
     bool roughTurnBackToGapStart(float angleDeg) {
         const float fwdMm = fabsf(angleDeg) * GAP_ROUGH_FWD_MM_PER_DEG;
         Actions::Forward::forward(45.0f, fwdMm,
@@ -277,14 +295,9 @@ namespace {
         updateXiaoNow();
         Actions::Turn::turn(-angleDeg);
         Processing::XiaoDecode::clearFilter();
-        return backUntilAnyGapPoint();
-    }
-
-    inline void returnToLineFollow() {
-        Actions::Drive::stop();
-        Processing::XiaoDecode::setMode(XIAO_MODE_LINE);
-        Processing::XiaoDecode::clearFilter();
-        StateMachine::transitionTo(StateMachine::LINE_FOLLOW);
+        if (backUntilAnyGapPoint()) return true;
+        returnToLineFollow();
+        return true;
     }
 }
 
@@ -330,12 +343,13 @@ void update() {
 
         
         Actions::Drive::stop();
-        pumpXiaoFor(GAP_ANGLE_SETTLE_MS);
+        // pumpXiaoFor(GAP_ANGLE_SETTLE_MS);
 
 
         Processing::XiaoDecode::clearFilter();
 
         if (sideDownGap()) {
+            // if (leftDownNegativeAngleBias(savedAngle)) return;
             driveSideArcThenStraightUntilBottomLostThenTwoPoints();
             returnToLineFollow();
             return;

@@ -64,7 +64,7 @@ constexpr uint8_t SILVER_COL_LEFT = LF_SILVER_COL_LEFT;
 constexpr uint8_t SILVER_COL_RIGHT = LF_SILVER_COL_RIGHT;
 constexpr uint8_t SILVER_ROW_MIN = LF_SILVER_ROW_MIN;
 constexpr uint8_t SILVER_ROW_MAX = LF_SILVER_ROW_MAX;
-constexpr uint8_t SILVER_THRESHOLD = 6; //num of px
+constexpr uint8_t SILVER_THRESHOLD = 10; //76//num of px
 
 // Color processing. Bounds follow the arc ROI side walls, not the full image.
 constexpr uint8_t COLOR_ROW = 45;
@@ -84,7 +84,7 @@ constexpr uint8_t GREEN_PX_THRESHOLD = 5;
 
 // During a black-saturated intersection row, ignore/reset green votes so green
 // after the intersection does not accidentally command a turn.
-constexpr uint8_t INTERSECTION_BLACK_SAT_THRESHOLD = 60;
+constexpr uint8_t INTERSECTION_BLACK_SAT_THRESHOLD = 45;
 
 // Green-left/right commit target. Ends after the branch has been seen and the
 // line settles back to exactly two crossings (in + one out) for this many frames.
@@ -380,6 +380,48 @@ uint8_t countSilverOnColumn(camera_fb_t* fb, uint8_t col) {
         if (sampleRawRgb(fb, col, y, px) && isSilverRaw(px)) count++;
     }
     return count;
+}
+
+void printBestSilverRawPoint(camera_fb_t* fb,
+                             uint8_t silverLeft,
+                             uint8_t silverRight,
+                             bool silverDetected) {
+    if (!SPRINT_RGB_HSV) return;
+
+    bool found = false;
+    uint8_t bestX = 0, bestY = 0;
+    RawRgb best = {0, 0, 0};
+    uint16_t bestScore = 0;
+    const uint8_t cols[2] = {SILVER_COL_LEFT, SILVER_COL_RIGHT};
+
+    for (uint8_t i = 0; i < 2; i++) {
+        const uint8_t x = cols[i];
+        for (uint8_t y = SILVER_ROW_MIN; y <= SILVER_ROW_MAX; y++) {
+            RawRgb px;
+            if (!sampleRawRgb(fb, x, y, px)) continue;
+
+            const uint16_t score = (uint16_t)px.r + (uint16_t)px.g + (uint16_t)px.b;
+            if (!found || score > bestScore) {
+                found = true;
+                bestScore = score;
+                bestX = x;
+                bestY = y;
+                best = px;
+            }
+        }
+    }
+
+    if (!found) return;
+
+    const HSV rawHsv = rgb888_to_hsv(best.r, best.g, best.b);
+    SPRINTF(SPRINT_RGB_HSV, "[PIX]",
+            "silverBest det=%u cntL=%u cntR=%u x=%u y=%u raw=%u,%u,%u hsv=%u,%u,%u pass=%u",
+            silverDetected ? 1 : 0,
+            silverLeft, silverRight,
+            bestX, bestY,
+            best.r, best.g, best.b,
+            rawHsv.h, rawHsv.s, rawHsv.v,
+            isSilverRaw(best) ? 1 : 0);
 }
 
 void scanColorRow(camera_fb_t* fb, float& blackCom, uint8_t& blackCount) {
@@ -868,6 +910,8 @@ void modeLineFollowRun(camera_fb_t* fb, YacheEncodedSerial& teensy) {
     const uint8_t silverLeft = countSilverOnColumn(fb, SILVER_COL_LEFT);
     const uint8_t silverRight = countSilverOnColumn(fb, SILVER_COL_RIGHT);
     const bool silverDetected = silverLeft > SILVER_THRESHOLD || silverRight > SILVER_THRESHOLD;
+    // const bool silverDetected = silverLeft > SILVER_THRESHOLD && silverRight > SILVER_THRES/HOLD;
+    printBestSilverRawPoint(fb, silverLeft, silverRight, silverDetected);
     float colorCom;
     uint8_t colorBlack;
     scanColorRow(fb, colorCom, colorBlack);

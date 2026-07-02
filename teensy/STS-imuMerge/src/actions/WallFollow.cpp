@@ -19,14 +19,14 @@ namespace {
     // -searching for the wall (see obstacleTurnDeg() / s_lastStatus below).
     constexpr float OBSTACLE_BACKUP_MM    = 48.0f;
     constexpr float OBSTACLE_BACKUP_SPEED = 40.0f;
-    constexpr float OBSTACLE_TURN_DEG     = -90.0f;
-    constexpr float SEARCH_TURN_DEG       = -50.0f;
+    constexpr float OBSTACLE_TURN_DEG     = -40.0f;
+    constexpr float SEARCH_TURN_DEG       = -40.0f;
     constexpr float OBSTACLE_TURN_SPEED   = 60.0f;
 
     // PID: error = measured wall distance - target distance.
-    constexpr float PID_KP = 3.0f;
+    constexpr float PID_KP = 2.70f;
     constexpr float PID_KI = 0.0f;
-    constexpr float PID_KD = 1.57f;
+    constexpr float PID_KD = 1.07f;
     constexpr float INTEGRAL_LIMIT = 200.0f;
 
     // Slew-limits the correction itself (mm/s of allowed change), not the
@@ -195,11 +195,15 @@ void reset() {
     resetExitCounters();
 }
 
-void recover(float backupMm) {
+void recover(float backupMm, float turnDeg) {
     Drive::stop();
     Forward::forward(-OBSTACLE_BACKUP_SPEED, backupMm);
-    Turn::turn(obstacleTurnDeg(), OBSTACLE_TURN_SPEED);
+    Turn::turn(turnDeg, OBSTACLE_TURN_SPEED);
     reset();
+}
+
+void recover(float backupMm) {
+    recover(backupMm, obstacleTurnDeg());
 }
 
 Status tick(float targetMm, float baseSpeed, float farMm, bool detectSudden) {

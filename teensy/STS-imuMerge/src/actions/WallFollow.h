@@ -22,9 +22,16 @@
 //
 //  recover(backupMm):
 //    Stop, back up backupMm, and turn away from the wall (same context-aware
-//    angle touch uses), then reset(). For callers that want the same
-//    "back off and turn" recovery touch gets, but for a different trigger
-//    (e.g. a tape-color marker) and/or a different backup distance.
+//    angle touch uses - wide vs narrow, see tick() above), then reset(). For
+//    callers that want the same "back off and turn" recovery touch gets, but
+//    for a different trigger and/or a different backup distance.
+//
+//  recover(backupMm, turnDeg):
+//    Same, but with an explicit turn angle instead of the context-aware one.
+//    For triggers where the turn should always be the same regardless of
+//    what WallFollow was doing when it fired (e.g. a tape-color marker,
+//    which should always turn the same way whether it's seen while following
+//    or while blind-searching).
 //
 //  reset():
 //    Clears PID memory and exit-detection counters. Call before starting
@@ -43,6 +50,7 @@ enum class Status {
 
 void reset();
 void recover(float backupMm);
+void recover(float backupMm, float turnDeg);
 Status tick(float targetMm = 100.0f, float baseSpeed = 40.0f,
             float farMm = 230.0f, bool detectSudden = true);
 

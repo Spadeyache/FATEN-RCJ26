@@ -147,7 +147,7 @@ enum XiaoMode : uint8_t {
 #define FILTER_THRESHOLD_RED      5   // red line
 #define FILTER_THRESHOLD_SILVER   4   // silver (evac entry)
 #define FILTER_THRESHOLD_LINELOST  3   // sustained line loss → gap
-#define FILTER_THRESHOLD_BLACK_INTERSECT 8  // saturated black row before/through an intersection
+#define FILTER_THRESHOLD_BLACK_INTERSECT 5  // saturated black row before/through an intersection
 #define FILTER_THRESHOLD_GREEN    6   // green left/right (matches main); u-turn = both sides build up
 
 // After firing any green turn (u-turn / left / right), ignore all green for this

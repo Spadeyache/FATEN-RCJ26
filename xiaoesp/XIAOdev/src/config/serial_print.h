@@ -38,5 +38,5 @@
     do { if (flag) { Serial.print(tag " "); Serial.println(val); } } while(0)
 
 #define SPRINTF(flag, tag, fmt, ...) \
-    do { if (flag) { char _b[80]; snprintf(_b, sizeof(_b), tag " " fmt, ##__VA_ARGS__); Serial.println(_b); } } while(0)
+    do { if (flag) { char _b[192]; snprintf(_b, sizeof(_b), tag " " fmt, ##__VA_ARGS__); Serial.println(_b); } } while(0)
 

@@ -46,8 +46,12 @@ namespace {
     constexpr float WALL_FAR_MM     = 200.0f;
 
     // Same back-off-and-turn recovery touch gets, but a bigger backup - a
-    // tape marker means we're further past the wall than a bumped obstacle.
+    // tape marker means we're further past the wall than a bumped obstacle -
+    // and a fixed turn angle (not the context-aware one touch uses): a
+    // marker should always turn the same way, whether it fired mid-follow or
+    // mid blind-search.
     constexpr float MARKER_BACKUP_MM = 80.0f;
+    constexpr float MARKER_TURN_DEG  = -90.0f;
 
     void setDetectionLed(bool on) {
         digitalWrite(LED_BUILTIN, on ? HIGH : LOW);
@@ -87,7 +91,7 @@ namespace {
 
             if (markerSeen()) {
                 Serial.println("[ENTRY] marker seen -> recover");
-                Actions::WallFollow::recover(MARKER_BACKUP_MM);
+                Actions::WallFollow::recover(MARKER_BACKUP_MM, MARKER_TURN_DEG);
                 continue;
             }
 
@@ -115,10 +119,11 @@ void onEnter() {
 
     Actions::Arm::attachServos();
 
-    Actions::Forward::forward(62, 170, /*useIMU=*/false, /*pumpComms=*/true);
+    Actions::Forward::forward(62, 100, /*useIMU=*/false, /*pumpComms=*/true);
 
+    Actions::Turn::turn(-40);
+    Actions::Forward::forward(62, 70, /*useIMU=*/false, /*pumpComms=*/true);
     Actions::Drive::stop();
-
     Actions::WallFollow::reset();
     huntForVictim();
 }

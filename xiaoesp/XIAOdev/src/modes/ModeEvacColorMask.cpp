@@ -20,7 +20,7 @@ constexpr uint8_t SILVER_COL_LEFT = LF_SILVER_COL_LEFT;
 constexpr uint8_t SILVER_COL_RIGHT = LF_SILVER_COL_RIGHT;
 constexpr uint8_t SILVER_ROW_MIN = LF_SILVER_ROW_MIN;
 constexpr uint8_t SILVER_ROW_MAX = LF_SILVER_ROW_MAX;
-constexpr uint8_t SILVER_THRESHOLD = 9;  // evac-only; line-follow keeps its own
+constexpr uint8_t SILVER_THRESHOLD = 7;  // evac-only; line-follow keeps its own
 
 constexpr uint8_t BLACK_ROW = 45;
 // Inset from the arc edges: at row 45 the extreme columns fall in the dark

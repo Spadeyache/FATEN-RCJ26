@@ -112,7 +112,7 @@
 #define SEARCH_LINE_SCAN_Y_MIN        15
 #define SEARCH_LINE_SCAN_Y_MAX        60
 #define SEARCH_LINE_SCAN_STEP          4   // sample every Nth pixel in x and y
-#define SEARCH_LINE_SILVER_THRESHOLD   5   // Min silver samples in region → FEAT_SEARCH_LINE_SILVER
+#define SEARCH_LINE_SILVER_THRESHOLD   3   // Min silver samples in region → FEAT_SEARCH_LINE_SILVER
 #define SEARCH_LINE_BLACK_THRESHOLD    5   // Min black samples in region  → FEAT_SEARCH_LINE_BLACK
 
 // ── Mode 2 : No-Green Intersection ──────────────────────────────────────────

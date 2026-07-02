@@ -8,9 +8,7 @@
 #include "../actions/Arm.h"
 #include "../actions/Forward.h"
 #include "../actions/Turn.h"
-#include "../actions/WallFollow.h"
 #include "../sensors/Touch.h"
-#include "../sensors/ToF.h"
 #include "../processing/K230Decode.h"
 
 #include <Arduino.h>
@@ -34,13 +32,14 @@ namespace {
     constexpr int16_t  VICTIM_BACK_MAX_HEIGHT     = 60;       // box height <= this ...
     constexpr int16_t  VICTIM_BACK_MIN_Y2         = K230_FRAME_H - 65;  // ...and bottom y2 >= this (415) -> back up
     // Collection / deploy policy:
-    constexpr uint32_t EVAC_SEARCH_TIMEOUT_MS     = 60000UL;  // 1-min search/deploy window
+    constexpr uint32_t EVAC_SEARCH_TIMEOUT_MS     = 105000UL; // 1m45s search/deploy window
     constexpr float    ROAM_TURN_SPEED            = 50.0f;    // turn speed used by the bump recovery
-    constexpr uint32_t VICTIM_SEARCH_SPIN_MS      = 8000UL;   // spin this long for a victim before wall-follow search
-    constexpr uint32_t DEPLOY_POINT_SPIN_MS       = 8000UL;   // spin this long for a point before wall-follow search
-    constexpr float    DEPLOY_WALL_TARGET_MM      = 100.0f;   // same wall-follow shape as EVAC_Entry
-    constexpr float    DEPLOY_WALL_BASE_SPEED     = 60.0f;
-    constexpr float    DEPLOY_WALL_FAR_MM         = 200.0f;
+    constexpr uint32_t VICTIM_SEARCH_SPIN_MS      = 8000UL;   // spin this long for a victim before forward search
+    constexpr uint32_t DEPLOY_POINT_SPIN_MS       = 8000UL;   // spin this long for a point before forward search
+    constexpr uint32_t SEARCH_FORWARD_MS          = 5000UL;   // forward-search phase after a failed spin
+    constexpr int      SEARCH_FORWARD_SPEED       = 60;
+    constexpr int      TOUCH_RECOVER_BACK_MM      = 100;
+    constexpr float    TOUCH_RECOVER_TURN_DEG     = 50.0f;
     constexpr float    EVAC_POINT_STOP_WIDTH_PX   = 450.0f;   // corner-approach stop width
     constexpr float    EVAC_POINT_STOP_HEIGHT_PX  = 140.0f;   // corner-approach stop height
     constexpr int16_t  EVAC_POINT_STOP_MIN_BOTTOM_Y_PX = 400; // corner bottom must be below this before colour read
@@ -67,6 +66,10 @@ namespace {
     bool searchTimedOut() {
         if (s_disposeMode) return false;   // final disposal runs to completion
         return (uint32_t)(millis() - s_searchStartMs) >= EVAC_SEARCH_TIMEOUT_MS;
+    }
+
+    void signalDeployStart() {
+        tone(BUZZER_PIN, 9000, 1000);
     }
     // (EVAC_GRAB_STOP_HEIGHT_PX stays in config.h — shared with VictimManager.)
 
@@ -256,53 +259,64 @@ namespace {
         return (uint32_t)(millis() - startMs) >= EVAC_DEPLOY_TIMEOUT_MS;
     }
 
-    bool driveAroundUntilPoint(uint32_t deployStartMs) {
-        Serial.println("[deploy] no point after spin - wall-follow search");
-        Actions::WallFollow::reset();
-        while (!deployTimedOut(deployStartMs) && !searchTimedOut()) {
-            Processing::K230Decode::tick();
-            if (closestCenterPoint() != nullptr) {
-                Actions::Drive::stop();
-                Serial.println("[deploy] point seen -> approach");
-                return true;
-            }
-
-            Sensors::Touch::tick();
-            Sensors::ToF::tick();
-            Actions::WallFollow::tick(DEPLOY_WALL_TARGET_MM, DEPLOY_WALL_BASE_SPEED,
-                                      DEPLOY_WALL_FAR_MM, /*detectSudden=*/false);
-            delayMicroseconds(10000);
-        }
+    void touchRecover() {
         Actions::Drive::stop();
-        return false;
+        Actions::Forward::forward(-SEARCH_FORWARD_SPEED, TOUCH_RECOVER_BACK_MM);
+        if (searchTimedOut()) return;
+        Actions::Turn::turn(TOUCH_RECOVER_TURN_DEG, ROAM_TURN_SPEED);
     }
 
     // Spin + drive to the nearest POINT (victims model) until close. true if reached.
     bool approachPoint(bool allowExtraLiveGrab) {
         const uint32_t start = millis();
-        uint32_t noPointSpinStart = 0;
+        uint32_t noPointPhaseStart = 0;
+        bool forwardSearch = false;
         uint8_t hits = 0;
         while (!deployTimedOut(start) && !searchTimedOut()) {
             Processing::K230Decode::drainDelay(50);
             if (allowExtraLiveGrab && tryGrabExtraLiveDuringGreenDeploy()) {
                 hits = 0;
-                noPointSpinStart = 0;
+                noPointPhaseStart = 0;
+                forwardSearch = false;
                 continue;
             }
 
             const K230DBox* corner = closestCenterPoint();
             if (corner == nullptr) {
                 hits = 0;
-                if (noPointSpinStart == 0) noPointSpinStart = millis();
-                if ((uint32_t)(millis() - noPointSpinStart) >= DEPLOY_POINT_SPIN_MS) {
-                    if (!driveAroundUntilPoint(start)) return false;
-                    noPointSpinStart = 0;
+                Sensors::Touch::tick();
+                if (Sensors::Touch::front()) {
+                    Serial.println("[deploy] touch -> recover");
+                    touchRecover();
+                    noPointPhaseStart = 0;
+                    forwardSearch = false;
+                    continue;
+                }
+
+                if (noPointPhaseStart == 0) {
+                    noPointPhaseStart = millis();
+                    forwardSearch = false;
+                }
+                const uint32_t phaseMs = millis() - noPointPhaseStart;
+                if (!forwardSearch && phaseMs >= DEPLOY_POINT_SPIN_MS) {
+                    Serial.println("[deploy] no point after spin - forward search");
+                    forwardSearch = true;
+                    noPointPhaseStart = millis();
+                } else if (forwardSearch && phaseMs >= SEARCH_FORWARD_MS) {
+                    Serial.println("[deploy] no point after forward - spin search");
+                    forwardSearch = false;
+                    noPointPhaseStart = millis();
+                }
+
+                if (forwardSearch) {
+                    Actions::Drive::motor(SEARCH_FORWARD_SPEED, SEARCH_FORWARD_SPEED);
                 } else {
                     Actions::Drive::motor(60, -60);
                 }
                 continue;
             }
-            noPointSpinStart = 0;
+            noPointPhaseStart = 0;
+            forwardSearch = false;
             if (boxWidthPx(*corner) > EVAC_POINT_STOP_WIDTH_PX &&
                 boxHeightPx(*corner) >= EVAC_POINT_STOP_HEIGHT_PX &&
                 corner->y2 > EVAC_POINT_STOP_MIN_BOTTOM_Y_PX) {
@@ -436,35 +450,6 @@ namespace {
         return true;
     }
 
-    // Drive forward `mm` at `speed` (both positive) while watching the front
-    // bumper. On a hit: stop and turn the other way (turn(-50)).
-    void forwardWatchTouch(int speed, int mm) {
-        const unsigned long duration = (unsigned long)
-            ((float)mm * FORWARD_MS_PER_MM * MAX_MOTOR_SPEED / (float)speed);
-        const unsigned long startT = millis();
-        Actions::Drive::motor(speed, speed);
-        while (millis() - startT < duration && !searchTimedOut()) {
-            Sensors::Touch::tick();
-            if (Sensors::Touch::front()) {
-                Actions::Drive::stop();
-                Actions::Turn::turn(-50.0f, ROAM_TURN_SPEED);
-                return;
-            }
-        }
-        Actions::Drive::stop();
-    }
-
-    // Front bumper hit while roaming: back off, turn away, nudge forward again.
-    void bumpRecover() {
-        if (searchTimedOut()) return;
-        Serial.println("[search] bump -> recover");
-        Actions::Drive::stop();
-        Actions::Forward::forward(-60, 40);            // back off
-        if (searchTimedOut()) return;
-        Actions::Turn::turn(50.0f, ROAM_TURN_SPEED);   // turn away
-        if (searchTimedOut()) return;
-        forwardWatchTouch(60, 110);                    // forward; re-hit -> stop + turn(-50)
-    }
 }
 
 void onEnter() {
@@ -476,25 +461,31 @@ void onEnter() {
 }
 
 void update() {
-    uint32_t noVictimSpinStart = 0;     // mini timer for the capped victim-search spin
-    bool     victimWallSearch  = false; // true once the no-victim search switches to wall-follow
+    uint32_t noVictimPhaseStart = 0;     // phase timer for spin/forward victim search
+    bool     victimForwardSearch = false;
+    bool     timeoutDeploySignaled = false;
 
-    // Collect-and-deploy loop. The 1-min timer never interrupts an in-progress
+    // Collect-and-deploy loop. The 1m45s timer never interrupts an in-progress
     // grab/approach; it is only checked here, between whole actions.
     while (true) {
         // Past the deadline: stop collecting. Finish disposing whatever we still
         // hold (live->green, dead->red, timer ignored), and only leave once both
         // are gone.
         if (searchTimedOut()) {
-            if (VictimManager::liveHeld() > 0) {
-                s_disposeMode = true; deployGreen(); s_disposeMode = false;
+            const bool hasLive = VictimManager::liveHeld() > 0;
+            const bool hasDead = VictimManager::deadHeld() > 0;
+            if (hasLive || hasDead) {
+                if (!timeoutDeploySignaled) {
+                    signalDeployStart();
+                    timeoutDeploySignaled = true;
+                }
+                s_disposeMode = true;
+                if (VictimManager::liveHeld() > 0) deployGreen();
+                if (VictimManager::deadHeld() > 0) deployRed();
+                s_disposeMode = false;
                 continue;
             }
-            if (VictimManager::deadHeld() > 0) {
-                s_disposeMode = true; deployRed(); s_disposeMode = false;
-                continue;
-            }
-            break;   // 1 min passed AND hands empty -> exit
+            break;   // 1m45s passed AND hands empty -> exit
         }
 
         // Deploy when we hold enough live (green trigger) OR we're already holding
@@ -504,10 +495,11 @@ void update() {
             VictimManager::liveHeld() > 0 && VictimManager::deadHeld() > 0;
         if (VictimManager::readyToDeploy() || holdsBoth) {
             digitalWrite(LED_BUILTIN, HIGH);
+            signalDeployStart();
             if (VictimManager::liveHeld() > 0) deployGreen();  // driveToColorCorner(GREEN)
             if (VictimManager::deadHeld() > 0) deployRed();    // driveToColorCorner(RED)
-            noVictimSpinStart = 0;  // fresh mini spin after disposing
-            victimWallSearch = false;
+            noVictimPhaseStart = 0;  // fresh spin after disposing
+            victimForwardSearch = false;
             continue;
         }
 
@@ -515,8 +507,8 @@ void update() {
 
         // closestCenterVictim is already filtered to types we still want.
         if (closestCenterVictim() != nullptr) {
-            noVictimSpinStart = 0;              // reset mini spin timer: something in view
-            victimWallSearch = false;
+            noVictimPhaseStart = 0;              // reset search phase: something in view
+            victimForwardSearch = false;
             const int type = approachVictim();   // runs to completion (reach or lose)
             if (type >= 0) {
                 const bool grabbed = VictimManager::tryGrab((uint8_t)type);  // grab + self-confirm
@@ -533,35 +525,37 @@ void update() {
                 // front of it) instead of re-grabbing straight away.
             }
         } else {
-            // Search for victims after an attempt/loss: spin for a capped mini
-            // timer, then use the same wall-follow drive-around shape as entry.
-            if (noVictimSpinStart == 0) {
-                noVictimSpinStart = millis();
-                victimWallSearch = false;
+            // Search for victims after an attempt/loss: spin 8s, then drive
+            // forward 5s. Both phases keep checking K230 and front touch.
+            Sensors::Touch::tick();
+            if (Sensors::Touch::front()) {
+                Serial.println("[search] touch -> recover");
+                touchRecover();
+                noVictimPhaseStart = 0;       // recovered -> restart spin phase
+                victimForwardSearch = false;
+                continue;
             }
 
-            if (!victimWallSearch &&
-                (uint32_t)(millis() - noVictimSpinStart) >= VICTIM_SEARCH_SPIN_MS) {
-                Serial.println("[search] no victim after spin - wall-follow search");
-                Actions::WallFollow::reset();
-                victimWallSearch = true;
+            if (noVictimPhaseStart == 0) {
+                noVictimPhaseStart = millis();
+                victimForwardSearch = false;
             }
 
-            if (victimWallSearch) {
-                Sensors::Touch::tick();
-                Sensors::ToF::tick();
-                Actions::WallFollow::tick(DEPLOY_WALL_TARGET_MM, DEPLOY_WALL_BASE_SPEED,
-                                          DEPLOY_WALL_FAR_MM, /*detectSudden=*/false);
-                delayMicroseconds(10000);
+            const uint32_t phaseMs = millis() - noVictimPhaseStart;
+            if (!victimForwardSearch && phaseMs >= VICTIM_SEARCH_SPIN_MS) {
+                Serial.println("[search] no victim after spin - forward search");
+                victimForwardSearch = true;
+                noVictimPhaseStart = millis();
+            } else if (victimForwardSearch && phaseMs >= SEARCH_FORWARD_MS) {
+                Serial.println("[search] no victim after forward - spin search");
+                victimForwardSearch = false;
+                noVictimPhaseStart = millis();
+            }
+
+            if (victimForwardSearch) {
+                Actions::Drive::motor(SEARCH_FORWARD_SPEED, SEARCH_FORWARD_SPEED);
             } else {
-                Sensors::Touch::tick();
-                if (Sensors::Touch::front()) {
-                    bumpRecover();
-                    noVictimSpinStart = 0;       // recovered -> restart mini spin
-                    victimWallSearch = false;
-                } else {
-                    Actions::Drive::motor(50, -50);  // spin sweep, capped by VICTIM_SEARCH_SPIN_MS
-                }
+                Actions::Drive::motor(50, -50);
             }
         }
     }

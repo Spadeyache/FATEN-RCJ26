@@ -152,7 +152,12 @@ namespace {
         // const int tDown = (side == SIDE_LEFT) ? LEFT_DOWN_MS : RIGHT_DOWN_MS;
         // const int tFwd  = (side == SIDE_LEFT) ? LEFT_FWD_MS  : RIGHT_FWD_MS;
 
-        if (side == SIDE_LEFT) Actions::Arm::grabLeft(false); else Actions::Arm::grabRight(false);
+        // Open EVERY arm that still has space (not just the chosen one) so any free
+        // gripper is ready. A filled gripper stays closed so its ball isn't dropped
+        // (hasSpace() counts the bucket, so it's true exactly when the gripper is empty).
+        if (leftHasSpace())  Actions::Arm::grabLeft(false);
+        if (rightHasSpace()) Actions::Arm::grabRight(false);
+        // if (side == SIDE_LEFT) Actions::Arm::grabLeft(false); else Actions::Arm::grabRight(false);
         Actions::Drive::motor(-18, -18);   // back off
         Actions::Arm::liftDown();
         Processing::K230Decode::drainDelay(570);
