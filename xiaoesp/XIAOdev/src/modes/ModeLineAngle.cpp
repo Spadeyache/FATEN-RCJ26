@@ -26,6 +26,7 @@ static constexpr uint8_t LA_FINE_MIN_RUN   = LC_RUN_MIN_LEN;
 static constexpr uint8_t LA_RED_ROW        = 65;
 static constexpr uint8_t LA_RED_THRESHOLD  = 8;
 static constexpr uint8_t LA_RED_FRAMES     = 3;
+static constexpr uint8_t LA_TOP_ARC_BLACK_THRESHOLD = 3;
 
 static constexpr float   LA_RAD2DEG        = 57.2957795f;
 
@@ -34,6 +35,28 @@ static uint8_t s_redFrames = 0;
 static bool hasBottomLinePoint(const LineCounts& lc) {
     for (uint8_t i = 0; i < lc.count; i++) {
         if (lc.crossings[i].edge == LC_EDGE_BOTTOM) return true;
+    }
+    return false;
+}
+
+static bool hasTopArcLinePoint(camera_fb_t* fb) {
+    const float cx = (float)LF_ARC_TOP_X;
+    const float topY = (float)LF_ARC_TOP_Y;
+    const float sideX = (float)LF_ARC_RIGHT_X;
+    const float sideY = (float)LF_ARC_SIDE_Y;
+    const float dx = sideX - cx;
+    const float cy = (sideY * sideY - topY * topY + dx * dx) / (2.0f * (sideY - topY));
+    const float r = cy - topY;
+
+    uint8_t black = 0;
+    const int step = (LF_ARC_SAMPLE_SPACING < 1.0f) ? 1 : (int)LF_ARC_SAMPLE_SPACING;
+    for (int x = LF_ARC_RIGHT_X - step; x >= LF_ARC_LEFT_X; x -= step) {
+        const float xdx = (float)x - cx;
+        const float inside = r * r - xdx * xdx;
+        const int y = (inside > 0.0f) ? (int)(cy - sqrtf(inside) + 0.5f) : LF_ARC_SIDE_Y;
+        if (isBlack(updateRawGrayHSV(fb, (uint8_t)x, (uint8_t)y))) {
+            if (++black >= LA_TOP_ARC_BLACK_THRESHOLD) return true;
+        }
     }
     return false;
 }
@@ -178,6 +201,7 @@ void modeLineAngleRun(camera_fb_t* fb, YacheEncodedSerial& teensy) {
 
     const bool haveAny = (lc.count >= 1);
     const bool bottomLinePoint = hasBottomLinePoint(lc);
+    const bool topLinePoint = hasTopArcLinePoint(fb);
     const bool sideLinePoint = hasSideLinePoint(lc);
 
     // ── Reduce to a base + tip pair ────────────────────────────────────────────
@@ -244,6 +268,7 @@ void modeLineAngleRun(camera_fb_t* fb, YacheEncodedSerial& teensy) {
     if (bottomLinePoint) flag |= XIAO_FLAG_BOTTOM_LINE;
     if (fineValid) flag |= XIAO_FLAG_FINE_ANGLE;
     if (sideLinePoint) flag |= XIAO_FLAG_SIDE_LINE;
+    if (topLinePoint) flag |= XIAO_FLAG_TOP_LINE;
 
     // ── Transmit ───────────────────────────────────────────────────────────────
     teensy.send(XIAO_REG_ANGLE, encodedAngle);

@@ -114,8 +114,15 @@ inline float robotRoll()  { return DEV_FORCE_TILT ? DEV_ROBOT_ROLL_DEG  : -Senso
 
 // --- Tilt gate + base speed --------------------------------------------------
 constexpr float TILT_GATE_DEG   = 17.0f;
-constexpr float FRIC_SPEED_FLAT = LINE_FOLLOW_BASE_SPEED_FLAT;    // flat-ground base speed
-constexpr float FRIC_SPEED_TILT = LINE_FOLLOW_BASE_SPEED_SLOPE;   // base speed once tilted past the gate
+constexpr float FRIC_SPEED_FLAT      = LINE_FOLLOW_BASE_SPEED_FLAT;       // flat-ground base speed
+constexpr float FRIC_SPEED_NOSE_UP   = LINE_FOLLOW_BASE_SPEED_NOSE_UP;    // nose-up slope base speed
+constexpr float FRIC_SPEED_NOSE_DOWN = LINE_FOLLOW_BASE_SPEED_NOSE_DOWN;  // nose-down slope base speed
+constexpr float FRIC_SPEED_SLOPE     = LINE_FOLLOW_BASE_SPEED_SLOPE;      // side-slope base speed
+
+// Nose-down sharp correction: while |rawError| (+-200 scale) is past the
+// threshold, drop to a slower base so downhill corrections don't run away.
+constexpr float FRIC_SPEED_NOSE_DOWN_SHARP = LINE_FOLLOW_BASE_SPEED_NOSE_DOWN_SHARP;
+constexpr float NOSE_DOWN_SHARP_ERR        = LINE_FOLLOW_NOSE_DOWN_SHARP_ERR;
 
 // --- Post-macro slope suppression --------------------------------------------
 // Madgwick fuses accel + gyro; a fast spin (U-turn/intersection turn) leaves a
@@ -145,14 +152,16 @@ void updateLineFollowState(float pitch, float roll) {
     // NOT gated by slope-suppression: this drives wheel roll-compensation in
     // motorSlopeProfiled/motorTurnGravityProfiled and the state read by the
     // next macro, both of which should always see the real live tilt.
-    // Suppression only holds frictionCircAdj()'s output (base speed + the
+    // Suppression only holds currentLinePidProfile()'s output (base speed + the
     // runLinePID kp/ki/kd pick), see suppressSlopeDetection().
     _lineFollowState = classifyLineFollowState(pitch, roll);
 }
 
-// --- PID (flat vs slope; selected by the gate, NOT by error sign) ------------
-constexpr float PID_KP_FLAT  = 1.7f,  PID_KI_FLAT  = 0.0f, PID_KD_FLAT  = 1.4f;  //1.5 1.3
-constexpr float PID_KP_SLOPE = 0.85f, PID_KI_SLOPE = 0.0f, PID_KD_SLOPE = 0.65f;
+// --- PID profiles (selected by IMU state, NOT by error sign) -----------------
+constexpr float PID_KP_FLAT    = 1.7f,  PID_KI_FLAT    = 0.0f, PID_KD_FLAT    = 1.4f;  //1.5 1.3
+constexpr float PID_KP_NOSE_UP = 0.85f, PID_KI_NOSE_UP = 0.0f, PID_KD_NOSE_UP = 0.65f;
+constexpr float PID_KP_NOSE_DOWN = 0.85f, PID_KI_NOSE_DOWN = 0.0f, PID_KD_NOSE_DOWN = 0.65f;
+constexpr float PID_KP_SLOPE   = 0.85f, PID_KI_SLOPE   = 0.0f, PID_KD_SLOPE   = 0.65f;
 constexpr float PID_INTEGRAL_LIMIT = 500.0f;
 
 // --- Tight-turn slow-down (driven by the XIAO TIGHT_SLOW flag) ---------------
@@ -173,7 +182,7 @@ constexpr float NOSE_DOWN_REVERSE_GAIN = 1.55f;
 constexpr float TURN_NOSE_UP_FORWARD_GAIN      = 1.20f;
 constexpr float TURN_NOSE_UP_REVERSE_GAIN      = 0.80f;
 constexpr float TURN_NOSE_DOWN_FORWARD_GAIN    = 1.00f;
-constexpr float TURN_NOSE_DOWN_REVERSE_GAIN    = 1.25f;
+constexpr float TURN_NOSE_DOWN_REVERSE_GAIN    = 1.55f;//1.25
 constexpr float TURN_SIDE_UPHILL_FORWARD_GAIN  = 1.20f;
 constexpr float TURN_SIDE_UPHILL_REVERSE_GAIN  = 1.00f;
 constexpr float TURN_SIDE_DOWNHILL_FORWARD_GAIN = 1.00f;
@@ -230,23 +239,43 @@ float rotAxisBias(float eNorm) {
     return constrain(bias, -1.0f, 1.0f);
 }
 
-// frictionCircAdj - base-speed selector. On a slope (past the gate) there is less
-// grip, so drop to FRIC_SPEED_TILT; otherwise run the fast flat-ground speed.
-// The drop also triggers the *_SLOPE PID gain swap in runLinePID().
-float frictionCircAdj() {
+enum LinePidProfile : uint8_t {
+    LINE_PID_PROFILE_FLAT = 0,
+    LINE_PID_PROFILE_NOSE_UP,
+    LINE_PID_PROFILE_NOSE_DOWN,
+    LINE_PID_PROFILE_SLOPE,
+};
+
+LinePidProfile profileForLineFollowState(LineFollowState state) {
+    if (state == LINE_FOLLOW_FLAT)
+        return LINE_PID_PROFILE_FLAT;
+    if (state == LINE_FOLLOW_NOSE_UP)
+        return LINE_PID_PROFILE_NOSE_UP;
+    if (state == LINE_FOLLOW_NOSE_DOWN)
+        return LINE_PID_PROFILE_NOSE_DOWN;
+    return LINE_PID_PROFILE_SLOPE;
+}
+
+LinePidProfile currentLinePidProfile() {
     if (millis() < _slopeSuppressUntil)
-        return (_slopeSuppressHoldState == LINE_FOLLOW_FLAT) ? FRIC_SPEED_FLAT : FRIC_SPEED_TILT;
-    const float pitch = robotPitch();
-    const float roll  = robotRoll();
-    if (fabsf(pitch) > TILT_GATE_DEG || fabsf(roll) > TILT_GATE_DEG)
-        return FRIC_SPEED_TILT;
-    return FRIC_SPEED_FLAT;
+        return profileForLineFollowState(_slopeSuppressHoldState);
+    return profileForLineFollowState(classifyLineFollowState(robotPitch(), robotRoll()));
+}
+
+float linePidBaseForProfile(LinePidProfile profile) {
+    switch (profile) {
+        case LINE_PID_PROFILE_NOSE_UP:   return FRIC_SPEED_NOSE_UP;
+        case LINE_PID_PROFILE_NOSE_DOWN: return FRIC_SPEED_NOSE_DOWN;
+        case LINE_PID_PROFILE_SLOPE:     return FRIC_SPEED_SLOPE;
+        case LINE_PID_PROFILE_FLAT:
+        default:                         return FRIC_SPEED_FLAT;
+    }
 }
 
 float currentLinePidBase() {
     if (Processing::XiaoDecode::tightSlowFlag())
         return TIGHT_SLOW_BASE_SPEED;
-    return frictionCircAdj();
+    return linePidBaseForProfile(currentLinePidProfile());
 }
 
 }  // namespace
@@ -375,19 +404,34 @@ void runLinePID() {
     integral += rawError * dt;
     integral  = constrain(integral, -PID_INTEGRAL_LIMIT, PID_INTEGRAL_LIMIT);
 
-    // Base speed: flat vs slope (slope = tilted past the gate). The slope flag
-    // also selects the *_SLOPE PID gains.
-    const float frictionBase = frictionCircAdj();
-    const bool  slope = (frictionBase < FRIC_SPEED_FLAT);
-    const float kp = slope ? PID_KP_SLOPE : PID_KP_FLAT;
-    const float ki = slope ? PID_KI_SLOPE : PID_KI_FLAT;
-    const float kd = slope ? PID_KD_SLOPE : PID_KD_FLAT;
+    // Base speed + PID gains: flat, nose-up, nose-down, or side-slope states.
+    const LinePidProfile pidProfile = currentLinePidProfile();
+    const float frictionBase = linePidBaseForProfile(pidProfile);
+    float kp = PID_KP_FLAT;
+    float ki = PID_KI_FLAT;
+    float kd = PID_KD_FLAT;
+    if (pidProfile == LINE_PID_PROFILE_NOSE_UP) {
+        kp = PID_KP_NOSE_UP;
+        ki = PID_KI_NOSE_UP;
+        kd = PID_KD_NOSE_UP;
+    } else if (pidProfile == LINE_PID_PROFILE_NOSE_DOWN) {
+        kp = PID_KP_NOSE_DOWN;
+        ki = PID_KI_NOSE_DOWN;
+        kd = PID_KD_NOSE_DOWN;
+    } else if (pidProfile == LINE_PID_PROFILE_SLOPE) {
+        kp = PID_KP_SLOPE;
+        ki = PID_KI_SLOPE;
+        kd = PID_KD_SLOPE;
+    }
 
     const float correction = kp * rawError + ki * integral + kd * derivative;
 
     const bool  tightSlow = Processing::XiaoDecode::tightSlowFlag();
-    const float base = tightSlow ? TIGHT_SLOW_BASE_SPEED : frictionBase;
-    digitalWrite(LED_PIN, base == FRIC_SPEED_FLAT ? HIGH : LOW);   // LED on = flat-ground base speed
+    float base = tightSlow ? TIGHT_SLOW_BASE_SPEED : frictionBase;
+    if (!tightSlow && pidProfile == LINE_PID_PROFILE_NOSE_DOWN &&
+        fabsf(rawError) > NOSE_DOWN_SHARP_ERR) {
+        base = FRIC_SPEED_NOSE_DOWN_SHARP;
+    }
 
     // Left/right steering speeds.
     float leftSpeed  = base + correction;

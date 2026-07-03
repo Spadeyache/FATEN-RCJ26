@@ -45,6 +45,7 @@
 #define XIAO_FLAG_BOTTOM_LINE 0x04
 #define XIAO_FLAG_FINE_ANGLE  0x08
 #define XIAO_FLAG_SIDE_LINE   0x10
+#define XIAO_FLAG_TOP_LINE    0x20
 
 // FEATURE byte — LINE-follow events (the clean contract; keep in sync with XIAO):
 #define FEAT_NONE           0
@@ -79,7 +80,14 @@ enum XiaoMode : uint8_t {
 // Shared line-follow base speeds. Drive.cpp uses these for PID base speed;
 // LINE_Follow.cpp intersection forward moves use the same values by state.
 #define LINE_FOLLOW_BASE_SPEED_FLAT   70.0f
-#define LINE_FOLLOW_BASE_SPEED_SLOPE  70.0f //55
+#define LINE_FOLLOW_BASE_SPEED_NOSE_UP 70.0f
+#define LINE_FOLLOW_BASE_SPEED_NOSE_DOWN 50.0f
+#define LINE_FOLLOW_BASE_SPEED_SLOPE  55.0f //55
+
+// Nose-down sharp-correction base: replaces NOSE_DOWN base while the line PID
+// error magnitude exceeds the threshold (raw error scale is +-200).
+#define LINE_FOLLOW_BASE_SPEED_NOSE_DOWN_SHARP 20.0f
+#define LINE_FOLLOW_NOSE_DOWN_SHARP_ERR        40.0f
 
 // =============================================================================
 //  IMU
@@ -238,7 +246,7 @@ enum XiaoMode : uint8_t {
 #define INTERSECTION_UTURN_NOSE_DOWN_FIRST_TURN_ANGLE     90.0f
 #define INTERSECTION_UTURN_NOSE_DOWN_FIRST_TURN_SPEED     45.0f
 #define INTERSECTION_UTURN_NOSE_DOWN_MID_FORWARD_SPEED    -LINE_FOLLOW_BASE_SPEED_SLOPE
-#define INTERSECTION_UTURN_NOSE_DOWN_MID_FORWARD_MM       40.0f
+#define INTERSECTION_UTURN_NOSE_DOWN_MID_FORWARD_MM       5.0f
 #define INTERSECTION_UTURN_NOSE_DOWN_FINAL_TURN_ANGLE     90.0f
 #define INTERSECTION_UTURN_NOSE_DOWN_FINAL_TURN_SPEED     45.0f
 
@@ -253,11 +261,11 @@ enum XiaoMode : uint8_t {
 
 #define INTERSECTION_UTURN_RIGHT_DOWN_PRE_FORWARD_SPEED   LINE_FOLLOW_BASE_SPEED_SLOPE
 #define INTERSECTION_UTURN_RIGHT_DOWN_PRE_FORWARD_MM      50.0f
-#define INTERSECTION_UTURN_RIGHT_DOWN_FIRST_TURN_ANGLE    75.0f
+#define INTERSECTION_UTURN_RIGHT_DOWN_FIRST_TURN_ANGLE    -85.0f
 #define INTERSECTION_UTURN_RIGHT_DOWN_FIRST_TURN_SPEED    45.0f
-#define INTERSECTION_UTURN_RIGHT_DOWN_MID_FORWARD_SPEED  -LINE_FOLLOW_BASE_SPEED_SLOPE
+#define INTERSECTION_UTURN_RIGHT_DOWN_MID_FORWARD_SPEED  LINE_FOLLOW_BASE_SPEED_SLOPE
 #define INTERSECTION_UTURN_RIGHT_DOWN_MID_FORWARD_MM      82.0f
-#define INTERSECTION_UTURN_RIGHT_DOWN_FINAL_TURN_ANGLE    65.0f
+#define INTERSECTION_UTURN_RIGHT_DOWN_FINAL_TURN_ANGLE    -78.0f
 #define INTERSECTION_UTURN_RIGHT_DOWN_FINAL_TURN_SPEED    45.0f
 
 // =============================================================================

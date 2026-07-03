@@ -20,6 +20,19 @@ void turnRaw(float angle_deg, float speed = 65.0f);
 bool turnUntilCenterPoint(float angleSign,
                           float speed,
                           unsigned long timeoutMs);
+bool turnUntilCenterPoint(float angleSign,
+                          float speed);
+// Spin until the center point is seen, giving up after the time an in-place
+// turn of maxAngleDeg would take (same speed scaling as turn()).
+bool turnUntilCenterPointMaxDeg(float angleSign,
+                                float speed,
+                                float maxAngleDeg);
+
+// Same spin, but only the front ARC (top) ends it - the bottom row is
+// ignored (XIAO_FLAG_TOP_LINE instead of FEAT_CENTER_POINT_BLACK).
+bool turnUntilCenterPointArc(float angleSign,
+                             float speed,
+                             unsigned long timeoutMs);
 
 }  // namespace Turn
 }  // namespace Actions

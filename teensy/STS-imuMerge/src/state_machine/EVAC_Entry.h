@@ -7,7 +7,7 @@ namespace EVAC_Entry {
 // into its own search timeout; EVAC_Entry's own hunt loop checks it directly
 // and skips straight to EVAC_EXIT if the clock runs out before a victim is
 // ever found.
-constexpr unsigned long GLOBAL_TIMEOUT_MS = 120000UL;  // 2:00 (30s trimmed off each of the search and deploy budgets)
+constexpr unsigned long GLOBAL_TIMEOUT_MS = 90000UL;  //90000 1:30 - the ONE evac clock (entry-hunt + search + deploy)
 
 void onEnter();
 void update();

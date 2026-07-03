@@ -183,6 +183,10 @@ namespace {
     }
 }  // namespace
 
+bool wallDistanceMm(float& outMm) {
+    return readWallDistanceMm(outMm);
+}
+
 void reset() {
     s_integral = 0.0f;
     s_lastError = 0.0f;
@@ -206,7 +210,8 @@ void recover(float backupMm) {
     recover(backupMm, obstacleTurnDeg());
 }
 
-Status tick(float targetMm, float baseSpeed, float farMm, bool detectSudden) {
+Status tick(float targetMm, float baseSpeed, float farMm, bool detectSudden,
+            bool stopOnNoWall) {
     if (Sensors::Touch::front()) {
         if (DEBUG_WALL_FOLLOW) Serial.println("[WF] touch recovery");
         handleObstacle();
@@ -219,7 +224,7 @@ Status tick(float targetMm, float baseSpeed, float farMm, bool detectSudden) {
 
     if (noWall) {
         const Status status = classifyNoWall(valid, distanceMm, detectSudden);
-        if (status == Status::EXIT_CANDIDATE_SUDDEN) {
+        if (stopOnNoWall || status == Status::EXIT_CANDIDATE_SUDDEN) {
             Drive::stop();
         } else {
             Drive::motor(baseSpeed, baseSpeed);

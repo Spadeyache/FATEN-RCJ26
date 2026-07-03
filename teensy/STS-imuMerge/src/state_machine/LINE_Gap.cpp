@@ -5,6 +5,7 @@
 
 #include "../sensors/XIAO_link.h"
 #include "../sensors/IMU.h"
+#include "../sensors/Touch.h"
 #include "../processing/XiaoDecode.h"
 #include "../actions/Drive.h"
 
@@ -38,13 +39,13 @@ namespace {
 
     constexpr float GAP_FORWARD_SPEED    = 45.0f;
     constexpr float GAP_SIDE_ARC_INNER_SPEED = 30.0f;
-    constexpr float GAP_SIDE_ARC_OUTER_SPEED = 45.0f;
+    constexpr float GAP_SIDE_ARC_OUTER_SPEED = 51.0f;
     constexpr float GAP_SIDE_STRAIGHT_SPEED  = 50.0f;
-    constexpr float GAP_SIDE_ARC_MS_PER_DEG  = 225.0f;
+    constexpr float GAP_SIDE_ARC_MS_PER_DEG  = 265.0f;
     constexpr uint16_t GAP_SIDE_ARC_MIN_MS   = 120;
     constexpr uint16_t GAP_SIDE_ARC_MAX_MS   = 700;
     constexpr uint16_t GAP_REVERSE_SETTLE_MS = 375;
-    constexpr uint8_t GAP_BOTTOM_LOST_FRAMES  = 5;
+    constexpr uint8_t GAP_BOTTOM_LOST_FRAMES  = 3;
     constexpr uint8_t GAP_BOTTOM_FOUND_FRAMES = 3;
 
     inline float signedAngleDeg() {
@@ -111,6 +112,22 @@ namespace {
         return true;
     }
 
+    bool transitionToObstacleIfTouched() {
+        static uint8_t touchFrames = 0;
+        Sensors::Touch::tick();
+        if (Sensors::Touch::front()) {
+            if (touchFrames < 2) touchFrames++;
+        } else {
+            touchFrames = 0;
+        }
+        if (touchFrames < 2) return false;
+        touchFrames = 0;
+        Actions::Drive::stop();
+        Processing::XiaoDecode::clearFilter();
+        StateMachine::transitionTo(StateMachine::LINE_OBSTACLE);
+        return true;
+    }
+
     void pumpXiaoFor(uint16_t ms) {
         const unsigned long start = millis();
         while (millis() - start < ms) {
@@ -119,31 +136,7 @@ namespace {
         }
     }
 
-    inline bool gapBottomAndSideWhite() {
-        return !Processing::XiaoDecode::gapBottomLineFlag() &&
-               !Processing::XiaoDecode::gapSideLineFlag();
-    }
-
-    void driveForwardUntilBottomAndSideLostThenTwoPoints() {
-        uint8_t lowFrames = 0;
-        updateXiaoNow();
-        while (lowFrames < GAP_BOTTOM_LOST_FRAMES) {
-            Actions::Drive::motor(GAP_FORWARD_SPEED, GAP_FORWARD_SPEED);
-            delay(5);
-            updateXiaoNow();
-            if (gapBottomAndSideWhite()) lowFrames++;
-            else lowFrames = 0;
-        }
-
-        while (!Processing::XiaoDecode::gapBothRowsFlag()) {
-            Actions::Drive::motor(GAP_FORWARD_SPEED, GAP_FORWARD_SPEED);
-            delay(5);
-            updateXiaoNow();
-        }
-        Actions::Drive::stop();
-    }
-
-    void driveSideArcThenStraightUntilBottomLostThenTwoPoints() {
+    bool driveSideArcThenStraightUntilBottomLostThenTwoPoints() {
         const bool leftDown =
             Actions::Drive::lineFollowState() == Actions::Drive::LINE_FOLLOW_LEFT_DOWN;
         const float arcLeft = leftDown ? GAP_SIDE_ARC_INNER_SPEED : GAP_SIDE_ARC_OUTER_SPEED;
@@ -166,7 +159,7 @@ namespace {
                 if (Processing::XiaoDecode::gapBottomLineFlag()) lowFrames = 0;
                 else if (++lowFrames >= GAP_BOTTOM_LOST_FRAMES) bottomLost = true;
             } else {
-                if (Processing::XiaoDecode::gapBothRowsFlag()) {
+                if (Processing::XiaoDecode::gapFineRowsFlag()) {
                     if (++twoPointFrames >= GAP_BOTTOM_FOUND_FRAMES) break;
                 } else {
                     twoPointFrames = 0;
@@ -179,8 +172,10 @@ namespace {
                 Actions::Drive::motor(GAP_SIDE_STRAIGHT_SPEED, GAP_SIDE_STRAIGHT_SPEED);
             }
             delay(5);
+            if (transitionToObstacleIfTouched()) return false;
         }
         Actions::Drive::stop();
+        return true;
     }
 
     void alignToCurrentGapAngle() {
@@ -240,24 +235,68 @@ void update() {
     const float backSpeed = gapBackSpeed();
     Actions::Drive::motor(backSpeed, backSpeed);
     while (sideDownGap() ? !Processing::XiaoDecode::gapAnyPointFlag()
-                         : !Processing::XiaoDecode::gapBothRowsFlag()) {
+                         : !Processing::XiaoDecode::gapFineRowsFlag()) {
         delay(5);
         updateXiaoNow();
         if (transitionToRedIfNeeded()) return;
     }
-
+    pumpXiaoFor(25);
     Actions::Drive::stop();
-    pumpXiaoFor(GAP_REVERSE_SETTLE_MS);
-    Processing::XiaoDecode::clearFilter();
 
+    updateXiaoNow();
+    if (Processing::XiaoDecode::gapAtLeastTwoPointsFlag()) {
+        returnToLineFollow();
+        return;
+    }
+
+    //SLOPE GAP
+    Processing::XiaoDecode::clearFilter();
     if (sideDownGap()) {
-        driveSideArcThenStraightUntilBottomLostThenTwoPoints();
+        if (!driveSideArcThenStraightUntilBottomLostThenTwoPoints()) return;
         returnToLineFollow();
         return;
     }
 
     alignToCurrentGapAngle();
-    driveForwardUntilBottomAndSideLostThenTwoPoints();
+
+    digitalWrite(LED_BUILTIN, LOW);
+    uint8_t frames = 0;
+    updateXiaoNow();
+    while (frames < GAP_BOTTOM_LOST_FRAMES) {
+        Actions::Drive::motor(GAP_FORWARD_SPEED, GAP_FORWARD_SPEED);
+        delay(5);
+        if (transitionToObstacleIfTouched()) return;
+        updateXiaoNow();
+        if (!Processing::XiaoDecode::gapTopLineFlag()) frames++;
+        else frames = 0;
+    }
+
+    frames = 0;
+    
+    while (frames < GAP_BOTTOM_FOUND_FRAMES) {
+        Actions::Drive::motor(GAP_FORWARD_SPEED, GAP_FORWARD_SPEED);
+        delay(5);
+        if (transitionToObstacleIfTouched()) return;
+        updateXiaoNow();
+
+        if (Processing::XiaoDecode::gapTopLineFlag()) {
+            if (frames < GAP_BOTTOM_FOUND_FRAMES) frames++;
+
+            // can add line follow motor here as well
+        
+        } else {
+            frames = 0;
+        }
+    }
+    digitalWrite(LED_BUILTIN, HIGH);
+    while (!Processing::XiaoDecode::gapAtLeastTwoPointsFlag()) {
+        Actions::Drive::motor(GAP_FORWARD_SPEED, GAP_FORWARD_SPEED);
+        delay(1);
+        if (transitionToObstacleIfTouched()) return;
+        updateXiaoNow();
+    }
+    Actions::Drive::stop();
+
     returnToLineFollow();
 }
 

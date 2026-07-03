@@ -1,13 +1,16 @@
 #pragma once
 
 // =============================================================================
-//  EVAC_SearchDeploy — collect victims and deploy them, on a fixed time budget.
+//  EVAC_SearchDeploy — collect SILVER (live) victims only, on the single
+//  global 1:30 evac clock (EVAC_Entry::GLOBAL_TIMEOUT_MS, from zone entry).
 //
-//  Loop (blocking, for EVAC_SEARCH_TIMEOUT_MS):
-//    - if 3 balls held -> deploy -> clear -> keep collecting
-//    - else spin to find a ball -> run at it -> grab via VictimManager
-//      (grab self-confirms; a failed grab counts nothing and we keep going)
-//  When the timer expires: stop immediately, then -> EVAC_EXIT.
+//  Loop (blocking, until the clock runs out):
+//    - if 2 silvers held -> deploy at the GREEN corner -> keep collecting
+//    - else spin/forward-search for a silver -> run at it -> grab via
+//      VictimManager (self-confirms; a failed grab counts nothing)
+//  Timer is only checked BETWEEN whole actions, never mid-grab/mid-deploy.
+//  On timeout while still holding a silver: one final green deploy (clock
+//  ignored), then -> EVAC_EXIT. Dead/red code remains but is unreachable.
 // =============================================================================
 
 namespace EVAC_SearchDeploy {

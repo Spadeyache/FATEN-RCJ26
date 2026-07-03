@@ -25,8 +25,11 @@ uint8_t gapLineCount();   // Back-compat alias for gapLineY().
 bool    commitFlag();     // XIAO green-turn commit in progress
 bool    tightSlowFlag();  // XIAO tight-turn target is low in frame
 bool    gapAnyPointFlag();
+bool    gapAtLeastTwoPointsFlag();  // MODE_LINE_ANGLE: two or more detected border points.
+bool    gapFineRowsFlag();  // MODE_LINE_ANGLE: both fixed fine-angle rows see line.
 bool    gapBothRowsFlag();
 bool    gapBottomLineFlag();
+bool    gapTopLineFlag();
 bool    gapSideLineFlag();
 bool    gapFineAngleFlag();
 bool    obstacleSeeLine();

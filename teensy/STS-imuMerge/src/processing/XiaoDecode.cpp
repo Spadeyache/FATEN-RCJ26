@@ -14,6 +14,7 @@ namespace {
     bool          _commitFlag = false;
     bool          _tightSlowFlag = false;
     bool          _bottomLineFlag = false;
+    bool          _topLineFlag = false;
     bool          _sideLineFlag = false;
     bool          _fineAngleFlag = false;
 }
@@ -27,6 +28,7 @@ void tick(bool instantRun) {
     _commitFlag = (flags & XIAO_FLAG_COMMIT) != 0;
     _tightSlowFlag = (flags & XIAO_FLAG_TIGHT_SLOW) != 0;
     _bottomLineFlag = (flags & XIAO_FLAG_BOTTOM_LINE) != 0;
+    _topLineFlag = (flags & XIAO_FLAG_TOP_LINE) != 0;
     _sideLineFlag = (flags & XIAO_FLAG_SIDE_LINE) != 0;
     _fineAngleFlag = (flags & XIAO_FLAG_FINE_ANGLE) != 0;
 
@@ -47,8 +49,11 @@ uint8_t gapLineCount()     { return gapLineY(); }
 bool    commitFlag()       { return _commitFlag; }
 bool    tightSlowFlag()    { return _tightSlowFlag; }
 bool    gapAnyPointFlag()  { return _commitFlag; }
+bool    gapAtLeastTwoPointsFlag() { return _tightSlowFlag; }
+bool    gapFineRowsFlag()  { return _fineAngleFlag; }
 bool    gapBothRowsFlag()  { return _tightSlowFlag; }
 bool    gapBottomLineFlag(){ return _bottomLineFlag; }
+bool    gapTopLineFlag()   { return _topLineFlag; }
 bool    gapSideLineFlag()  { return _sideLineFlag; }
 bool    gapFineAngleFlag() { return _fineAngleFlag; }
 bool    obstacleSeeLine()  { return _commitFlag; }

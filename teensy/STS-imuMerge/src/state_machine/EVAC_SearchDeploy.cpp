@@ -33,7 +33,6 @@ namespace {
     constexpr int16_t  VICTIM_BACK_MAX_HEIGHT     = 60;       // box height <= this ...
     constexpr int16_t  VICTIM_BACK_MIN_Y2         = K230_FRAME_H - 65;  // ...and bottom y2 >= this (415) -> back up
     // Collection / deploy policy:
-    constexpr uint32_t EVAC_SEARCH_TIMEOUT_MS     = 105000UL; // 1m45s search/deploy window
     constexpr float    ROAM_TURN_SPEED            = 50.0f;    // turn speed used by the bump recovery
     constexpr uint32_t VICTIM_SEARCH_SPIN_MS      = 8000UL;   // spin this long for a victim before forward search
     constexpr uint32_t DEPLOY_POINT_SPIN_MS       = 8000UL;   // spin this long for a point before forward search
@@ -69,17 +68,13 @@ namespace {
     constexpr int      POINT_COLOR_BACK_SPEED     = -45;
     constexpr int      POINT_COLOR_BACK_MM        = 50;
 
-    uint32_t s_searchStartMs = 0;
     bool     s_disposeMode   = false;   // final drop-all after the timer: ignore the clock
 
     bool searchTimedOut() {
         if (s_disposeMode) return false;   // final disposal runs to completion
-        // Global evac-wide clock (from EVAC_Entry::onEnter()) takes priority
-        // over the local search/deploy window - whichever runs out first.
-        if ((unsigned long)(millis() - EVAC_Entry::startMs()) >= EVAC_Entry::GLOBAL_TIMEOUT_MS) {
-            return true;
-        }
-        return (uint32_t)(millis() - s_searchStartMs) >= EVAC_SEARCH_TIMEOUT_MS;
+        // ONE clock: the global 1:30 budget started at evac entry
+        // (EVAC_Entry::onEnter()). No separate local search window.
+        return (unsigned long)(millis() - EVAC_Entry::startMs()) >= EVAC_Entry::GLOBAL_TIMEOUT_MS;
     }
 
     void signalDeployStart() {
@@ -109,7 +104,9 @@ namespace {
         const K230DBox* best  = nullptr;
         float bestAbs = 999.0f;
         for (uint8_t i = 0; i < n; i++) {
-            if (!Processing::K230Decode::isVictimClass(boxes[i].cls)) continue;
+            // SILVERS ONLY: never chase/grab dead (black) balls. This one gate
+            // makes every deadHeld()/deployRed() path below unreachable (dormant).
+            if (boxes[i].cls != K230_CLASS_ALIVE) continue;
             if (!VictimManager::acceptsType(boxes[i].cls)) continue;
             const float a = absF(directionFor(boxes[i]));
             if (best == nullptr || a < bestAbs) { best = &boxes[i]; bestAbs = a; }
@@ -446,7 +443,8 @@ namespace {
     bool driveToColorCorner(int targetColor) {
         const uint32_t start = millis();
         while (millis() - start < EVAC_DEPLOY_TIMEOUT_MS && !searchTimedOut()) {
-            if (!approachPoint(targetColor == K230_POINT_GREEN)) return false;
+            // Exactly-2 policy: no opportunistic extra grab while corner hunting.
+            if (!approachPoint(/*allowExtraLiveGrab=*/false)) return false;
             float pointDir = 0.0f;
             if (!alignPointToCenter(&pointDir)) continue;
             if (shouldDropAllOnGreenDeploy(targetColor)) {
@@ -479,14 +477,18 @@ namespace {
         return false;
     }
 
-    // Deposit live balls at the GREEN corner, then back off.
+    // Deposit live balls at the GREEN corner, then back off - except on the
+    // final (dispose-mode) deploy: EVAC_Exit starts by driving forward until
+    // touch anyway, so backing off there is a wasted round trip.
     bool deployGreen() {
         Serial.println("[deploy] GREEN (live)");
         if (!driveToColorCorner(K230_POINT_GREEN) || searchTimedOut()) return false;
         const bool dropAll = VictimManager::count() >= 3;
         VictimManager::releaseLive();
         if (dropAll && VictimManager::deadHeld() > 0) VictimManager::releaseDead();
-        Actions::Forward::forward(DEPLOY_BACKOFF_SPEED, DEPLOY_BACKOFF_MM);
+        if (!s_disposeMode) {
+            Actions::Forward::forward(DEPLOY_BACKOFF_SPEED, DEPLOY_BACKOFF_MM);
+        }
         return true;
     }
 
@@ -506,7 +508,6 @@ void onEnter() {
     Serial.println("State: EVAC_SEARCH_DEPLOY");
 #endif
     VictimManager::reset();
-    s_searchStartMs = millis();
 }
 
 void update() {
@@ -514,8 +515,8 @@ void update() {
     bool     victimForwardSearch = false;
     bool     timeoutDeploySignaled = false;
 
-    // Collect-and-deploy loop. The 1m45s timer never interrupts an in-progress
-    // grab/approach; it is only checked here, between whole actions.
+    // Collect-and-deploy loop. The global 1:30 clock never interrupts an
+    // in-progress grab/approach; it is only checked here, between whole actions.
     while (true) {
         // Past the deadline: stop collecting. Finish disposing whatever we still
         // hold (live->green, dead->red, timer ignored), and only leave once both
@@ -542,7 +543,7 @@ void update() {
                 s_disposeMode = false;
                 continue;
             }
-            break;   // 1m45s passed AND hands empty -> exit
+            break;   // 1:30 passed AND hands empty -> exit
         }
 
         // Deploy when we hold enough live (green trigger) OR we're already holding

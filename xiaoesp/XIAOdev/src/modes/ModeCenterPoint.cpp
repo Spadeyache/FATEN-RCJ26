@@ -88,29 +88,21 @@ bool frontArcSampleBlack(camera_fb_t* fb, uint8_t x, uint8_t y) {
     return blackHits >= threshold;
 }
 
-bool centeredBlackRun(camera_fb_t* fb, uint8_t& midpointX, uint8_t& runLen) {
-    buildFrontArcGeometry();
-    midpointX = (uint8_t)LF_CENTER_X;
-    runLen = 0;
-    if (s_sampleCount <= 0) return false;
-
-    for (int i = 0; i < s_sampleCount; i++) {
-        s_black[i] = frontArcSampleBlack(fb, s_px[i], s_py[i]) ? 1 : 0;
-    }
-
-    for (int i = 0; i < s_sampleCount;) {
-        if (!s_black[i]) {
+bool centeredRunInSamples(const uint8_t* black, const uint8_t* px, int count,
+                          uint8_t& midpointX, uint8_t& runLen) {
+    for (int i = 0; i < count;) {
+        if (!black[i]) {
             i++;
             continue;
         }
 
         const int start = i;
-        while (i < s_sampleCount && s_black[i]) i++;
+        while (i < count && black[i]) i++;
         const int len = i - start;
         if (len < RUN_MIN_LEN) continue;
 
         const int mid = start + len / 2;
-        const int x = s_px[mid];
+        const int x = px[mid];
         if (abs(x - (int)LF_CENTER_X) <= BAND_HALF_PX) {
             midpointX = (uint8_t)x;
             runLen = (uint8_t)min(len, 255);
@@ -121,17 +113,62 @@ bool centeredBlackRun(camera_fb_t* fb, uint8_t& midpointX, uint8_t& runLen) {
     return false;
 }
 
+bool centeredBlackRun(camera_fb_t* fb, uint8_t& midpointX, uint8_t& runLen) {
+    buildFrontArcGeometry();
+    midpointX = (uint8_t)LF_CENTER_X;
+    runLen = 0;
+    if (s_sampleCount <= 0) return false;
+
+    for (int i = 0; i < s_sampleCount; i++) {
+        s_black[i] = frontArcSampleBlack(fb, s_px[i], s_py[i]) ? 1 : 0;
+    }
+
+    return centeredRunInSamples(s_black, s_px, s_sampleCount, midpointX, runLen);
+}
+
+bool centeredBlackRunBottomRow(camera_fb_t* fb, uint8_t& midpointX, uint8_t& runLen) {
+    constexpr int ROW_SAMPLES = LF_ARC_BOTTOM_RIGHT_X - LF_ARC_BOTTOM_LEFT_X + 1;
+    uint8_t black[ROW_SAMPLES];
+    uint8_t px[ROW_SAMPLES];
+
+    midpointX = (uint8_t)LF_CENTER_X;
+    runLen = 0;
+
+    for (int i = 0; i < ROW_SAMPLES; i++) {
+        const int x = LF_ARC_BOTTOM_LEFT_X + i;
+        px[i] = (uint8_t)x;
+        black[i] = frontArcSampleBlack(fb, (uint8_t)x, (uint8_t)LF_ARC_BOTTOM_Y) ? 1 : 0;
+    }
+
+    return centeredRunInSamples(black, px, ROW_SAMPLES, midpointX, runLen);
+}
+
 }  // namespace
 
 void modeCenterPointRun(camera_fb_t* fb, YacheEncodedSerial& teensy) {
     uint8_t midpointX = (uint8_t)LF_CENTER_X;
     uint8_t runLen = 0;
-    const bool seen = centeredBlackRun(fb, midpointX, runLen);
+    const bool arcSeen = centeredBlackRun(fb, midpointX, runLen);
+
+    uint8_t bottomX = (uint8_t)LF_CENTER_X;
+    uint8_t bottomLen = 0;
+    const bool bottomSeen = centeredBlackRunBottomRow(fb, bottomX, bottomLen);
+
+    const bool seen = arcSeen || bottomSeen;
+    if (!arcSeen && bottomSeen) {
+        midpointX = bottomX;
+        runLen = bottomLen;
+    }
 
     teensy.send(XIAO_REG_FEATURE, seen ? FEAT_CENTER_POINT_BLACK : FEAT_NONE);
     teensy.send(XIAO_REG_COM, midpointX);
-    teensy.send(XIAO_REG_FLAG, seen ? XIAO_FLAG_COMMIT : 0);
+    // FLAG: COMMIT mirrors the combined arc|bottom "seen" (obstacle finish);
+    // TOP_LINE is set only when the front ARC itself has the centered run -
+    // used by the evac-exit line spin, which must ignore the bottom row.
+    teensy.send(XIAO_REG_FLAG, (uint8_t)((seen ? XIAO_FLAG_COMMIT : 0) |
+                                         (arcSeen ? XIAO_FLAG_TOP_LINE : 0)));
 
     digitalWrite(LED_BUILTIN, seen ? LOW : HIGH);
-    SPRINTF(SPRINT_SERIAL_IN, "[CP]", "seen=%d x=%u len=%u", seen ? 1 : 0, midpointX, runLen);
+    SPRINTF(SPRINT_SERIAL_IN, "[CP]", "seen=%d arc=%d bot=%d x=%u len=%u",
+            seen ? 1 : 0, arcSeen ? 1 : 0, bottomSeen ? 1 : 0, midpointX, runLen);
 }

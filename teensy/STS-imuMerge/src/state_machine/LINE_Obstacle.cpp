@@ -39,6 +39,7 @@ namespace {
     };
 
     constexpr float    OBS_REACQUIRE_TURN_DEG     = 25.0f;
+    constexpr float    OBS_CENTER_FINISH_MAX_DEG  = 100.0f;  // give up the center-point spin past this
     constexpr float    OBS_REACQUIRE_TURN_SPEED   = 50.0f;
     constexpr uint16_t OBS_AFTER_POINT_EXTRA_MS   = 120;
     constexpr float    OBS_STATE_TILT_GATE_DEG    = 17.0f;
@@ -48,8 +49,6 @@ namespace {
     constexpr float    OBS_TOUCH_ARC_RIGHT         = 5.0f;
     constexpr float    OBS_FREE_ARC_LEFT           = -3.0f;
     constexpr float    OBS_FREE_ARC_RIGHT          = 67.0f;
-    constexpr float    OBS_CENTER_FINISH_EXTRA_DEG = 30.0f;
-
     constexpr ObstacleEntryMotion OBS_ENTRY_FLAT = {
         -55.0f, 40.0f,
          80.0f, 40.0f,
@@ -182,6 +181,30 @@ namespace {
         Processing::XiaoDecode::tick(true);
     }
 
+    // Fallback when the center-point spin times out: creep forward in
+    // LINE_ANGLE mode until either the top arc (front row) or the bottom
+    // edge (near row) reports a line point.
+    void driveForwardUntilLineRow() {
+        Processing::XiaoDecode::setMode(XIAO_MODE_LINE_ANGLE);
+        pumpFor(60);
+        tone(BUZZER_PIN, 3000, 100);
+        Actions::Drive::motor(40, 40);
+        while (!Processing::XiaoDecode::gapTopLineFlag() &&
+               !Processing::XiaoDecode::gapBottomLineFlag()) {
+            Sensors::XIAO_link::tick();
+            Processing::XiaoDecode::tick(true);
+            Sensors::IMU::tick();
+            Actions::Drive::motor(40, 40);
+            delay(5);
+        }
+        Actions::Drive::stop();
+#if PRINT_ACTIONS
+        Serial.printf("Obstacle forward fallback: top=%d bottom=%d\n",
+                      Processing::XiaoDecode::gapTopLineFlag() ? 1 : 0,
+                      Processing::XiaoDecode::gapBottomLineFlag() ? 1 : 0);
+#endif
+    }
+
     bool turnWithCenterPointFinish(float angleDeg, float speed) {
         Processing::XiaoDecode::setMode(XIAO_MODE_CENTER_POINT);
         pumpFor(60);
@@ -194,16 +217,11 @@ namespace {
             Actions::Turn::turn(timedAngle, speed);
         }
 
-        const float timeoutDeg = finishDeg + OBS_CENTER_FINISH_EXTRA_DEG;
-        const unsigned long finishTimeoutMs =
-            (unsigned long)(timeoutDeg * TURN_SPIN_MS_PER_DEG * MAX_MOTOR_SPEED / speed);
-        const bool centered = (finishTimeoutMs > 0)
-            ? Actions::Turn::turnUntilCenterPoint(sign, speed, finishTimeoutMs)
-            : false;
+        const bool centered = Actions::Turn::turnUntilCenterPointMaxDeg(
+            sign, speed, OBS_CENTER_FINISH_MAX_DEG);
 #if PRINT_ACTIONS
-        Serial.printf("Obstacle center finish: %s (%.1f+%.1f deg timeout -> %lu ms)\n",
-                      centered ? "centered" : "timeout",
-                      finishDeg, OBS_CENTER_FINISH_EXTRA_DEG, finishTimeoutMs);
+        Serial.printf("Obstacle center finish: %s (%.1f deg timed lead-in, max %.0f deg)\n",
+                      centered ? "centered" : "timeout", finishDeg, OBS_CENTER_FINISH_MAX_DEG);
 #endif
         return centered;
     }
@@ -284,10 +302,11 @@ void update() {
     }
     tone(BUZZER_PIN, 1000, 500);
 
-    Actions::Forward::forward(-50, 80, /*useIMU=*/false, /*pumpComms=*/true);
-    Actions::Turn::turn(25, 45);
-    driveForwardUntilGapAnyPoint();
-    Actions::Drive::motor(50, 50);
+    Actions::Forward::forward(50, 50, /*useIMU=*/false, /*pumpComms=*/true);
+    // Actions::Forward::forward(-50, 80, /*useIMU=*/false, /*pumpComms=*/true);
+    // Actions::Turn::turn(25, 45);
+    // driveForwardUntilGapAnyPoint();
+    // Actions::Drive::motor(50, 50);
     {
         // Replaces a blind delay(790) -- keeps the IMU filter fed through
         // this straight run instead of letting it go stale.
@@ -296,7 +315,10 @@ void update() {
             Sensors::IMU::tick();
         }
     }
-    turnWithCenterPointFinish(65.0f, 45.0f);
+    const bool centered = turnWithCenterPointFinish(65.0f, 45.0f);
+    if (!centered) {
+        driveForwardUntilLineRow();
+    }
     finishToLineFollow();
     return;
 }

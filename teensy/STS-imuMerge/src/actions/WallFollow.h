@@ -9,7 +9,9 @@
 //    - Reads the shared tofFL[8][8] grid populated by Sensors::ToF::tick().
 //    - Runs a PID on the selected 2x2 ToF block when a wall is visible.
 //    - Drives straight (blind search) while the wall is temporarily absent
-//      (invalid reading, or distance >= farMm).
+//      (invalid reading, or distance >= farMm) — unless stopOnNoWall is set,
+//      in which case it stops instead and just keeps reporting NO_WALL
+//      (EVAC_Exit: park on wall loss, movement decided by the caller).
 //    - Handles the front touch sensor internally: backs up and turns, then
 //      returns TOUCH. The turn angle depends on the last returned status —
 //      wide (established wall/pause) vs narrow (still blind-searching).
@@ -48,11 +50,16 @@ enum class Status {
     TOUCH,
 };
 
+// One-shot read of the wall ToF zone (same 2x2 block tick() uses).
+// Returns false when every cell is invalid (-1); true + distance otherwise.
+bool wallDistanceMm(float& outMm);
+
 void reset();
 void recover(float backupMm);
 void recover(float backupMm, float turnDeg);
 Status tick(float targetMm = 100.0f, float baseSpeed = 40.0f,
-            float farMm = 230.0f, bool detectSudden = true);
+            float farMm = 230.0f, bool detectSudden = true,
+            bool stopOnNoWall = false);
 
 }  // namespace WallFollow
 }  // namespace Actions
