@@ -162,6 +162,13 @@ enum XiaoMode : uint8_t {
 // After firing any green turn (u-turn / left / right), ignore all green for this
 // long so the same intersection isn't re-read on the way out.
 #define DISABLE_GREEN_MS         1000
+
+// Left-green counting: the robot only turns on the Nth left-green marker it
+// sees (N == LOW or N == HIGH); every other left green is driven straight
+// through. Counter persists for the whole run (reset at power-on only).
+#define GREEN_LEFT_TURN_COUNT_LOW   1
+#define GREEN_LEFT_TURN_COUNT_HIGH  2
+
 #define BLACK_INTERSECT_DISABLE_GREEN_BASE_MS 1100
 #define BLACK_INTERSECT_DISABLE_GREEN_MIN_MS   700
 #define BLACK_INTERSECT_DISABLE_GREEN_MAX_MS  2000

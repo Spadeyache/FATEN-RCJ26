@@ -23,7 +23,8 @@
 //  Dispatch (highest priority first):
 //    front bumper          → LINE_OBSTACLE
 //    FEAT_UTURN            → 180° spin + line re-acquire, stay in LINE_FOLLOW
-//    FEAT_GREEN_LEFT/RIGHT → hardcoded forward + 90° turn
+//    FEAT_GREEN_LEFT       → counted; turn only on count LOW/HIGH, else forward
+//    FEAT_GREEN_RIGHT      → hardcoded forward + 90° turn
 //    FEAT_RED              → STALLED_RED
 //    FEAT_SILVER           → EVAC_ENTRY
 //    (none)                → runLinePID()
@@ -53,6 +54,12 @@ namespace {
         float finalTurnSpeed;
         bool rawTurns;
     };
+
+    // Left-green counter: each confirmed left green bumps this; the 90° turn
+    // (and later the arm-deploy sequence) only fires when the count hits
+    // GREEN_LEFT_TURN_COUNT_LOW or _HIGH. All other left greens are driven
+    // straight through. Persists across state re-entries; reset at power-on.
+    uint16_t      _greenLeftCount    = 0;
 
     // One-shot green cooldown: after firing any green turn (u-turn/left/right)
     // we ignore all green for DISABLE_GREEN_MS so the same intersection isn't
@@ -314,17 +321,30 @@ void update() {
             }
             return;
 
-        // Green turns: hardcoded straight-in then 90° spin (no continuous commit).
+        // Green left: counted. Only the GREEN_LEFT_TURN_COUNT_LOW-th and
+        // _HIGH-th marker fire the turn (arm-deploy sequence goes there later);
+        // every other left green is driven straight through.
         case FEAT_GREEN_LEFT:
             if (_disableGreen) { Actions::Drive::runLinePID(); return; }
             {
             const Actions::Drive::LineFollowState lfState = Actions::Drive::lineFollowState();
             const IntersectionMotion motion = greenLeftMotion(lfState);
+            ++_greenLeftCount;
+            const bool doTurn = (_greenLeftCount == GREEN_LEFT_TURN_COUNT_LOW ||
+                                 _greenLeftCount == GREEN_LEFT_TURN_COUNT_HIGH);
             #if PRINT_ACTIONS
-                        Serial.printf("Action: Green-Left (%s)\n", Actions::Drive::lineFollowStateName(lfState));
+                        Serial.printf("Action: Green-Left #%u -> %s (%s)\n", _greenLeftCount,
+                                      doTurn ? "TURN" : "forward",
+                                      Actions::Drive::lineFollowStateName(lfState));
             #endif
             tone(BUZZER_PIN, 9000, 300);
-            runIntersectionMotion(motion);
+            if (doTurn) {
+                // TODO: deploy-arm sequence goes here.
+                runIntersectionMotion(motion);
+            } else {
+                // Not a trigger count: drive straight through the intersection.
+                runForwardIfNeeded(motion.forwardSpeed, motion.forwardMm);
+            }
             Actions::Drive::stop();
             Processing::XiaoDecode::clearFilter();
             armGreenCooldown();
