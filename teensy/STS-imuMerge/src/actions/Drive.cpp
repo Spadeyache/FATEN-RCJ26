@@ -99,9 +99,13 @@ namespace {
 //  behaviour can be tested on a flat bench. Set false for normal IMU use.
 //    pitch + = nose up        roll + = left side down
 // =============================================================================
-constexpr bool  DEV_FORCE_TILT      = false;
+// FLAT-ONLY: IMU slope layer disabled. Forcing 0/0 tilt keeps every slope gate
+// closed, so lineFollowState() is always FLAT, rotAxisBias() is 0, and the
+// slope-profiled motor paths collapse to plain 4-wheel output.
+// To re-enable slopes: set DEV_FORCE_TILT back to false.
+constexpr bool  DEV_FORCE_TILT      = true;
 constexpr float DEV_ROBOT_PITCH_DEG = 0.0f;
-constexpr float DEV_ROBOT_ROLL_DEG  = 25.0f;
+constexpr float DEV_ROBOT_ROLL_DEG  = 0.0f;
 
 // IMU -> robot-frame remap for this mount (axis swap + sign flip, see header).
 inline float robotPitch() { return DEV_FORCE_TILT ? DEV_ROBOT_PITCH_DEG : Sensors::IMU::getRoll(); }

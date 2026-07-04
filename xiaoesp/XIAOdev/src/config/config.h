@@ -21,12 +21,7 @@
 //   1 = send camera frames + [LC]/[ROW]/[EVT] overlay text
 //   0 = send only [LC]/[ROW]/[EVT] text, no image payload
 #define STREAM_SEND_CAMERA_IMAGES 1
-// Debug: force XIAO to run MODE_LINE_ANGLE without Teensy/state-machine control.
-// Set back to 0 before normal robot runs.
-#define DEBUG_FORCE_LINE_ANGLE_MODE 0
-
 // Debug: force XIAO to run the evacuation silver + row-45 black scan mode.
-// Leave DEBUG_FORCE_LINE_ANGLE_MODE at 0; this is a separate override.
 #define DEBUG_FORCE_EVAC_COLOR_MASK_MODE 0
 
 
@@ -39,7 +34,6 @@
 //    reg 0x01 FEATURE  X→T  per-frame event (FEAT_* below; meaning is mode-scoped)
 //    reg 0x02 COM      X→T  line error 0..254 (127 = centred)
 //    reg 0x03 MODE     T→X  active XIAO mode (MODE_*)
-//    reg 0x04 ANGLE    X→T  gap line angle (gap mode)
 //    reg 0x05 FLAG     X→T  bit0 commit, bit1 tight-turn slow drive
 // ═════════════════════════════════════════════════════════════════════════════
 // FEATURE byte — LINE-follow mode events (the clean contract):
@@ -81,14 +75,13 @@
 
 // ── Mode 0 : Line Follow ─────────────────────────────────────────────────────
 #define LF_SILVER_PixCOUNT_THRESHOLD   4    // Min silver Pixel count → report FEAT_SILVER
-#define LF_RED_PixCOUNT_THRESHOLD      30   // Min red Pixel count → report FEAT_RED
 #define LF_BLACK_PixCOUNT_THRESHOLD    35   // Min black pixels → report FEAT_BLACK_INTERSECT
 #define LF_GREEN_PixCOUNT_THRESHOLD    4   //5 // pixels needed to confirm green
 
 // ── Mode 0b : Line Follow 2 (clean two-row CoM; no green/commit) ─────────────
 //  Row NEAR (70): black center-of-mass → line error (0..254, 127 = centre).
 //                 < LF2_NOLINE_BLACK_MIN black px on this row → no line.
-//  Row FAR  (40): edge cases — red (FEAT_RED) and black saturation (→ LED on).
+//  Row FAR  (40): edge cases — black saturation (→ LED on).
 #define LF2_ROW_NEAR             70   // lower row used for the steering error
 #define LF2_ROW_FAR              40   // front/look-ahead row used for edge cases
 #define LF2_NOLINE_BLACK_MIN      5   // near-row black px below this → no line (error = centre)

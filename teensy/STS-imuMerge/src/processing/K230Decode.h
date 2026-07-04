@@ -35,6 +35,25 @@ enum ObjectType : uint8_t {
     NONE        = 255,
 };
 
+// colordet.kmodel classes — box cls when the K230 runs the 7-colour line/field
+// model. Values MUST match the K230_COLOR_* ids in config.h (and the K230-side
+// colordet_labels.txt order). Distinct from ObjectType above, which describes
+// the victim-ball model used in the EVAC phase.
+enum ColorClass : uint8_t {
+    COLOR_BLACK   = K230_COLOR_BLACK,
+    COLOR_BLUE    = K230_COLOR_BLUE,
+    COLOR_GREEN   = K230_COLOR_GREEN,
+    COLOR_ORANGE  = K230_COLOR_ORANGE,
+    COLOR_RED     = K230_COLOR_RED,
+    COLOR_SILVER  = K230_COLOR_SILVER,
+    COLOR_YELLOW  = K230_COLOR_YELLOW,
+    COLOR_NONE    = 255,
+};
+
+// Human-readable name for a colordet class id ("Black".."Yellow"), or "?" if
+// the id is out of range. Handy for PRINT_K230 debug output.
+const char* colorName(uint8_t cls);
+
 struct Detection {
     ObjectType type;
     uint8_t    x;   // 0..255 (left=0, right=255)
@@ -82,7 +101,7 @@ bool checkVictim(const K230DBox &msg);
 bool checkVictim(const K230DBox *msgs, uint8_t msgCount);
 
 // Check the most recent K230D frame already stored by this decoder. This is the
-// normal call for state-machine code such as EVAC_Search.
+// normal call for state-machine code such as EVAC.
 bool checkVictim();
 
 // Evac-point (corner) detection, mirroring the victim helpers above. Picks the

@@ -31,7 +31,7 @@ Processing may call `sensors/` and `drivers/`. It must not include from
 | File | Role |
 |---|---|
 | `CommandFilter.{h,cpp}` | Majority-vote ring buffer over XIAO feature byte |
-| `XiaoDecode.{h,cpp}` | Reads XIAO_link cache → `xiaoCommand`, `lineError`, `gapAngle` |
+| `XiaoDecode.{h,cpp}` | Reads XIAO_link cache → `xiaoCommand`, `lineError` |
 | `K230Decode.{h,cpp}` | Stream parser for K230D frames → `detections[]` |
 | `Pose.{h,cpp}` | 3-state EKF (x, y, θ) |
 | `Mapping.{h,cpp}` | Pose estimator (Phase 0): predict + yaw update |

@@ -25,7 +25,6 @@ enum XiaoStreamClass : uint8_t {
 enum XiaoStreamPriority : uint8_t {
     XS_PRIO_NONE   = 0,
     XS_PRIO_LINE   = 1,
-    XS_PRIO_GAP    = 2,
     XS_PRIO_GREEN  = 3,
     XS_PRIO_RED    = 4,
     XS_PRIO_SILVER = 5

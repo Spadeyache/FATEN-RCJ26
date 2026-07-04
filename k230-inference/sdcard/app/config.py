@@ -18,10 +18,10 @@
 # Paths
 # ============================================================================
 MODELS_DIR         = "/data/models"
-DEPLOY_CONFIG_PATH = MODELS_DIR + "/victim_deploy_config.json"   # victims model (Dead/Live/Point)
+DEPLOY_CONFIG_PATH = MODELS_DIR + "/colordet_deploy_config.json"  # colour model (Black/Blue/Green/Orange/Red/Silver/Yellow)
 POINTS_DEPLOY_CONFIG = MODELS_DIR + "/points_deploy_config.json"  # points model (corner colour)
-LABELS_PATH        = MODELS_DIR + "/victim_labels.txt"
-KMODEL_DEFAULT     = MODELS_DIR + "/victim.kmodel"   # used only if deploy_config absent
+LABELS_PATH        = MODELS_DIR + "/colordet_labels.txt"
+KMODEL_DEFAULT     = MODELS_DIR + "/colordet.kmodel"   # used only if deploy_config absent
 
 CAPTURE_DIR        = "/data/captures"
 LOG_DIR            = "/data/logs"
@@ -33,7 +33,7 @@ CAMERA_CALIB_PATH  = "/data/calibration/camera.json"
 # ============================================================================
 WIDTH              = 640
 HEIGHT             = 480
-CAMERA_PIXFORMAT   = "GRAYSCALE"  # model trained on grayscale captures (maincam.py) — keep in sync
+CAMERA_PIXFORMAT   = "RGB888"  # colordet model trained on RGB888 captures (maincam_rgb.py) — keep in sync
 HMIRROR            = False
 VFLIP              = False
 
@@ -57,7 +57,9 @@ JPEG_QUALITY       = 95
 NUM_ANCHORS_640x480 = 6300        # 80*60 + 40*30 + 20*15
 CONF_THRESHOLD      = 0.30
 NMS_THRESHOLD       = 0.50
-MAX_BOXES_TX        = 16          # cap per wire frame (must match robot_io.MAX_BOXES)
+MAX_BOXES_TX        = 16          # hard cap per wire frame (must match robot_io.MAX_BOXES)
+TX_TOP_N            = 3           # only the N highest-confidence boxes are sent to the Teensy
+                                 # (the K230 display still draws ALL boxes above CONF_THRESHOLD)
 
 
 # ============================================================================
@@ -85,8 +87,19 @@ STATUS_COLOR_FOUND = (0, 255, 0)     # green: at least one victim
 # Display / debug
 # ============================================================================
 SHOW_DISPLAY       = True
+DRAW_LABELS        = True   # draw class name+score text on boxes. Uses the
+                           # bitmap font (no FreeType); set False to draw boxes
+                           # only if your firmware has no usable font at all.
 DEBUG_EVERY        = 30
 PROFILE_TIMING     = True
 SETTLE_MS          = 200
-COLOR_PALETTE      = [(220, 20, 60), (119, 11, 32),
-                      (0,   0, 142), (0,   0, 230)]
+# One draw colour per colordet class id (0=Black .. 6=Yellow). Chosen to be
+# visible on the preview, echoing the class name where a literal colour would
+# be invisible (Black -> light grey).
+COLOR_PALETTE      = [(200, 200, 200),  # 0 Black
+                      (0,     0, 255),  # 1 Blue
+                      (0,   255,   0),  # 2 Green
+                      (255, 140,   0),  # 3 Orange
+                      (255,   0,   0),  # 4 Red
+                      (192, 192, 192),  # 5 Silver
+                      (255, 255,   0)]  # 6 Yellow

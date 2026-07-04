@@ -3,13 +3,14 @@
 #include "../../config.h"
 #include "../../pins_teensy.h"
 
-#include "../sensors/Touch.h"
 #include "../sensors/XIAO_link.h"
-#include "../sensors/IMU.h"
+#include "../sensors/Touch.h"
+// #include "../sensors/IMU.h"  // IMU disabled — flat-only
 #include "../processing/XiaoDecode.h"
 #include "../actions/Drive.h"
 #include "../actions/Turn.h"
 #include "../actions/Forward.h"
+#include "../actions/Arm.h"
 
 #include <Arduino.h>
 #include <math.h>
@@ -21,13 +22,18 @@
 //  here does all the voting/debouncing (see CommandFilter::update).
 //
 //  Dispatch (highest priority first):
-//    front bumper          → LINE_OBSTACLE
-//    FEAT_UTURN            → 180° spin + line re-acquire, stay in LINE_FOLLOW
-//    FEAT_GREEN_LEFT       → counted; turn only on count LOW/HIGH, else forward
-//    FEAT_GREEN_RIGHT      → hardcoded forward + 90° turn
-//    FEAT_RED              → STALLED_RED
-//    FEAT_SILVER           → EVAC_ENTRY
+//    front touch           → release pending arm, stop 6 s, 180° spin, resume
+//    FEAT_GREEN_RIGHT      → counted; turn on count LEFT/RIGHT (sets which arm
+//                            deploys at the wall); after both counts passed,
+//                            the next right green = END → stop 12 s;
+//                            otherwise drive straight through
+//    FEAT_GREEN_LEFT       → both deploy counts passed → normal left turn;
+//                            otherwise mirrored deploy-return → turn RIGHT
+//    FEAT_SILVER           → EVAC
 //    (none)                → runLinePID()
+//
+//  FLAT-ONLY: the IMU slope layer is disabled (see DEV_FORCE_TILT in Drive.cpp);
+//  all intersection/u-turn motions use the FLAT tuning only.
 //
 //  After any green turn (u-turn/left/right) a DISABLE_GREEN_MS cooldown ignores
 //  all green so the same intersection isn't re-read on the way out.
@@ -43,23 +49,23 @@ namespace {
         float turnSpeed;
     };
 
-    struct UTurnSequence {
-        float preForwardSpeed;
-        float preForwardMm;
-        float firstTurnAngle;
-        float firstTurnSpeed;
-        float midForwardSpeed;
-        float midForwardMm;
-        float finalTurnAngle;
-        float finalTurnSpeed;
-        bool rawTurns;
-    };
+    // Right-green counter: each confirmed right green bumps this; the deploy
+    // turn fires when the count hits GREEN_RIGHT_TURN_COUNT_LEFT (→ left arm)
+    // or _RIGHT (→ right arm). Persists across state re-entries; power-on reset.
+    uint16_t      _greenRightCount   = 0;
 
-    // Left-green counter: each confirmed left green bumps this; the 90° turn
-    // (and later the arm-deploy sequence) only fires when the count hits
-    // GREEN_LEFT_TURN_COUNT_LOW or _HIGH. All other left greens are driven
-    // straight through. Persists across state re-entries; reset at power-on.
-    uint16_t      _greenLeftCount    = 0;
+    // Which arm the next front-touch (wall) releases; set by the deploy turn.
+    enum PendingArm : uint8_t { ARM_NONE, ARM_LEFT, ARM_RIGHT };
+    PendingArm    _pendingArm        = ARM_NONE;
+
+    // The very first left green of the run turns LEFT normally; the mirrored
+    // deploy-return rule (turn right until both deploys passed) starts after.
+    bool          _firstLeftGreenDone = false;
+
+    bool bothDeployCountsPassed() {
+        return _greenRightCount >= GREEN_RIGHT_TURN_COUNT_LEFT &&
+               _greenRightCount >= GREEN_RIGHT_TURN_COUNT_RIGHT;
+    }
 
     // One-shot green cooldown: after firing any green turn (u-turn/left/right)
     // we ignore all green for DISABLE_GREEN_MS so the same intersection isn't
@@ -96,128 +102,24 @@ namespace {
         while (millis() - start < ms) {
             Sensors::XIAO_link::tick();
             Processing::XiaoDecode::tick();
-            Sensors::IMU::tick();
+            // Sensors::IMU::tick();  // IMU disabled — flat-only
             delay(2);
         }
     }
 
-    IntersectionMotion greenLeftMotion(Actions::Drive::LineFollowState state) {
-        switch (state) {
-            case Actions::Drive::LINE_FOLLOW_NOSE_UP:
-                return {INTERSECTION_GREEN_NOSE_UP_FORWARD_SPEED,
-                        INTERSECTION_GREEN_NOSE_UP_FORWARD_MM,
-                        -INTERSECTION_GREEN_NOSE_UP_TURN_ANGLE,
-                        INTERSECTION_GREEN_NOSE_UP_TURN_SPEED};
-            case Actions::Drive::LINE_FOLLOW_NOSE_DOWN:
-                return {INTERSECTION_GREEN_NOSE_DOWN_FORWARD_SPEED,
-                        INTERSECTION_GREEN_NOSE_DOWN_FORWARD_MM,
-                        -INTERSECTION_GREEN_NOSE_DOWN_TURN_ANGLE,
-                        INTERSECTION_GREEN_NOSE_DOWN_TURN_SPEED};
-            case Actions::Drive::LINE_FOLLOW_LEFT_DOWN:
-                return {INTERSECTION_GREEN_SIDE_DOWNHILL_FORWARD_SPEED,
-                        INTERSECTION_GREEN_SIDE_DOWNHILL_FORWARD_MM,
-                        -INTERSECTION_GREEN_SIDE_DOWNHILL_TURN_ANGLE,
-                        INTERSECTION_GREEN_SIDE_DOWNHILL_TURN_SPEED};
-            case Actions::Drive::LINE_FOLLOW_RIGHT_DOWN:
-                return {INTERSECTION_GREEN_SIDE_UPHILL_FORWARD_SPEED,
-                        INTERSECTION_GREEN_SIDE_UPHILL_FORWARD_MM,
-                        -INTERSECTION_GREEN_SIDE_UPHILL_TURN_ANGLE,
-                        INTERSECTION_GREEN_SIDE_UPHILL_TURN_SPEED};
-            case Actions::Drive::LINE_FOLLOW_FLAT:
-            default:
-                return {INTERSECTION_GREEN_LEFT_FLAT_FORWARD_SPEED,
-                        INTERSECTION_GREEN_LEFT_FLAT_FORWARD_MM,
-                        INTERSECTION_GREEN_LEFT_FLAT_TURN_ANGLE,
-                        INTERSECTION_GREEN_LEFT_FLAT_TURN_SPEED};
-        }
-    }
+    // Flat-only motions. The slope-aware (IMU LineFollowState) variants were
+    // removed — see git history if slopes ever come back.
+    constexpr IntersectionMotion GREEN_LEFT_MOTION = {
+        INTERSECTION_GREEN_LEFT_FLAT_FORWARD_SPEED,
+        INTERSECTION_GREEN_LEFT_FLAT_FORWARD_MM,
+        INTERSECTION_GREEN_LEFT_FLAT_TURN_ANGLE,
+        INTERSECTION_GREEN_LEFT_FLAT_TURN_SPEED};
 
-    IntersectionMotion greenRightMotion(Actions::Drive::LineFollowState state) {
-        switch (state) {
-            case Actions::Drive::LINE_FOLLOW_NOSE_UP:
-                return {INTERSECTION_GREEN_NOSE_UP_FORWARD_SPEED,
-                        INTERSECTION_GREEN_NOSE_UP_FORWARD_MM,
-                        INTERSECTION_GREEN_NOSE_UP_TURN_ANGLE,
-                        INTERSECTION_GREEN_NOSE_UP_TURN_SPEED};
-            case Actions::Drive::LINE_FOLLOW_NOSE_DOWN:
-                return {INTERSECTION_GREEN_NOSE_DOWN_FORWARD_SPEED,
-                        INTERSECTION_GREEN_NOSE_DOWN_FORWARD_MM,
-                        INTERSECTION_GREEN_NOSE_DOWN_TURN_ANGLE,
-                        INTERSECTION_GREEN_NOSE_DOWN_TURN_SPEED};
-            case Actions::Drive::LINE_FOLLOW_LEFT_DOWN:
-                return {INTERSECTION_GREEN_SIDE_UPHILL_FORWARD_SPEED,
-                        INTERSECTION_GREEN_SIDE_UPHILL_FORWARD_MM,
-                        INTERSECTION_GREEN_SIDE_UPHILL_TURN_ANGLE,
-                        INTERSECTION_GREEN_SIDE_UPHILL_TURN_SPEED};
-            case Actions::Drive::LINE_FOLLOW_RIGHT_DOWN:
-                return {INTERSECTION_GREEN_SIDE_DOWNHILL_FORWARD_SPEED,
-                        INTERSECTION_GREEN_SIDE_DOWNHILL_FORWARD_MM,
-                        INTERSECTION_GREEN_SIDE_DOWNHILL_TURN_ANGLE,
-                        INTERSECTION_GREEN_SIDE_DOWNHILL_TURN_SPEED};
-            case Actions::Drive::LINE_FOLLOW_FLAT:
-            default:
-                return {INTERSECTION_GREEN_RIGHT_FLAT_FORWARD_SPEED,
-                        INTERSECTION_GREEN_RIGHT_FLAT_FORWARD_MM,
-                        INTERSECTION_GREEN_RIGHT_FLAT_TURN_ANGLE,
-                        INTERSECTION_GREEN_RIGHT_FLAT_TURN_SPEED};
-        }
-    }
-
-    UTurnSequence uturnSequence(Actions::Drive::LineFollowState state) {
-        switch (state) {
-            case Actions::Drive::LINE_FOLLOW_NOSE_UP:
-                return {INTERSECTION_UTURN_NOSE_UP_PRE_FORWARD_SPEED,
-                        INTERSECTION_UTURN_NOSE_UP_PRE_FORWARD_MM,
-                        INTERSECTION_UTURN_NOSE_UP_FIRST_TURN_ANGLE,
-                        INTERSECTION_UTURN_NOSE_UP_FIRST_TURN_SPEED,
-                        INTERSECTION_UTURN_NOSE_UP_MID_FORWARD_SPEED,
-                        INTERSECTION_UTURN_NOSE_UP_MID_FORWARD_MM,
-                        INTERSECTION_UTURN_NOSE_UP_FINAL_TURN_ANGLE,
-                        INTERSECTION_UTURN_NOSE_UP_FINAL_TURN_SPEED,
-                        true};
-            case Actions::Drive::LINE_FOLLOW_NOSE_DOWN:
-                return {INTERSECTION_UTURN_NOSE_DOWN_PRE_FORWARD_SPEED,
-                        INTERSECTION_UTURN_NOSE_DOWN_PRE_FORWARD_MM,
-                        INTERSECTION_UTURN_NOSE_DOWN_FIRST_TURN_ANGLE,
-                        INTERSECTION_UTURN_NOSE_DOWN_FIRST_TURN_SPEED,
-                        INTERSECTION_UTURN_NOSE_DOWN_MID_FORWARD_SPEED,
-                        INTERSECTION_UTURN_NOSE_DOWN_MID_FORWARD_MM,
-                        INTERSECTION_UTURN_NOSE_DOWN_FINAL_TURN_ANGLE,
-                        INTERSECTION_UTURN_NOSE_DOWN_FINAL_TURN_SPEED,
-                        true};
-            case Actions::Drive::LINE_FOLLOW_LEFT_DOWN:
-                return {INTERSECTION_UTURN_LEFT_DOWN_PRE_FORWARD_SPEED,
-                        INTERSECTION_UTURN_LEFT_DOWN_PRE_FORWARD_MM,
-                        INTERSECTION_UTURN_LEFT_DOWN_FIRST_TURN_ANGLE,
-                        INTERSECTION_UTURN_LEFT_DOWN_FIRST_TURN_SPEED,
-                        INTERSECTION_UTURN_LEFT_DOWN_MID_FORWARD_SPEED,
-                        INTERSECTION_UTURN_LEFT_DOWN_MID_FORWARD_MM,
-                        INTERSECTION_UTURN_LEFT_DOWN_FINAL_TURN_ANGLE,
-                        INTERSECTION_UTURN_LEFT_DOWN_FINAL_TURN_SPEED,
-                        false};
-            case Actions::Drive::LINE_FOLLOW_RIGHT_DOWN:
-                return {INTERSECTION_UTURN_RIGHT_DOWN_PRE_FORWARD_SPEED,
-                        INTERSECTION_UTURN_RIGHT_DOWN_PRE_FORWARD_MM,
-                        INTERSECTION_UTURN_RIGHT_DOWN_FIRST_TURN_ANGLE,
-                        INTERSECTION_UTURN_RIGHT_DOWN_FIRST_TURN_SPEED,
-                        INTERSECTION_UTURN_RIGHT_DOWN_MID_FORWARD_SPEED,
-                        INTERSECTION_UTURN_RIGHT_DOWN_MID_FORWARD_MM,
-                        INTERSECTION_UTURN_RIGHT_DOWN_FINAL_TURN_ANGLE,
-                        INTERSECTION_UTURN_RIGHT_DOWN_FINAL_TURN_SPEED,
-                        false};
-            case Actions::Drive::LINE_FOLLOW_FLAT:
-            default:
-                return {INTERSECTION_UTURN_FLAT_PRE_FORWARD_SPEED,
-                        INTERSECTION_UTURN_FLAT_PRE_FORWARD_MM,
-                        INTERSECTION_UTURN_FLAT_FIRST_TURN_ANGLE,
-                        INTERSECTION_UTURN_FLAT_FIRST_TURN_SPEED,
-                        INTERSECTION_UTURN_FLAT_MID_FORWARD_SPEED,
-                        INTERSECTION_UTURN_FLAT_MID_FORWARD_MM,
-                        INTERSECTION_UTURN_FLAT_FINAL_TURN_ANGLE,
-                        INTERSECTION_UTURN_FLAT_FINAL_TURN_SPEED,
-                        false};
-        }
-    }
+    constexpr IntersectionMotion GREEN_RIGHT_MOTION = {
+        INTERSECTION_GREEN_RIGHT_FLAT_FORWARD_SPEED,
+        INTERSECTION_GREEN_RIGHT_FLAT_FORWARD_MM,
+        INTERSECTION_GREEN_RIGHT_FLAT_TURN_ANGLE,
+        INTERSECTION_GREEN_RIGHT_FLAT_TURN_SPEED};
 
     void runIntersectionMotion(const IntersectionMotion& motion) {
         if (motion.forwardSpeed != 0.0f && motion.forwardMm != 0.0f) {
@@ -254,14 +156,6 @@ namespace {
         }
     }
 
-    void runUTurnSequence(const UTurnSequence& seq) {
-        runForwardIfNeeded(seq.preForwardSpeed, seq.preForwardMm);
-        if (seq.rawTurns) Actions::Turn::turnRaw(seq.firstTurnAngle, seq.firstTurnSpeed);
-        else              Actions::Turn::turn(seq.firstTurnAngle, seq.firstTurnSpeed);
-        runForwardIfNeeded(seq.midForwardSpeed, seq.midForwardMm);
-        if (seq.rawTurns) Actions::Turn::turnRaw(seq.finalTurnAngle, seq.finalTurnSpeed);
-        else              Actions::Turn::turn(seq.finalTurnAngle, seq.finalTurnSpeed);
-    }
 }
 
 void onEnter() {
@@ -278,122 +172,116 @@ void onEnter() {
 void update() {
     clearGreenIfElapsed();
 
-    // Front bumper has priority — hand off to the obstacle handler.
+    // Front touch = deploy wall: release the arm picked at the deploy turn
+    // (nothing if no deploy is pending), stop DEPLOY_TOUCH_STOP_MS, spin 180°,
+    // resume line following. Always active in this state.
     if (Sensors::Touch::front()) {
-        StateMachine::transitionTo(StateMachine::LINE_OBSTACLE);
+        Actions::Drive::stop();
+#if PRINT_ACTIONS
+        Serial.printf("Action: Deploy touch -> release %s arm\n",
+                      _pendingArm == ARM_LEFT ? "LEFT" : _pendingArm == ARM_RIGHT ? "RIGHT" : "NO");
+#endif
+        if (_pendingArm == ARM_LEFT)       Actions::Arm::releaseLeft();
+        else if (_pendingArm == ARM_RIGHT) Actions::Arm::releaseRight();
+        _pendingArm = ARM_NONE;
+
+        // Course-specific: a touch while the right-green count sits at exactly
+        // 3 counts as marker #4 (3 → 4 only; no other count is bumped here).
+        if (_greenRightCount == 3) {
+            ++_greenRightCount;
+#if PRINT_ACTIONS
+            Serial.println("Deploy touch: green-right count bumped 3 -> 4");
+#endif
+        }
+
+        pumpXiaoFor(DEPLOY_TOUCH_STOP_MS);
+        Actions::Turn::turn(180.0f, DEPLOY_UTURN_SPEED);
+        Actions::Drive::stop();
+        Processing::XiaoDecode::clearFilter();
+        armGreenCooldown();
         return;
     }
 
     switch (Processing::XiaoDecode::command()) {
-        case FEAT_UTURN:
-            if (_disableGreen) { Actions::Drive::runLinePID(); return; }
-            {
-            // Captured once, before the spin: held through the post-macro
-            // suppression window so a mid-spin IMU blip can't be mistaken
-            // for the slope state changing.
-            const Actions::Drive::LineFollowState lfState = Actions::Drive::lineFollowState();
-            const UTurnSequence seq = uturnSequence(lfState);
-            #if PRINT_ACTIONS
-                        Serial.printf("Action: U-Turn (%s)\n", Actions::Drive::lineFollowStateName(lfState));
-            #endif
-            runUTurnSequence(seq);
-
-            // After the timed U-turn, keep spinning with the same motor power
-            // until XIAO's SearchLine mode sees the black line again.
-            Actions::Drive::stop();
-            Processing::XiaoDecode::setMode(XIAO_MODE_SEARCH_LINE);
-            pumpXiaoFor(200);
-            Processing::XiaoDecode::clearFilter();
-
-            while (Processing::XiaoDecode::command() != FEAT_SEARCH_LINE_BLACK) {
-                Sensors::XIAO_link::tick();
-                Processing::XiaoDecode::tick();
-                Sensors::IMU::tick();
-                Actions::Drive::motor(60.0f, -60.0f);
-            }
-
-            Actions::Drive::stop();
-            Processing::XiaoDecode::setMode(XIAO_MODE_LINE);
-            pumpXiaoFor(200);
-            Processing::XiaoDecode::clearFilter();
-            armGreenCooldown();
-            Actions::Drive::suppressSlopeDetection(lfState);
-            }
-            return;
-
-        // Green left: counted. Only the GREEN_LEFT_TURN_COUNT_LOW-th and
-        // _HIGH-th marker fire the turn (arm-deploy sequence goes there later);
-        // every other left green is driven straight through.
-        case FEAT_GREEN_LEFT:
-            if (_disableGreen) { Actions::Drive::runLinePID(); return; }
-            {
-            const Actions::Drive::LineFollowState lfState = Actions::Drive::lineFollowState();
-            const IntersectionMotion motion = greenLeftMotion(lfState);
-            ++_greenLeftCount;
-            const bool doTurn = (_greenLeftCount == GREEN_LEFT_TURN_COUNT_LOW ||
-                                 _greenLeftCount == GREEN_LEFT_TURN_COUNT_HIGH);
-            #if PRINT_ACTIONS
-                        Serial.printf("Action: Green-Left #%u -> %s (%s)\n", _greenLeftCount,
-                                      doTurn ? "TURN" : "forward",
-                                      Actions::Drive::lineFollowStateName(lfState));
-            #endif
-            tone(BUZZER_PIN, 9000, 300);
-            if (doTurn) {
-                // TODO: deploy-arm sequence goes here.
-                runIntersectionMotion(motion);
-            } else {
-                // Not a trigger count: drive straight through the intersection.
-                runForwardIfNeeded(motion.forwardSpeed, motion.forwardMm);
-            }
-            Actions::Drive::stop();
-            Processing::XiaoDecode::clearFilter();
-            armGreenCooldown();
-            Actions::Drive::suppressSlopeDetection(lfState);
-            }
-            return;
-
+        // Green right: counted. On count LEFT/RIGHT → deploy turn (remember
+        // which arm to drop at the wall). After BOTH counts have been passed,
+        // any further right green is the END marker: stop 12 s. Every other
+        // right green is driven straight through.
         case FEAT_GREEN_RIGHT:
             if (_disableGreen) { Actions::Drive::runLinePID(); return; }
             {
-            const Actions::Drive::LineFollowState lfState = Actions::Drive::lineFollowState();
-            const IntersectionMotion motion = greenRightMotion(lfState);
+            if (bothDeployCountsPassed()) {
+                // End marker: full stop for END_RIGHT_GREEN_STOP_MS.
+                #if PRINT_ACTIONS
+                            Serial.println("Action: Green-Right END -> stop");
+                #endif
+                Actions::Drive::stop();
+                tone(BUZZER_PIN, 9000, 300);
+                pumpXiaoFor(END_RIGHT_GREEN_STOP_MS);
+                Processing::XiaoDecode::clearFilter();
+                armGreenCooldown();
+                return;
+            }
+
+            ++_greenRightCount;
+            const bool deployLeft  = (_greenRightCount == GREEN_RIGHT_TURN_COUNT_LEFT);
+            const bool deployRight = (_greenRightCount == GREEN_RIGHT_TURN_COUNT_RIGHT);
             #if PRINT_ACTIONS
-                        Serial.printf("Action: Green-Right (%s)\n", Actions::Drive::lineFollowStateName(lfState));
+                        Serial.printf("Action: Green-Right #%u -> %s\n", _greenRightCount,
+                                      deployLeft ? "TURN (left arm)"
+                                                 : deployRight ? "TURN (right arm)" : "forward");
             #endif
             tone(BUZZER_PIN, 9000, 300);
-            runIntersectionMotion(motion);
-            Actions::Drive::stop();
-            Processing::XiaoDecode::clearFilter();
-            armGreenCooldown();
-            Actions::Drive::suppressSlopeDetection(lfState);
+            if (deployLeft || deployRight) {
+                _pendingArm = deployLeft ? ARM_LEFT : ARM_RIGHT;
+                runIntersectionMotion(GREEN_RIGHT_MOTION);
+                Actions::Drive::stop();
+                Processing::XiaoDecode::clearFilter();
+                armGreenCooldown();
+            } else {
+                // Not a trigger count: drive straight through the intersection,
+                // then ignore green for the same window as a saturated-black
+                // intersection so the marker isn't re-read on the way out.
+                runForwardIfNeeded(GREEN_RIGHT_MOTION.forwardSpeed, GREEN_RIGHT_MOTION.forwardMm);
+                Actions::Drive::stop();
+                Processing::XiaoDecode::clearFilter();
+                armBlackIntersectCooldown();
+            }
             }
             return;
 
-        case FEAT_RED:
-            if (StateMachine::redSuppressed()) {
-                Processing::XiaoDecode::clearFilter();
-                Actions::Drive::runLinePID();
-                return;
+        // Green left: the very first one of the run is a genuine marker →
+        // normal left turn. After that: once both deploy counts are passed
+        // it's genuine again → left; otherwise it's the deploy intersection
+        // seen mirrored on the way back from the wall → turn RIGHT to resume.
+        case FEAT_GREEN_LEFT:
+            if (_disableGreen) { Actions::Drive::runLinePID(); return; }
+            {
+            const bool turnLeft = !_firstLeftGreenDone || bothDeployCountsPassed();
+            _firstLeftGreenDone = true;
+            #if PRINT_ACTIONS
+                        Serial.printf("Action: Green-Left -> turn %s\n", turnLeft ? "LEFT" : "RIGHT");
+            #endif
+            tone(BUZZER_PIN, 9000, 300);
+            runIntersectionMotion(turnLeft ? GREEN_LEFT_MOTION : GREEN_RIGHT_MOTION);
+            Actions::Drive::stop();
+            Processing::XiaoDecode::clearFilter();
+            armGreenCooldown();
             }
-            StateMachine::transitionTo(StateMachine::STALLED_RED);
             return;
 
         case FEAT_SILVER:
             Actions::Drive::stop();
-            StateMachine::transitionTo(StateMachine::EVAC_ENTRY);
+            StateMachine::transitionTo(StateMachine::EVAC);
             return;
 
         case FEAT_BLACK_INTERSECT:
 
             tone(BUZZER_PIN, 3000, 50);
             armBlackIntersectCooldown();
-            Actions::Drive::suppressSlopeDetection(Actions::Drive::lineFollowState());
+            // Actions::Drive::suppressSlopeDetection(...);  // IMU disabled — flat-only
             Processing::XiaoDecode::clearFilter();
             Actions::Drive::runLinePID();
-            return;
-
-        case FEAT_LINE_LOST:
-            StateMachine::transitionTo(StateMachine::LINE_GAP);
             return;
 
         default:

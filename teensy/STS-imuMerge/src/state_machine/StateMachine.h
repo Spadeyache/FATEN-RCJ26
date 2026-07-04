@@ -8,18 +8,12 @@ namespace StateMachine {
 
 enum RobotState {
     LINE_FOLLOW,
-    LINE_OBSTACLE,
-    LINE_GAP,
-    STALLED_RED,         // handled inline in StateMachine.cpp (no file)
-    EVAC_ENTRY,
-    EVAC_SEARCH_DEPLOY,
-    EVAC_EXIT,
+    EVAC,
 };
 
 void       init();
 void       tick();                 // dispatches to active state's update()
 void       transitionTo(RobotState next);
 RobotState current();
-bool       redSuppressed();
 
 }  // namespace StateMachine

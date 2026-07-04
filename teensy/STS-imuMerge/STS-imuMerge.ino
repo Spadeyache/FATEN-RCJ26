@@ -28,7 +28,7 @@
 
 // Debug force-start. Set FORCE_START_STATE to 0 before normal runs.
 #define FORCE_START_STATE 0
-#define FORCE_STATE_TARGET StateMachine::EVAC_EXIT
+#define FORCE_STATE_TARGET StateMachine::EVAC
 
 FLASHMEM void setup() {
     Serial.begin(115200);
@@ -41,11 +41,11 @@ FLASHMEM void setup() {
 
     Actions::Drive::init();
     Actions::Arm::init();           // servos + KRS, sets initial pose
-    Sensors::IMU::init();
+    // Sensors::IMU::init();
     Sensors::Touch::init();
     Sensors::XIAO_link::init();
     Sensors::K230_link::init();
-    Sensors::ToF::init();  // Needed by EVAC_EXIT wall-follow.
+    Sensors::ToF::init();
 
     StateMachine::init();
 #if FORCE_START_STATE
@@ -73,7 +73,7 @@ void loop() {
     // 1. Pump sensor I/O (raw bytes in/out).
     Sensors::XIAO_link::tick();
     Sensors::K230_link::tick();
-    Sensors::IMU::tick();
+    // Sensors::IMU::tick();
     Sensors::ToF::tick();       // updates global tofFL[8][8]
     // Sensors::ToF::printFL(); // optional debug dump
     Sensors::Touch::tick();
@@ -81,7 +81,7 @@ void loop() {
     // 2. Run processing layer (decode, filter, fuse).
     Processing::XiaoDecode::tick();
     Processing::K230Decode::tick();
-    // Mapping::tick() is called by EVAC_* states only.
+    // Mapping is disabled.
 
     // 3. Debug Serial commands ('m' = map dump, 'p' = pose print). DISABLED (mapping off).
     // while (Serial.available()) Processing::Mapping::handleSerial((char)Serial.read());

@@ -1,8 +1,8 @@
 #pragma once
 
-namespace LINE_Gap {
+namespace EVAC {
 
 void onEnter();
 void update();
 
-}  // namespace LINE_Gap
+}  // namespace EVAC

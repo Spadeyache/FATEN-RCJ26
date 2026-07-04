@@ -115,7 +115,7 @@
 flowchart LR
   subgraph SRC["INPUTS — smart co-processors & sensors"]
     direction TB
-    XIAO["📷 XIAO ESP32-S3<br/><small>runs camera vision<br/>(line, green, red, silver, gap)</small>"]
+    XIAO["📷 XIAO ESP32-S3<br/><small>runs camera vision<br/>(line, green, silver)</small>"]
     K230["🧠 K230D AI processor<br/><small>YOLO model<br/>(victim bounding boxes)</small>"]
     IMU["🧭 IMU MPU6050<br/><small>pitch / roll / yaw</small>"]
     TOF["📏 ToF VL53L7CX<br/><small>distance / walls</small>"]
@@ -170,7 +170,7 @@ flowchart LR
 
     <div class="mermaid">
 flowchart TB
-  SM["<b>state_machine/</b><br/>orchestrates behaviour<br/><small>LINE_Follow · LINE_Gap · LINE_Obstacle · EVAC_*</small>"]
+  SM["<b>state_machine/</b><br/>orchestrates behaviour<br/><small>LINE_Follow · EVAC_*</small>"]
   AC["<b>actions/</b><br/>blocking high-level motions<br/><small>Drive (PID) · Turn · Forward · Arm</small>"]
   PR["<b>processing/</b><br/>decode · filter · fuse<br/><small>XiaoDecode · K230Decode · CommandFilter · Pose/EKF · Mapping</small>"]
   SE["<b>sensors/</b><br/>raw I/O wrappers<br/><small>XIAO_link · K230_link · IMU · ToF · Touch</small>"]
@@ -241,9 +241,8 @@ flowchart LR
     <h3>The register protocol</h3>
     <table>
       <tr><th>Register</th><th>ID</th><th>Direction</th><th>Meaning</th></tr>
-      <tr><td><code>XIAO_REG_FEATURE</code></td><td>0x01</td><td><span class="tag t-in">Xiao → Teensy</span></td><td>Detected feature byte (green, red, silver, intersection, gap…) — the noisy raw vote</td></tr>
+      <tr><td><code>XIAO_REG_FEATURE</code></td><td>0x01</td><td><span class="tag t-in">Xiao → Teensy</span></td><td>Detected feature byte (green, silver, intersection…) — the noisy raw vote</td></tr>
       <tr><td><code>XIAO_REG_COM</code></td><td>0x02</td><td><span class="tag t-in">Xiao → Teensy</span></td><td>Line centre-of-mass, <code>0..254</code> (<b>127 = centred</b>) — the steering error</td></tr>
-      <tr><td><code>XIAO_REG_ANGLE</code></td><td>0x04</td><td><span class="tag t-in">Xiao → Teensy</span></td><td>Gap line angle, <code>0..254</code> (127 = 0°) — only meaningful in GAP mode</td></tr>
       <tr><td><code>XIAO_REG_MODE</code></td><td>0x03</td><td><span class="tag t-out">Teensy → Xiao</span></td><td>Tells the XIAO which vision program to run (see below)</td></tr>
     </table>
 
@@ -251,10 +250,9 @@ flowchart LR
     <p>The Teensy can re-task the camera by writing <code>XIAO_REG_MODE</code>. This is the one
     upward message — the state machine swaps the camera's job to match the behaviour it's running.</p>
     <div class="grid">
-      <div class="card"><b>0 · LINE</b><br><span class="pill">Follow the black line, watch for green/red/silver/intersection glyphs.</span></div>
+      <div class="card"><b>0 · LINE</b><br><span class="pill">Follow the black line, watch for green/silver/intersection glyphs.</span></div>
       <div class="card"><b>1 · EVAC</b><br><span class="pill">Evacuation-zone vision.</span></div>
       <div class="card"><b>2 · NOGI</b><br><span class="pill">No-green-intersection disambiguation (which arm of the cross to take).</span></div>
-      <div class="card"><b>3 · GAP</b><br><span class="pill">Line-gap mode — reports a gap angle to re-acquire the line.</span></div>
     </div>
 
     <h3>What the decode layer does with it</h3>
@@ -262,17 +260,15 @@ flowchart LR
 flowchart LR
   RAW["Register cache<br/><small>XIAO_link::get(reg)</small>"]
   COM["lineError()<br/><small>= COM register<br/>updated EVERY loop</small>"]
-  ANG["gapAngle()<br/><small>= ANGLE register</small>"]
   FEAT["FEATURE byte"]
   FILT["CommandFilter<br/><small>majority vote @ 50 Hz<br/>(15-frame ring buffer)</small>"]
   CMD["command()<br/><small>confirmed code 1–8</small>"]
   RAW --> COM
-  RAW --> ANG
   RAW --> FEAT --> FILT --> CMD
 
   classDef proc fill:#241a33,stroke:#bc8cff,color:#e6edf3;
   classDef src fill:#102a2c,stroke:#39c5cf,color:#e6edf3;
-  class RAW src; class COM,ANG,FEAT,FILT,CMD proc;
+  class RAW src; class COM,FEAT,FILT,CMD proc;
     </div>
     <div class="note"><b>Two speeds on purpose.</b> <code>lineError</code> (steering) is time-critical, so
     it's read raw <i>every loop</i>. The <code>FEATURE</code> byte is noisy, so it's only trusted after
@@ -291,7 +287,7 @@ flowchart LR
 flowchart TB
   IN["raw FEATURE byte<br/>(each 50 Hz tick)"]
   Q["15-frame ring buffer<br/><small>oldest vote falls off</small>"]
-  TALLY["Tally votes per category<br/><small>left · right · u-turn · red · silver · black · no-line</small>"]
+  TALLY["Tally votes per category<br/><small>left · right · u-turn · silver · black · no-line</small>"]
   CHK{"reached<br/>threshold?"}
   CONF["confirmed command 1–8"]
   ZERO["0 — nothing confirmed yet"]
@@ -310,16 +306,14 @@ flowchart TB
       <tr><td><b>1</b></td><td>U-turn glyph (green both sides)</td><td>≥2 u-turn glyphs, or strong dual-green</td><td>180° spin in place</td></tr>
       <tr><td><b>2</b></td><td>Green left</td><td>4 votes</td><td>forward 35 mm + turn −75°, then green-cooldown</td></tr>
       <tr><td><b>3</b></td><td>Green right</td><td>4 votes</td><td>forward 35 mm + turn +75°, then green-cooldown</td></tr>
-      <tr><td><b>4</b></td><td>Red (stop) tile</td><td>5 votes</td><td>→ <code>STALLED_RED</code> (idle until red clears)</td></tr>
-      <tr><td><b>5</b></td><td>Silver (evac entrance)</td><td>4 votes</td><td>→ <code>EVAC_ENTRY</code></td></tr>
+      <tr><td><b>5</b></td><td>Silver (evac entrance)</td><td>4 votes</td><td>→ <code>EVAC</code></td></tr>
       <tr><td><b>6</b></td><td>No-green intersection</td><td>6 black votes, ≤2 green</td><td>NGI sub-sequence (stop, NOGI mode, resample, go straight)</td></tr>
       <tr><td><b>7</b></td><td>NGI back-up variant</td><td>2 black, 0 green</td><td>NGI sub-sequence (90° branch — future work)</td></tr>
-      <tr><td><b>8</b></td><td>Sustained line loss</td><td>3 votes</td><td>→ <code>LINE_GAP</code></td></tr>
       <tr><td><b>0</b></td><td>nothing confirmed</td><td>—</td><td>just run the line PID</td></tr>
     </table>
     <div class="note"><b>Clever bit:</b> the U-turn glyph (code 1) also counts as one vote toward
     <i>both</i> left and right, so a normal single-side green approach can never accidentally cross
-    the U-turn threshold. Precedence: <b>red → silver → u-turn → green → intersection → no-line</b>.</div>
+    the U-turn threshold. Precedence: <b>silver → u-turn → green → intersection → no-line</b>.</div>
   </section>
 
   <!-- ===================================================================== -->
@@ -363,7 +357,7 @@ flowchart LR
   <section id="other">
     <h2>7 · Onboard sensors — IMU · ToF · Touch</h2>
     <p class="lead">Beyond the two camera co-processors, the Teensy reads three local sensors
-    directly. These feed slope compensation, evac-zone mapping, and obstacle handling.</p>
+    directly. These feed slope compensation, evac-zone mapping, and contact sensing.</p>
     <div class="grid">
       <div class="card">
         <b style="color:var(--cyan)">🧭 IMU (MPU6050)</b>
@@ -378,8 +372,7 @@ flowchart LR
       </div>
       <div class="card">
         <b style="color:var(--cyan)">👆 Touch + conductive</b>
-        <p class="pill">GPIO. Front bumper has <b>top priority</b> in LINE_Follow — a bump immediately
-        hands off to <code>LINE_Obstacle</code> before any camera command is considered.</p>
+        <p class="pill">GPIO. Front bumper and conductive probes are still available to states that need contact sensing, especially evacuation behaviours.</p>
       </div>
     </div>
   </section>
@@ -395,17 +388,8 @@ flowchart LR
     <div class="mermaid">
 stateDiagram-v2
   [*] --> LINE_FOLLOW
-  LINE_FOLLOW --> LINE_OBSTACLE: touch front bumper
-  LINE_FOLLOW --> LINE_GAP: cmd 8 (line lost)
-  LINE_FOLLOW --> STALLED_RED: cmd 4 (red tile)
-  LINE_FOLLOW --> EVAC_ENTRY: cmd 5 (silver)
-  LINE_OBSTACLE --> LINE_FOLLOW: obstacle cleared
-  LINE_GAP --> LINE_FOLLOW: line re-acquired
-  STALLED_RED --> LINE_FOLLOW: red clears (cmd ≠ 4)
-  EVAC_ENTRY --> EVAC_SEARCH
-  EVAC_SEARCH --> EVAC_DEPLOY: victim reached
-  EVAC_DEPLOY --> EVAC_EXIT: victim dropped
-  EVAC_EXIT --> LINE_FOLLOW: back on the line
+  LINE_FOLLOW --> EVAC: cmd 5 (silver)
+  EVAC --> LINE_FOLLOW: K230D exit point
 
   note right of LINE_FOLLOW
     cmd 1/2/3 (U-turn, green L/R)
@@ -415,9 +399,8 @@ stateDiagram-v2
     </div>
 
     <div class="grid">
-      <div class="card"><b style="color:var(--amber)">LINE_*</b><br><span class="pill">The competition course: follow line, cross gaps, dodge obstacles, obey green/red glyphs.</span></div>
-      <div class="card"><b style="color:var(--amber)">EVAC_*</b><br><span class="pill">The evacuation zone: enter → search victims (K230D) → deploy in safe corner → exit → rejoin line.</span></div>
-      <div class="card"><b style="color:var(--amber)">STALLED_RED</b><br><span class="pill">No file — handled inline. Just stops until the XIAO stops reporting red.</span></div>
+      <div class="card"><b style="color:var(--amber)">LINE_*</b><br><span class="pill">The competition course: follow line and obey green/silver glyphs.</span></div>
+      <div class="card"><b style="color:var(--amber)">EVAC</b><br><span class="pill">The evacuation zone: search victims with K230D, grab left then right, then return through a K230D exit point.</span></div>
     </div>
   </section>
 
@@ -432,37 +415,30 @@ stateDiagram-v2
 flowchart TB
   T["LINE_Follow::update()"]
   G{"green cooldown<br/>elapsed?"}
-  TCH{"touch front?"}
   C{"confirmed<br/>command?"}
   U["cmd 1 → 180° U-turn<br/><small>(inline, stay in state)</small>"]
   GR["cmd 2/3 → fwd + 90° green turn<br/><small>start cooldown</small>"]
-  RED["cmd 4 → STALLED_RED"]
-  EV["cmd 5 → EVAC_ENTRY"]
+  EV["cmd 5 → EVAC"]
   NGI["cmd 6/7 → no-green-intersection seq<br/><small>stop · NOGI mode · resample · go</small>"]
-  GAP["cmd 8 → LINE_GAP"]
   PID["default → Drive::runLinePID()"]
 
-  T --> G --> TCH
-  TCH -- yes --> OBS["→ LINE_OBSTACLE"]
-  TCH -- no --> C
+  T --> G --> C
   C -- 1 --> U
   C -- "2/3" --> GR
-  C -- 4 --> RED
   C -- 5 --> EV
   C -- "6/7" --> NGI
-  C -- 8 --> GAP
   C -- "0 / none" --> PID
 
   classDef dec fill:#2b2410,stroke:#d29922,color:#e6edf3;
   classDef out fill:#10271a,stroke:#3fb950,color:#e6edf3;
-  class T,G,TCH,C dec; class U,GR,RED,EV,NGI,GAP,PID,OBS out;
+  class T,G,C dec; class U,GR,EV,NGI,PID out;
     </div>
 
     <div class="note danger"><b>Heads-up — currently neutralised for bench tuning:</b> in
     <code>LINE_Follow.cpp</code> the line reads <code>const uint8_t cmd = 0;</code> (the real
     <code>XiaoDecode::command()</code> call right above it is commented out). So right now the robot
-    <i>ignores all glyph commands</i> and only does touch-handoff + pure PID. Re-enable the real
-    command read to restore green/red/silver/gap behaviour.</div>
+    <i>ignores all glyph commands</i> and only does pure PID. Re-enable the real
+    command read to restore green/silver behaviour.</div>
   </section>
 
   <!-- ===================================================================== -->

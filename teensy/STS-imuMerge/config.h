@@ -31,28 +31,21 @@
 //   reg 0x01 FEATURE  X→T  per-frame event (FEAT_* below)
 //   reg 0x02 COM      X→T  line error 0..254 (127 = centred)
 //   reg 0x03 MODE     T→X  active XIAO mode
-//   reg 0x04 ANGLE    X→T  gap line angle (gap mode)
 //   reg 0x05 FLAG     X→T  bit0 commit, bit1 tight-turn slow drive
 #define XIAO_REG_FEATURE    0x01
 #define XIAO_REG_COM        0x02
 #define XIAO_REG_MODE       0x03
-#define XIAO_REG_ANGLE      0x04
 #define XIAO_REG_FLAG       0x05
-#define XIAO_REG_FINE_ANGLE 0x06
 
 #define XIAO_FLAG_COMMIT      0x01
 #define XIAO_FLAG_TIGHT_SLOW  0x02
 #define XIAO_FLAG_BOTTOM_LINE 0x04
-#define XIAO_FLAG_FINE_ANGLE  0x08
-#define XIAO_FLAG_SIDE_LINE   0x10
 #define XIAO_FLAG_TOP_LINE    0x20
 
 // FEATURE byte — LINE-follow events (the clean contract; keep in sync with XIAO):
 #define FEAT_NONE           0
 #define FEAT_UTURN          1   // XIAO GreenFilter-confirmed both-green
-#define FEAT_RED            2   // raw red on the scan row (Teensy filters)
 #define FEAT_SILVER         3   // raw silver on the scan row (Teensy filters)
-#define FEAT_LINE_LOST      4   // raw "no line" on the scan row (Teensy filters)
 #define FEAT_BLACK_INTERSECT 6   // saturated black row in LINE mode; suppress green rereads
 #define FEAT_GREEN_LEFT     7   // XIAO GreenFilter-confirmed left turn  (hardcoded fwd+turn)
 #define FEAT_GREEN_RIGHT    8   // XIAO GreenFilter-confirmed right turn (hardcoded fwd+turn)
@@ -60,14 +53,12 @@
 // FEATURE byte — mode-scoped codes for SEARCH_LINE / NOGI modes (separate code space):
 #define FEAT_CENTER_POINT_BLACK 1   // CENTER_POINT mode: front-arc black point centered
 #define FEAT_SEARCH_LINE_SILVER 5   // SEARCH_LINE mode: silver tape
-#define FEAT_SEARCH_LINE_BLACK  6   // SEARCH_LINE mode: black return line (LINE_Obstacle waits on this)
+#define FEAT_SEARCH_LINE_BLACK  6   // SEARCH_LINE mode: black return line
 
 enum XiaoMode : uint8_t {
     XIAO_MODE_LINE        = 0,
     XIAO_MODE_SEARCH_LINE = 1,
     XIAO_MODE_NOGI        = 2,
-    XIAO_MODE_LINE_ANGLE  = 3,   // line slope + point flags/Y during gap traversal
-    XIAO_MODE_OBSTACLE    = 4,   // obstacle re-acquire: arc see-line flag + line tilt angle
     XIAO_MODE_EVAC_COLOR_MASK = 5,   // evac entry/exit: silver side scan + row-45 black flag
     XIAO_MODE_CENTER_POINT = 6,      // front arc: feature=1 when black point is centered
 };
@@ -142,20 +133,17 @@ enum XiaoMode : uint8_t {
 //  State machine timings
 // =============================================================================
 
-// EVAC shared tuning — used by BOTH EVAC_SearchDeploy (approach stop) AND
-// VictimManager (grab self-confirm), so it stays here.
+// EVAC shared tuning: used by EVAC victim approach and VictimManager grab
+// self-confirm, so it stays here.
 #define EVAC_GRAB_STOP_HEIGHT_PX     135.0f
-// Other EVAC tuning is now file-local: EVAC_SearchDeploy-only constants live in
-// EVAC_SearchDeploy.cpp; EVAC_MAX_BALLS lives in VictimManager.cpp.
+// Other EVAC tuning is file-local in EVAC.cpp / VictimManager.cpp.
 
 // =============================================================================
 //  CommandFilter — moving-average vote thresholds (votes within the last
 //  FILTER_QUEUE_SIZE frames needed to confirm each event)
 // =============================================================================
 #define FILTER_QUEUE_SIZE        15
-#define FILTER_THRESHOLD_RED      5   // red line
 #define FILTER_THRESHOLD_SILVER   4   // silver (evac entry)
-#define FILTER_THRESHOLD_LINELOST  3   // sustained line loss → gap
 #define FILTER_THRESHOLD_BLACK_INTERSECT 5  // saturated black row before/through an intersection
 #define FILTER_THRESHOLD_GREEN    6   // green left/right (matches main); u-turn = both sides build up
 
@@ -163,56 +151,41 @@ enum XiaoMode : uint8_t {
 // long so the same intersection isn't re-read on the way out.
 #define DISABLE_GREEN_MS         1000
 
-// Left-green counting: the robot only turns on the Nth left-green marker it
-// sees (N == LOW or N == HIGH); every other left green is driven straight
-// through. Counter persists for the whole run (reset at power-on only).
-#define GREEN_LEFT_TURN_COUNT_LOW   1
-#define GREEN_LEFT_TURN_COUNT_HIGH  2
+// Right-green counting: every confirmed right green bumps a counter (persists
+// for the whole run; reset at power-on). The robot only TURNS on the marker
+// whose count equals one of these two values — the name says which arm gets
+// released at the wall (front touch) after that turn. No ordering guarantee:
+// LEFT may be higher or lower than RIGHT. All other right greens are driven
+// straight through.
+#define GREEN_RIGHT_TURN_COUNT_LEFT   1   // this Nth right green → turn, deploy LEFT arm
+#define GREEN_RIGHT_TURN_COUNT_RIGHT  4   // this Nth right green → turn, deploy RIGHT arm
+
+// Deploy run: after the deploy turn, front touch = wall. Release the pending
+// arm, stop this long, spin 180°, resume line follow.
+#define DEPLOY_TOUCH_STOP_MS       6000
+#define DEPLOY_UTURN_SPEED         60.0f
+
+// End of run: once the right-green count has passed BOTH trigger counts, every
+// further right green is the end marker — stop this long.
+#define END_RIGHT_GREEN_STOP_MS   12000
 
 #define BLACK_INTERSECT_DISABLE_GREEN_BASE_MS 1100
 #define BLACK_INTERSECT_DISABLE_GREEN_MIN_MS   700
 #define BLACK_INTERSECT_DISABLE_GREEN_MAX_MS  2000
 
 // =============================================================================
-//  Intersection / green-marker action tuning
+//  Intersection / green-marker action tuning — FLAT ONLY
 //
-//  Drive::lineFollowState() selects one row:
-//    FLAT, NOSE_UP, NOSE_DOWN, LEFT_DOWN, RIGHT_DOWN
+//  The IMU slope layer is disabled (DEV_FORCE_TILT in Drive.cpp); the slope
+//  variants (nose up/down, side up/downhill) were removed — see git history.
 //
-//  Forward distance/speed runs before the turn. U-turn forward distance is 0 by
-//  default, so the current behavior is unchanged unless you tune it up.
+//  Forward distance/speed runs before the turn.
 // =============================================================================
 
 #define INTERSECTION_GREEN_LEFT_FLAT_FORWARD_SPEED        LINE_FOLLOW_BASE_SPEED_FLAT
 #define INTERSECTION_GREEN_LEFT_FLAT_FORWARD_MM           52.0f
 #define INTERSECTION_GREEN_LEFT_FLAT_TURN_ANGLE          -90.0f
 #define INTERSECTION_GREEN_LEFT_FLAT_TURN_SPEED           60.0f
-
-// Nose-up / nose-down turns are symmetric: left and right share the same
-// forward values and turn speed; only the turn angle sign is mirrored.
-#define INTERSECTION_GREEN_NOSE_UP_FORWARD_SPEED          LINE_FOLLOW_BASE_SPEED_SLOPE
-#define INTERSECTION_GREEN_NOSE_UP_FORWARD_MM             115.0f
-#define INTERSECTION_GREEN_NOSE_UP_TURN_ANGLE             68.0f
-#define INTERSECTION_GREEN_NOSE_UP_TURN_SPEED             45.0f
-
-#define INTERSECTION_GREEN_NOSE_DOWN_FORWARD_SPEED        -LINE_FOLLOW_BASE_SPEED_SLOPE
-#define INTERSECTION_GREEN_NOSE_DOWN_FORWARD_MM           32.0f
-#define INTERSECTION_GREEN_NOSE_DOWN_TURN_ANGLE           90.0f
-#define INTERSECTION_GREEN_NOSE_DOWN_TURN_SPEED           45.0f
-
-// Side-down green turns are diagonal pairs:
-//   green-left on left-down  == green-right on right-down, with angle sign mirrored.
-//   green-left on right-down == green-right on left-down,  with angle sign mirrored.
-#define INTERSECTION_GREEN_SIDE_DOWNHILL_FORWARD_SPEED    LINE_FOLLOW_BASE_SPEED_SLOPE
-#define INTERSECTION_GREEN_SIDE_DOWNHILL_FORWARD_MM       69.0f
-#define INTERSECTION_GREEN_SIDE_DOWNHILL_TURN_ANGLE       90.0f
-#define INTERSECTION_GREEN_SIDE_DOWNHILL_TURN_SPEED       45.0f
-
-#define INTERSECTION_GREEN_SIDE_UPHILL_FORWARD_SPEED      INTERSECTION_GREEN_SIDE_DOWNHILL_FORWARD_SPEED
-#define INTERSECTION_GREEN_SIDE_UPHILL_FORWARD_MM         INTERSECTION_GREEN_SIDE_DOWNHILL_FORWARD_MM
-#define INTERSECTION_GREEN_SIDE_UPHILL_TURN_ANGLE         80.0f
-#define INTERSECTION_GREEN_SIDE_UPHILL_TURN_SPEED         INTERSECTION_GREEN_SIDE_DOWNHILL_TURN_SPEED
-//add go a small turn before foward at start? and less turn at the end
 
 #define INTERSECTION_GREEN_RIGHT_FLAT_FORWARD_SPEED       LINE_FOLLOW_BASE_SPEED_SLOPE
 #define INTERSECTION_GREEN_RIGHT_FLAT_FORWARD_MM          52.0f
@@ -226,54 +199,7 @@ enum XiaoMode : uint8_t {
 //   configured turn angle (90 deg on the flat green turns).
 #define INTERSECTION_GREEN_CENTER_FINISH_DEG              35.0f
 
-
-// U-turn sequence:
-//   pre-forward -> first turn -> mid-forward -> final turn -> search-line align.
-// Speeds may be signed; negative forward speed drives backward for that segment.
-#define INTERSECTION_UTURN_FLAT_PRE_FORWARD_SPEED         60.0f
-#define INTERSECTION_UTURN_FLAT_PRE_FORWARD_MM            50.0f
-#define INTERSECTION_UTURN_FLAT_FIRST_TURN_ANGLE          90.0f
-#define INTERSECTION_UTURN_FLAT_FIRST_TURN_SPEED          60.0f
-#define INTERSECTION_UTURN_FLAT_MID_FORWARD_SPEED         LINE_FOLLOW_BASE_SPEED_FLAT
-#define INTERSECTION_UTURN_FLAT_MID_FORWARD_MM             0.0f
-#define INTERSECTION_UTURN_FLAT_FINAL_TURN_ANGLE          90.0f
-#define INTERSECTION_UTURN_FLAT_FINAL_TURN_SPEED          60.0f
-
-#define INTERSECTION_UTURN_NOSE_UP_PRE_FORWARD_SPEED      LINE_FOLLOW_BASE_SPEED_SLOPE
-#define INTERSECTION_UTURN_NOSE_UP_PRE_FORWARD_MM         77.0f
-#define INTERSECTION_UTURN_NOSE_UP_FIRST_TURN_ANGLE       90.0f
-#define INTERSECTION_UTURN_NOSE_UP_FIRST_TURN_SPEED       45.0f
-#define INTERSECTION_UTURN_NOSE_UP_MID_FORWARD_SPEED      -LINE_FOLLOW_BASE_SPEED_SLOPE
-#define INTERSECTION_UTURN_NOSE_UP_MID_FORWARD_MM         40.0f
-#define INTERSECTION_UTURN_NOSE_UP_FINAL_TURN_ANGLE       90.0f
-#define INTERSECTION_UTURN_NOSE_UP_FINAL_TURN_SPEED       45.0f
-
-#define INTERSECTION_UTURN_NOSE_DOWN_PRE_FORWARD_SPEED    -LINE_FOLLOW_BASE_SPEED_SLOPE
-#define INTERSECTION_UTURN_NOSE_DOWN_PRE_FORWARD_MM       50.0f
-#define INTERSECTION_UTURN_NOSE_DOWN_FIRST_TURN_ANGLE     90.0f
-#define INTERSECTION_UTURN_NOSE_DOWN_FIRST_TURN_SPEED     45.0f
-#define INTERSECTION_UTURN_NOSE_DOWN_MID_FORWARD_SPEED    -LINE_FOLLOW_BASE_SPEED_SLOPE
-#define INTERSECTION_UTURN_NOSE_DOWN_MID_FORWARD_MM       5.0f
-#define INTERSECTION_UTURN_NOSE_DOWN_FINAL_TURN_ANGLE     90.0f
-#define INTERSECTION_UTURN_NOSE_DOWN_FINAL_TURN_SPEED     45.0f
-
-#define INTERSECTION_UTURN_LEFT_DOWN_PRE_FORWARD_SPEED    LINE_FOLLOW_BASE_SPEED_SLOPE
-#define INTERSECTION_UTURN_LEFT_DOWN_PRE_FORWARD_MM       50.0f
-#define INTERSECTION_UTURN_LEFT_DOWN_FIRST_TURN_ANGLE     75.0f
-#define INTERSECTION_UTURN_LEFT_DOWN_FIRST_TURN_SPEED     45.0f
-#define INTERSECTION_UTURN_LEFT_DOWN_MID_FORWARD_SPEED    LINE_FOLLOW_BASE_SPEED_SLOPE
-#define INTERSECTION_UTURN_LEFT_DOWN_MID_FORWARD_MM       82.0f
-#define INTERSECTION_UTURN_LEFT_DOWN_FINAL_TURN_ANGLE     65.0f
-#define INTERSECTION_UTURN_LEFT_DOWN_FINAL_TURN_SPEED     45.0f
-
-#define INTERSECTION_UTURN_RIGHT_DOWN_PRE_FORWARD_SPEED   LINE_FOLLOW_BASE_SPEED_SLOPE
-#define INTERSECTION_UTURN_RIGHT_DOWN_PRE_FORWARD_MM      50.0f
-#define INTERSECTION_UTURN_RIGHT_DOWN_FIRST_TURN_ANGLE    -85.0f
-#define INTERSECTION_UTURN_RIGHT_DOWN_FIRST_TURN_SPEED    45.0f
-#define INTERSECTION_UTURN_RIGHT_DOWN_MID_FORWARD_SPEED  LINE_FOLLOW_BASE_SPEED_SLOPE
-#define INTERSECTION_UTURN_RIGHT_DOWN_MID_FORWARD_MM      82.0f
-#define INTERSECTION_UTURN_RIGHT_DOWN_FINAL_TURN_ANGLE    -78.0f
-#define INTERSECTION_UTURN_RIGHT_DOWN_FINAL_TURN_SPEED    45.0f
+// (U-turn detection + sequence removed — see git history.)
 
 // =============================================================================
 //  K230D AI processor
@@ -301,6 +227,20 @@ enum XiaoMode : uint8_t {
 // colour. Confirmed order: 0=green, 1=red.
 #define K230_POINT_GREEN    0   // live-victim corner
 #define K230_POINT_RED      1   // dead-victim corner
+
+// colordet.kmodel class IDs — when the K230 runs the 7-colour line/field model,
+// box cls = detected colour. Order MUST match the model's class list
+// (datasets/colordet classes.txt: Black,Blue,Green,Orange,Red,Silver,Yellow).
+// VERIFY against the model: watch "K230D BOX cls=/col=" (PRINT_K230) and confirm
+// a known colour reports the expected id before relying on it.
+#define K230_COLOR_BLACK    0
+#define K230_COLOR_BLUE     1
+#define K230_COLOR_GREEN    2
+#define K230_COLOR_ORANGE   3
+#define K230_COLOR_RED      4
+#define K230_COLOR_SILVER   5
+#define K230_COLOR_YELLOW   6
+#define K230_COLOR_COUNT    7
 
 // =============================================================================
 //  Evacuation-zone mapping

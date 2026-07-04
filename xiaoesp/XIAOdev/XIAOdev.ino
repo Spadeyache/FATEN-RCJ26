@@ -8,8 +8,6 @@
 #include "src/modes/ModeLineFollow.h"
 #include "src/modes/ModeSearchLine.h"
 #include "src/modes/ModeNoGI.h"
-#include "src/modes/ModeLineAngle.h"
-#include "src/modes/ModeObstacle.h"
 #include "src/modes/ModeEvacColorMask.h"
 #include "src/modes/ModeCenterPoint.h"
 #include "src/stream/XiaoStream.h"
@@ -139,11 +137,7 @@ void loop() {
 
     // ── Receive current mode from Teensy ──────────────────────────────────────
     teensy.update();
-#if DEBUG_FORCE_LINE_ANGLE_MODE
-    // Debug only: comment out the Teensy/state-machine mode and force angle mode.
-    // uint8_t mode = teensy.get(XIAO_REG_MODE);
-    uint8_t mode = MODE_LINE_ANGLE;
-#elif DEBUG_FORCE_EVAC_COLOR_MASK_MODE
+#if DEBUG_FORCE_EVAC_COLOR_MASK_MODE
     // Debug only: force evacuation color mask mode.
     uint8_t mode = MODE_EVAC_COLOR_MASK;
 #else
@@ -152,7 +146,6 @@ void loop() {
     static uint8_t s_prevMode = 255;
     if (mode != s_prevMode) {
         if (mode == MODE_LINEFOLLOW) modeLineFollowReset();
-        if (mode == MODE_LINE_ANGLE) modeLineAngleReset();
         s_prevMode = mode;
     }
 
@@ -169,8 +162,6 @@ void loop() {
         case MODE_LINEFOLLOW:  modeLineFollowRun(fb, teensy); break;
         case MODE_SEARCH_LINE: modeSearchLineRun(fb, teensy);  break;
         case MODE_NOGI:        modeNoGIRun(fb, teensy);        break;
-        case MODE_LINE_ANGLE:  modeLineAngleRun(fb, teensy);   break;
-        case MODE_OBSTACLE:    modeObstacleRun(fb, teensy);    break;
         case MODE_EVAC_COLOR_MASK: modeEvacColorMaskRun(fb, teensy); break;
         case MODE_CENTER_POINT: modeCenterPointRun(fb, teensy); break;
         default:               modeLineFollowRun(fb, teensy);  break;

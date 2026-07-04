@@ -82,7 +82,7 @@ class Detector:
         """Run one inference. Returns list of [cls, score, x1, y1, x2, y2]
         in SENSOR pixel coords (post un-letterbox)."""
         t0 = time.ticks_ms() if config.PROFILE_TIMING else 0
-        chw = self._chw_from_grayscale(img)
+        chw = self._chw_from_image(img)
         ai2d_input_tensor = nn.from_numpy(chw)
         self._ai2d_builder.run(ai2d_input_tensor, self._ai2d_out)
         del ai2d_input_tensor
@@ -234,9 +234,22 @@ class Detector:
         return [x1, y1, x2, y2]
 
     @staticmethod
-    def _chw_from_grayscale(img):
+    def _chw_from_image(img):
+        """Convert a sensor snapshot to a (3, H, W) uint8 CHW plane.
+
+        RGB888  -> to_numpy_ref() is (H, W, 3) RGB; split into planes directly
+                   (matches the calibrated preprocessing: RGB, swapRB=false).
+        GRAYSCALE -> single plane replicated across all 3 channels.
+        """
         hwc = img.to_numpy_ref()
         shape = hwc.shape
+        if len(shape) == 3 and shape[2] == 3:
+            H, W, _ = shape
+            chw = np.zeros((3, H, W), dtype=np.uint8)
+            chw[0] = hwc[:, :, 0]   # R
+            chw[1] = hwc[:, :, 1]   # G
+            chw[2] = hwc[:, :, 2]   # B
+            return chw
         if len(shape) == 2:
             H, W = shape
             plane = hwc

@@ -31,7 +31,7 @@ void init();
 void grabLeft(bool closed, bool blocking = true);
 void grabRight(bool closed, bool blocking = true);
 
-// Left bucket pose. VictimManager owns the wait/release/carry choreography.
+// Left bucket pose. Currently unused by the simplified evac grab flow.
 void store();
 
 // Drops.

@@ -239,15 +239,11 @@
   <!-- LIFECYCLE -->
   <section>
     <h3>7 · Lifecycle &amp; integration</h3>
-    <pre>LINE_FOLLOW ──(xiaoCmd==5)──► EVAC_ENTRY ──► <b>EVAC_SEARCH</b> ──► EVAC_DEPLOY ──► EVAC_EXIT ──► LINE_FOLLOW
-
-EVAC_SEARCH.onEnter():  Mapping::init(restart=false)   // snapshot yaw=θ0, bring up ToF, fresh/loaded map
-EVAC_SEARCH.update():   Drive::stop(); Mapping::tick(); 1 Hz beep    // PASSIVE — no path planning yet
-EVAC_EXIT.onEnter():    Mapping::persist()              // force final EEPROM save</pre>
+    <pre>LINE_FOLLOW --(silver)--&gt; EVAC --(K230D exit point)--&gt; LINE_FOLLOW`r`n`r`nMapping is currently disabled in the active EVAC flow.</pre>
     <table>
       <tr><th>Entry point</th><th>Where</th></tr>
       <tr><td><code>Mapping::init()</code> / <code>tick()</code> / <code>persist()</code></td>
-        <td><a class="src">EVAC_Search.cpp</a>, <a class="src">EVAC_Exit.cpp</a></td></tr>
+        <td>Not wired into the current single-file <code>EVAC</code> flow.</td></tr>
       <tr><td>Serial debug <code>'m'</code> (map) / <code>'p'</code> (pose)</td>
         <td><a class="src">STS-imuMerge.ino:64</a> → <code>Mapping::handleSerial()</code></td></tr>
     </table>
@@ -258,17 +254,14 @@ EVAC_EXIT.onEnter():    Mapping::persist()              // force final EEPROM sa
     <h3>8 · What's <span class="tag todo">not</span> implemented yet (the "run the map" gap)</h3>
     <div class="grid cards">
       <div class="card"><h4>Exploration planner</h4>
-        <p>Nothing consumes the grid to choose where to drive. <code>EVAC_Search</code> keeps the robot
-        parked. This is the core of "running the map".</p></div>
+        <p>Nothing consumes the grid to choose where to drive. The current <code>EVAC</code> flow uses K230D detections directly instead of map navigation.</p></div>
       <div class="card"><h4>Victim / corner fusion</h4>
         <p><code>K230Decode::detections()</code> are streamed but not yet written into the semantic grid
         as <code>VICTIM_*</code> / <code>EVAC_*</code> cells.</p></div>
       <div class="card"><h4>Wall-snap EKF update</h4>
         <p><code>poseUpdateWall()</code> is declared but never called — x/y is still open-loop between
         scan-match snaps.</p></div>
-      <div class="card"><h4>Deploy / exit logic</h4>
-        <p><code>EVAC_Deploy</code> and <code>EVAC_Exit</code> are skeletons; no map-driven navigation
-        to drop points or the exit.</p></div>
+      <div class="card"><h4>Map-driven exit logic</h4><p>The current exit path is K230D point-based, not map-driven.</p></div>
     </div>
   </section>
 
@@ -311,3 +304,4 @@ EVAC_EXIT.onEnter():    Mapping::persist()              // force final EEPROM sa
 </footer>
 </body>
 </html>
+

@@ -27,6 +27,31 @@ import robot_io
 import status_led
 
 
+# draw_string_advanced() needs a FreeType TTF font, which this legacy K230D
+# firmware doesn't ship ("FreeType init failed, font (null)"). Prefer the
+# built-in bitmap font (draw_string, no FreeType); fall back to the advanced
+# call only if draw_string is missing, and if BOTH fail just disable text so a
+# font error can never take down the detection/UART loop -- boxes still draw.
+_text_ok = True
+
+
+def _draw_label(img, x, y, text, color):
+    global _text_ok
+    if not (_text_ok and getattr(config, "DRAW_LABELS", True)):
+        return
+    try:
+        img.draw_string(int(x), int(y), text, color=color, scale=2)
+        return
+    except Exception:
+        pass
+    try:
+        img.draw_string_advanced(int(x), int(y), 16, text, color=color)
+        return
+    except Exception as e:
+        print("label text disabled (draw failed):", e)
+        _text_ok = False
+
+
 def main():
     # LED alive immediately (cyan) so the slow nncase import + 3.5MB kmodel
     # load doesn't look like a hung board. Stays cyan until the loop runs.
@@ -47,10 +72,10 @@ def main():
     sensor.run()
     time.sleep_ms(config.SETTLE_MS)
 
-    # Model + ai2d. Starts on the victims model; Teensy can swap to points.
+    # Model + ai2d. Starts on the colordet model; Teensy can swap to points.
     # Still cyan here -- this is the slow part. The loop switches to white/green.
     det = detmod.Detector(sensor)
-    current_model = "victims"
+    current_model = "colordet"
 
     # UART link.
     u = robot_io.open_link()
@@ -113,11 +138,20 @@ def main():
             if saved:
                 print("saved ->", saved)
 
-            boxes = det.infer(img)               # list of [cls, score, x1,y1,x2,y2]
+            boxes = det.infer(img)               # ALL boxes >= CONF_THRESHOLD,
+                                                 # [cls, score, x1,y1,x2,y2],
+                                                 # sorted high->low confidence
             status_led.set_status("found" if len(boxes) > 0 else "run")
-            robot_io.send_boxes(u, boxes)
 
-            # Draw same boxes on preview.
+            # Teensy only wants the strongest few targets: send the top-N by
+            # confidence. The K230 preview below still draws every box above
+            # threshold.
+            tx_boxes = boxes
+            if len(tx_boxes) > config.TX_TOP_N:
+                tx_boxes = sorted(boxes, key=lambda d: -float(d[1]))[:config.TX_TOP_N]
+            robot_io.send_boxes(u, tx_boxes)
+
+            # Draw ALL detected boxes on preview (not just the ones sent).
             if config.SHOW_DISPLAY:
                 for d in boxes:
                     cls_id = int(d[0])
@@ -127,9 +161,8 @@ def main():
                                        int(x2 - x1), int(y2 - y1),
                                        color=color, thickness=2)
                     name = det.labels[cls_id] if cls_id < len(det.labels) else "c{}".format(cls_id)
-                    img.draw_string_advanced(int(x1), max(0, int(y1) - 20), 16,
-                                              "{} {:.2f}".format(name, float(d[1])),
-                                              color=color)
+                    _draw_label(img, int(x1), max(0, int(y1) - 16),
+                                "{} {:.2f}".format(name, float(d[1])), color)
                 Display.show_image(img)
 
             frame += 1

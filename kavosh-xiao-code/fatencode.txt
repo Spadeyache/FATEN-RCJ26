@@ -1,0 +1,110 @@
+//送受信
+
+#include <Arduino.h>
+#include "WiFi.h"
+#include "esp_now.h"
+#include "esp_wifi.h"
+
+#define ESPNOW_WIFI_CHANNEL 1
+#define MAX_ESP_NOW_MAC_LEN 6
+#define BAUD 115200
+#define MAX_CHARACTERS_NUMBER 20
+#define NO_PMK_KEY false
+
+// 相手(ロボット側)のMACアドレス
+static uint8_t Peer_MAC_Address[MAX_ESP_NOW_MAC_LEN] = {0xD8, 0x3B, 0xDA, 0x47, 0x24, 0x28};
+
+// このボード自身の名前
+const char* MY_DEVICE_NAME = "PC";
+
+esp_now_peer_info_t peerInfo;
+
+typedef struct message_types{
+  char device[MAX_CHARACTERS_NUMBER];
+  char message[MAX_CHARACTERS_NUMBER];
+} message_types;
+
+message_types outgoingMessage;
+message_types incomingMessage;
+
+void espnow_init();
+void MACAddress_print();
+void Send_Data();
+void OnDataSent(const wifi_tx_info_t *tx_info, esp_now_send_status_t status);
+void OnDataRecv(const esp_now_recv_info *info, const uint8_t *incomingData, int len);
+void Association_peer();
+
+void setup(){
+  Serial.begin(BAUD);
+  delay(1000);
+
+  WiFi.mode(WIFI_STA);
+  WiFi.STA.begin();
+  delay(500);
+  esp_wifi_set_channel(ESPNOW_WIFI_CHANNEL, WIFI_SECOND_CHAN_NONE);
+
+  MACAddress_print();
+  espnow_init();
+
+  esp_now_register_send_cb(OnDataSent);
+  esp_now_register_recv_cb(OnDataRecv);
+  Association_peer();
+}
+
+void loop(){
+  Send_Data();
+  delay(1000);
+}
+
+void espnow_init(){
+  if (esp_now_init() == ESP_OK) {
+    Serial.println("ESP-NOW initialized successfully");
+  } else {
+    Serial.println("ESP-NOW initialization failed");
+  }
+}
+
+void MACAddress_print(){
+  uint8_t mac[MAX_ESP_NOW_MAC_LEN];
+  esp_wifi_get_mac(WIFI_IF_STA, mac);
+  Serial.printf("このボードのMACアドレス: {0x%02X, 0x%02X, 0x%02X, 0x%02X, 0x%02X, 0x%02X}\n",
+                mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+}
+
+void Association_peer(){
+  peerInfo.channel = ESPNOW_WIFI_CHANNEL;
+  peerInfo.encrypt = NO_PMK_KEY;
+  memcpy(peerInfo.peer_addr, Peer_MAC_Address, MAX_ESP_NOW_MAC_LEN);
+
+  if (esp_now_add_peer(&peerInfo) == ESP_OK) {
+    Serial.println("ピア登録に成功しました");
+  } else {
+    Serial.println("ピア登録に失敗しました");
+  }
+}
+
+void Send_Data(){
+  strcpy(outgoingMessage.device, MY_DEVICE_NAME);
+  strcpy(outgoingMessage.message, "Hello!");
+
+  esp_err_t result = esp_now_send(Peer_MAC_Address, (uint8_t *)&outgoingMessage, sizeof(outgoingMessage));
+  if (result == ESP_OK) {
+    Serial.println("送信キューに追加しました");
+  } else {
+    Serial.println("送信に失敗しました");
+  }
+}
+
+void OnDataSent(const wifi_tx_info_t *tx_info, esp_now_send_status_t status){
+  Serial.print("送信結果: ");
+  Serial.println(status == ESP_NOW_SEND_SUCCESS ? "成功" : "失敗");
+}
+
+void OnDataRecv(const esp_now_recv_info *info, const uint8_t *incomingData, int len) {
+  memcpy(&incomingMessage, incomingData, sizeof(incomingMessage));
+  Serial.print("受信元: ");
+  Serial.println(incomingMessage.device);
+  Serial.print("メッセージ: ");
+  Serial.println(incomingMessage.message);
+  Serial.println();
+}

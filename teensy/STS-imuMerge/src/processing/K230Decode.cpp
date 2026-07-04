@@ -81,6 +81,8 @@ namespace {
             const K230DBox &b = _k230d.box(i);
             Serial.print(F("K230D BOX cls="));
             Serial.print(viewerClassFor(b.cls));
+            Serial.print(F(" col="));
+            Serial.print(colorName(b.cls));
             Serial.print(F(" score="));
             Serial.print(b.score);
             Serial.print(F(" x1="));
@@ -272,6 +274,14 @@ int16_t dominantClass() {
         if (area > bestArea) { bestArea = area; bestCls = b[i].cls; }
     }
     return bestCls;
+}
+
+// Human-readable colordet class name. Order matches K230_COLOR_* / config.h.
+const char* colorName(uint8_t cls) {
+    static const char* const kNames[K230_COLOR_COUNT] = {
+        "Black", "Blue", "Green", "Orange", "Red", "Silver", "Yellow",
+    };
+    return (cls < K230_COLOR_COUNT) ? kNames[cls] : "?";
 }
 
 void setModel(Model m) {

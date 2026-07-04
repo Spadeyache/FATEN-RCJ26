@@ -42,12 +42,8 @@ Each state is a C++ namespace exposing `onEnter()` and `update()`. A state
 ends its `update()` by optionally calling `StateMachine::transitionTo(NEXT)`.
 
 ```
-LINE_Follow  ──► LINE_Gap       (xiaoCommand == 8)
-LINE_Follow  ──► LINE_Obstacle  (touchfront)
-LINE_Follow  ──► STALLED_RED    (xiaoCommand == 4; handled inline in StateMachine)
-LINE_Follow  ──► EVAC_Entry     (xiaoCommand == 5)
-
-EVAC_Entry   ──► EVAC_Search ──► EVAC_Deploy ──► EVAC_Exit ──► LINE_Follow
+LINE_Follow  -> EVAC              (silver)
+EVAC         -> LINE_Follow       (K230D exit point)
 ```
 
 ## Where new code goes

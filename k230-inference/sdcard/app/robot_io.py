@@ -7,9 +7,13 @@
 # where each box is 10 bytes:
 #
 #   [cls] [score] [x1_hi] [x1_lo] [y1_hi] [y1_lo] [x2_hi] [x2_lo] [y2_hi] [y2_lo]
-#       cls    : 0=silver, 1=black (model output class id, NO swap done here)
+#       cls    : colordet class id (0=Black 1=Blue 2=Green 3=Orange 4=Red
+#                5=Silver 6=Yellow), model output id, NO swap done here
 #       score  : 0..255 = round(model_confidence * 255)
 #       x1..y2 : signed 16-bit BE pixel coords in SENSOR frame
+#
+# N is capped: main.py sends only the top TX_TOP_N (3) highest-confidence
+# boxes even though the K230 display draws every box above CONF_THRESHOLD.
 #
 # checksum = XOR of every byte from 0xAA through the last box byte
 #

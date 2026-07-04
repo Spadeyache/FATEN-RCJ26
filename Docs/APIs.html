@@ -72,27 +72,23 @@
   <h3>StateMachine <span class="ns">namespace StateMachine</span></h3>
   <div class="fn"><code class="sig">void init()</code><p class="desc">Boots the FSM in LINE_FOLLOW. Call once from setup().</p></div>
   <div class="fn"><code class="sig">void tick()</code><p class="desc">Runs onEnter() once on a transition, then the active state's update(). Called every main-loop iteration.</p></div>
-  <div class="fn"><code class="sig">void transitionTo(RobotState next)</code><p class="desc">Queues a state change; applied on the next tick(). States: LINE_FOLLOW / LINE_OBSTACLE / LINE_GAP / STALLED_RED / EVAC_ENTRY / EVAC_SEARCH_DEPLOY / EVAC_EXIT.</p></div>
+  <div class="fn"><code class="sig">void transitionTo(RobotState next)</code><p class="desc">Queues a state change; applied on the next tick(). States: LINE_FOLLOW / EVAC.</p></div>
   <div class="fn"><code class="sig">RobotState current()</code><p class="desc">The currently active state.</p></div>
 </section>
 
 <section class="mod">
   <h3>State handlers <span class="ns">LINE_* / EVAC_* namespaces</span></h3>
-  <div class="fn"><code class="sig">LINE_Follow::onEnter() / update()</code><p class="desc">Default driving. Dispatches on the XIAO feature byte: bumper→obstacle, U-turn, red→stall, silver→evac entry; otherwise runs the line PID.</p></div>
-  <div class="fn"><code class="sig">LINE_Obstacle::onEnter() / update()</code><p class="desc">Front bumper hit: drive a fixed arc around the obstacle, then wait for the XIAO to re-acquire the black line.</p></div>
-  <div class="fn"><code class="sig">LINE_Gap::onEnter() / update()</code><p class="desc">Line-gap traversal (gap/intersection crossing helper). Steers on the XIAO line-angle output.</p></div>
-  <div class="fn"><code class="sig">EVAC_Entry::onEnter() / update()</code><p class="desc">Fixed entry sequence into the evacuation zone (reset VictimManager, attach servos, drive in), then hands to search-deploy.</p></div>
-  <div class="fn"><code class="sig">EVAC_SearchDeploy::onEnter() / update()</code><p class="desc">The 2-minute collect↔deploy loop: spin-search victims, grab via VictimManager, deploy live at the green corner / dead at the red corner.</p></div>
-  <div class="fn"><code class="sig">EVAC_Exit::onEnter() / update()</code><p class="desc">Leave the zone: switch the XIAO back to line mode and return to LINE_FOLLOW.</p></div>
+  <div class="fn"><code class="sig">LINE_Follow::onEnter() / update()</code><p class="desc">Default driving. Dispatches on the XIAO feature byte: U-turn, green turns, silver→evac entry; otherwise runs the line PID.</p></div>
+  <div class="fn"><code class="sig">EVAC::onEnter() / update()</code><p class="desc">Single evacuation state: K230D victim search/grab until both grippers are full, then K230D point-based exit back to LINE_FOLLOW.</p></div>
 </section>
 
 <section class="mod">
   <h3>VictimManager <span class="ns">namespace VictimManager</span></h3>
-  <div class="fn"><code class="sig">void reset() / void clearAll()</code><p class="desc">Empty both arms — reset() at evac start, clearAll() after a deploy.</p></div>
+  <div class="fn"><code class="sig">void reset() / void clearAll()</code><p class="desc">Clear the two-gripper held-ball state.</p></div>
   <div class="fn"><code class="sig">uint8_t count() / liveHeld() / deadHeld()</code><p class="desc">How many balls are currently held, total and split by type.</p></div>
   <div class="fn"><code class="sig">bool full()</code><p class="desc">Both arms at capacity (left 2 + right 1).</p></div>
   <div class="fn"><code class="sig">bool acceptsType(uint8_t type)</code><p class="desc">Should the search keep chasing this victim type? DEAD only if none held and the right arm is free; ALIVE whenever any arm has space. Used to filter detections.</p></div>
-  <div class="fn"><code class="sig">bool readyToDeploy()</code><p class="desc">True once ≥2 live balls are held — the trigger to break off and deploy green.</p></div>
+  <div class="fn"><code class="sig">bool readyToDeploy()</code><p class="desc">Compatibility helper; true once both grippers are full.</p></div>
   <div class="fn"><code class="sig">bool tryGrab(uint8_t type)</code><p class="desc">Pick an arm, run the align + grab + self-confirm, and book the ball only if confirmed captured. Returns false on a miss (nothing counted).</p></div>
   <div class="fn"><code class="sig">void releaseLive() / void releaseDead()</code><p class="desc">Drop balls by type at the corner — live from the left arm (+right overflow), dead from the right.</p></div>
 </section>
@@ -113,9 +109,8 @@
   <div class="fn"><code class="sig">void init()</code><p class="desc">Attach the two grippers + KRS lift, close the grippers, park the lift.</p></div>
   <div class="fn"><code class="sig">void grabLeft(bool closed, bool blocking=true)</code><p class="desc">Open/close the left (alive/silver) gripper. Blocking ramps the servo smoothly.</p></div>
   <div class="fn"><code class="sig">void grabRight(bool closed, bool blocking=true)</code><p class="desc">Open/close the right (dead/black) gripper.</p></div>
-  <div class="fn"><code class="sig">void store()</code><p class="desc">Move the ball in the left gripper into the bucket so the gripper is free for a second one (left = 2, LIFO). <span class="tag">TODO macro</span></p></div>
-  <div class="fn"><code class="sig">void releaseLeft() / releaseRight() / releaseStore()</code><p class="desc">Drop a single ball: the left gripper / the right gripper / the left bucket. releaseStore is the bucket primitive. <span class="tag">store/releaseStore TODO</span></p></div>
-  <div class="fn"><code class="sig">void releaseBothLeft()</code><p class="desc">Drop the left gripper ball then the bucket ball (LIFO order).</p></div>
+  <div class="fn"><code class="sig">void store()</code><p class="desc">Left bucket hardware pose; currently unused by the simplified evac grab flow.</p></div>
+  <div class="fn"><code class="sig">void releaseLeft() / releaseRight()</code><p class="desc">Drop the ball in the left or right gripper.</p></div>
   <div class="fn"><code class="sig">void releaseAll()</code><p class="desc">Blocking: drop every held ball.</p></div>
   <div class="fn"><code class="sig">void lift(int us)</code><p class="desc">Raw KRS lift pulse width (microseconds, clamped). Holds via PWM refresh.</p></div>
   <div class="fn"><code class="sig">void liftDown() / liftCarry() / liftPark()</code><p class="desc">Named lift poses — reach-to-grab / carry-up / parked.</p></div>
@@ -134,12 +129,9 @@
   <div class="fn"><code class="sig">void tick(bool instantRun=false)</code><p class="desc">Read the XIAO register cache and feed the feature byte through CommandFilter (~50 Hz). Call every loop.</p></div>
   <div class="fn"><code class="sig">uint8_t command()</code><p class="desc">The confirmed FEAT_* event (FEAT_NONE if none) — the debounced line-follow signal the state machine acts on.</p></div>
   <div class="fn"><code class="sig">float lineError()</code><p class="desc">Line position error 0..254 (127 = centred), fed into the drive PID.</p></div>
-  <div class="fn"><code class="sig">float gapAngle() / gapFineAngle() / uint8_t gapLineY()</code><p class="desc">Gap-crossing geometry: rough slope, precise two-row angle, and the point's Y — used by LINE_GAP.</p></div>
   <div class="fn"><code class="sig">bool commitFlag() / tightSlowFlag()</code><p class="desc">XIAO is mid green-turn commit / the turn target is low in frame (drive slower).</p></div>
-  <div class="fn"><code class="sig">bool gapAnyPointFlag() / gapBothRowsFlag() / gapBottomLineFlag() / gapFineAngleFlag()</code><p class="desc">Per-frame gap detector flags (point seen, two rows, bottom edge, fine angle valid).</p></div>
-  <div class="fn"><code class="sig">bool obstacleSeeLine() / float obstacleAngle()</code><p class="desc">Obstacle-reacquire mode: line back in view + its tilt.</p></div>
   <div class="fn"><code class="sig">bool silverSeen() / bool evacBlackSeen()</code><p class="desc">Evac color-mask flags: silver side scan and row-45 black threshold.</p></div>
-  <div class="fn"><code class="sig">void setMode(XiaoMode m)</code><p class="desc">Tell the XIAO which vision mode to run (LINE / SEARCH_LINE / NOGI / LINE_ANGLE / OBSTACLE / EVAC_COLOR_MASK).</p></div>
+  <div class="fn"><code class="sig">void setMode(XiaoMode m)</code><p class="desc">Tell the XIAO which vision mode to run (LINE / SEARCH_LINE / NOGI / EVAC_COLOR_MASK / CENTER_POINT).</p></div>
   <div class="fn"><code class="sig">void clearFilter() / void setCommand(uint8_t c)</code><p class="desc">Reset the debounce votes / force the current command (used during scripted manoeuvres).</p></div>
 </section>
 
@@ -198,11 +190,9 @@
 
 <section class="mod">
   <h3>Vision modes <span class="ns">one per XIAO mode; run() per camera frame</span></h3>
-  <div class="fn"><code class="sig">modeLineFollowRun(fb, teensy) / modeLineFollowReset()</code><p class="desc">Mode 0. Scan the line row, send line error (COM) + the highest-priority feature (green/red/silver/U-turn) to the Teensy.</p></div>
-  <div class="fn"><code class="sig">modeSearchLineRun(fb, teensy)</code><p class="desc">Mode 1. Look for tape in a region; report silver tape or the black return line (black wins). Used after a U-turn / around obstacles.</p></div>
+  <div class="fn"><code class="sig">modeLineFollowRun(fb, teensy) / modeLineFollowReset()</code><p class="desc">Mode 0. Scan the line row, send line error (COM) + line-follow features to the Teensy.</p></div>
+  <div class="fn"><code class="sig">modeSearchLineRun(fb, teensy)</code><p class="desc">Mode 1. Look for tape in a region; report silver tape or the black return line (black wins). Used after a U-turn.</p></div>
   <div class="fn"><code class="sig">modeNoGIRun(fb, teensy)</code><p class="desc">Mode 2. Far-field black-pixel count across rows; flags a no-green intersection ahead.</p></div>
-  <div class="fn"><code class="sig">modeLineAngleRun(fb, teensy)</code><p class="desc">Mode 3. Gap-crossing helper: report the line slope, a precise fine angle, and point flags so the Teensy can drive straight across a gap.</p></div>
-  <div class="fn"><code class="sig">modeObstacleRun(fb, teensy)</code><p class="desc">Mode 4. After going around an obstacle, confirm the line is back in the top arc and report its tilt.</p></div>
   <div class="fn"><code class="sig">modeEvacColorMaskRun(fb, teensy)</code><p class="desc">Mode 5. At the evac entrance/exit, detect silver with the line-follow side scan and raise a flag when row 45 has enough black pixels.</p></div>
 </section>
 

@@ -18,22 +18,8 @@ void tick(bool instantRun = false);  // re-runs filter every 20 ms (or instantly
 
 uint8_t command();        // confirmed FEAT_* event (FEAT_NONE if none)
 float   lineError();      // 0..254
-float   gapAngle();       // 0..254 rough LINE_ANGLE slope (127 = 0 deg)
-float   gapFineAngle();   // 0..254 precise two-row gap angle (127 = 0 deg)
-uint8_t gapLineY();       // LINE_ANGLE mode: point Y / average point Y
-uint8_t gapLineCount();   // Back-compat alias for gapLineY().
 bool    commitFlag();     // XIAO green-turn commit in progress
 bool    tightSlowFlag();  // XIAO tight-turn target is low in frame
-bool    gapAnyPointFlag();
-bool    gapAtLeastTwoPointsFlag();  // MODE_LINE_ANGLE: two or more detected border points.
-bool    gapFineRowsFlag();  // MODE_LINE_ANGLE: both fixed fine-angle rows see line.
-bool    gapBothRowsFlag();
-bool    gapBottomLineFlag();
-bool    gapTopLineFlag();
-bool    gapSideLineFlag();
-bool    gapFineAngleFlag();
-bool    obstacleSeeLine();
-float   obstacleAngle();
 bool    silverSeen();
 bool    evacBlackSeen();
 
