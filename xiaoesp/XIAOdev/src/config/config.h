@@ -24,6 +24,13 @@
 // Debug: force XIAO to run the evacuation silver + row-45 black scan mode.
 #define DEBUG_FORCE_EVAC_COLOR_MASK_MODE 0
 
+// Cooperative Faten/Kavosh deploy exchange.
+// Set COOP_ENABLE_FATEN_XIAO to 1 only on Faten's XIAO coordinator build.
+#define COOP_ENABLE_FATEN_XIAO 1
+#define COOP_ESPNOW_CHANNEL 1
+#define COOP_SEND_INTERVAL_MS 200
+#define COOP_STALE_MS 5000
+
 
 // ── Serial baud rates ────────────────────────────────────────────────────────
 
@@ -53,9 +60,9 @@
 // Applied to calibrated data (vision.cpp rgb888Calibration) unless noted "raw"
 #define BLACK_GRAY_MAX     5   // Calibrated grayscale ≤ this → black
 
-#define SILVER_RAW_R_MIN   250  // Raw (pre-calibration) R ≥ this
-#define SILVER_RAW_G_MIN   252  // Raw G ≥ this
-#define SILVER_RAW_B_MIN   252  // Raw B ≥ this
+#define SILVER_RAW_R_MIN   240  // Raw (pre-calibration) R ≥ this
+#define SILVER_RAW_G_MIN   242  // Raw G ≥ this
+#define SILVER_RAW_B_MIN   242  // Raw B ≥ this
 
 #define GREEN_HUE_MIN      80
 #define GREEN_HUE_MAX      165

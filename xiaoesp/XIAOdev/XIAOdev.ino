@@ -8,9 +8,11 @@
 #include "src/modes/ModeLineFollow.h"
 #include "src/modes/ModeSearchLine.h"
 #include "src/modes/ModeNoGI.h"
+#include "src/modes/ModeGap.h"
 #include "src/modes/ModeEvacColorMask.h"
 #include "src/modes/ModeCenterPoint.h"
 #include "src/stream/XiaoStream.h"
+#include "src/coop/FatenCoop.h"
 // #include "src/drivers/wifi_config.h"
 
 // Stream FPS cap — limits USB interrupt pressure on Core 1.
@@ -111,6 +113,7 @@ void setup() {
 #endif
 #endif
     pinMode(LED_BUILTIN, OUTPUT);
+    FatenCoop::begin();
 }
 
 // ── Main loop (Core 1) ─────────────────────────────────────────────────────────
@@ -137,6 +140,7 @@ void loop() {
 
     // ── Receive current mode from Teensy ──────────────────────────────────────
     teensy.update();
+    FatenCoop::tick(teensy);
 #if DEBUG_FORCE_EVAC_COLOR_MASK_MODE
     // Debug only: force evacuation color mask mode.
     uint8_t mode = MODE_EVAC_COLOR_MASK;
@@ -162,6 +166,7 @@ void loop() {
         case MODE_LINEFOLLOW:  modeLineFollowRun(fb, teensy); break;
         case MODE_SEARCH_LINE: modeSearchLineRun(fb, teensy);  break;
         case MODE_NOGI:        modeNoGIRun(fb, teensy);        break;
+        case MODE_GAP:         modeGapRun(fb, teensy);         break;
         case MODE_EVAC_COLOR_MASK: modeEvacColorMaskRun(fb, teensy); break;
         case MODE_CENTER_POINT: modeCenterPointRun(fb, teensy); break;
         default:               modeLineFollowRun(fb, teensy);  break;

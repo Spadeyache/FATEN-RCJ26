@@ -22,7 +22,6 @@ namespace {
     constexpr uint8_t ALIGN_LOST_RETRY   = 4;
 
     constexpr int     CARRY_MS      = 800;
-    constexpr int     RELEASE_MS    = 625;
     constexpr uint8_t CONFIRM_SAMPLE_FRAMES = 3;
     constexpr uint8_t CONFIRM_CLEAR_REQUIRED = 2;
     constexpr uint32_t CONFIRM_FRAME_TIMEOUT_MS = 500;
@@ -56,13 +55,6 @@ namespace {
             _rightFull = true;
             _rightType = type;
         }
-    }
-
-    uint8_t countType(uint8_t type) {
-        uint8_t n = 0;
-        if (_leftFull && _leftType == type) n++;
-        if (_rightFull && _rightType == type) n++;
-        return n;
     }
 
     bool closeEnoughForCapture(uint8_t cls) {
@@ -121,8 +113,12 @@ namespace {
         Actions::Drive::motor(50, 50);
         Processing::K230Decode::drainDelay(615);
 
-        if (side == SIDE_LEFT) Actions::Arm::grabLeft(true);
-        else                   Actions::Arm::grabRight(true);
+        if (side == SIDE_LEFT) {
+            Actions::Arm::grabLeft(true);
+        } else {
+            Actions::Arm::grabLeft(true);
+            Actions::Arm::grabRight(true);
+        }
 
         Actions::Drive::motor(-50, -50);
         Processing::K230Decode::drainDelay(300);
@@ -155,21 +151,22 @@ void reset() {
     _rightFull = false;
 }
 
-void clearAll() { reset(); }
-
 uint8_t count() {
     return (uint8_t)((_leftFull ? 1 : 0) + (_rightFull ? 1 : 0));
 }
 
-uint8_t liveHeld() { return countType(K230_CLASS_ALIVE); }
-uint8_t deadHeld() { return countType(K230_CLASS_DEAD); }
 bool full() { return _leftFull && _rightFull; }
 
 bool acceptsType(uint8_t type) {
-    return Processing::K230Decode::isVictimClass(type) && !full();
+    // Colour-agnostic: any valid colordet class (0..6) is grabbable while a
+    // gripper is free. Which colours are actually chased is decided upstream
+    // in EVAC::isTargetColor().
+    return type < K230_COLOR_COUNT && !full();
 }
 
-bool readyToDeploy() { return full(); }
+// The colour held in each gripper — the "left"/"right" globals read later.
+uint8_t leftColor()  { return _leftFull  ? _leftType  : COLOR_NONE; }
+uint8_t rightColor() { return _rightFull ? _rightType : COLOR_NONE; }
 
 bool tryGrab(uint8_t type) {
     Side side;
@@ -183,45 +180,16 @@ bool tryGrab(uint8_t type) {
         return false;
     }
 
+    record(side, type);
     if (!confirmCaptured(type)) {
-        Serial.printf("[VictimManager] grab FAILED type=%u\n", type);
-        return false;
+        Serial.printf("[VictimManager] grab confirm UNCERTAIN type=%u side=%s; keeping grip\n",
+                      type, side == SIDE_LEFT ? "LEFT" : "RIGHT");
+        return true;
     }
 
-    record(side, type);
     Serial.printf("[VictimManager] grabbed type=%u side=%s total=%u\n",
                   type, side == SIDE_LEFT ? "LEFT" : "RIGHT", count());
     return true;
-}
-
-void releaseLive() {
-    Actions::Arm::liftRelease();
-    Processing::K230Decode::drainDelay(RELEASE_MS);
-    if (_leftFull && _leftType == K230_CLASS_ALIVE) {
-        Actions::Arm::releaseLeft();
-        _leftFull = false;
-    }
-    if (_rightFull && _rightType == K230_CLASS_ALIVE) {
-        Actions::Arm::releaseRight();
-        _rightFull = false;
-    }
-    Processing::K230Decode::drainDelay(RELEASE_MS);
-    Actions::Arm::liftCarry();
-}
-
-void releaseDead() {
-    Actions::Arm::liftRelease();
-    Processing::K230Decode::drainDelay(RELEASE_MS);
-    if (_leftFull && _leftType == K230_CLASS_DEAD) {
-        Actions::Arm::releaseLeft();
-        _leftFull = false;
-    }
-    if (_rightFull && _rightType == K230_CLASS_DEAD) {
-        Actions::Arm::releaseRight();
-        _rightFull = false;
-    }
-    Processing::K230Decode::drainDelay(RELEASE_MS);
-    Actions::Arm::liftCarry();
 }
 
 }  // namespace VictimManager

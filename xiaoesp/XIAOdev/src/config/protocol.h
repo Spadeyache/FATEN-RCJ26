@@ -7,7 +7,14 @@
 #define XIAO_REG_FEATURE   0x01  // XIAO -> Teensy: per-frame event
 #define XIAO_REG_COM       0x02  // XIAO -> Teensy: line error, 127 = centered
 #define XIAO_REG_MODE      0x03  // Teensy -> XIAO: active vision mode
+#define XIAO_REG_ANGLE     0x04  // XIAO -> Teensy: gap line angle, 127 = straight
 #define XIAO_REG_FLAG      0x05  // XIAO -> Teensy: mode-specific flags
+#define XIAO_REG_FATEN_LEFT_COLOR    0x20  // Teensy -> XIAO: Faten left arm colordet id, 254 = none
+#define XIAO_REG_FATEN_RIGHT_COLOR   0x21  // Teensy -> XIAO: Faten right arm colordet id, 254 = none
+#define XIAO_REG_FATEN_COLOR_SEQ     0x22  // Teensy -> XIAO: increments when colors are resent
+#define XIAO_REG_FATEN_DEPLOY_PACKED 0x23  // XIAO -> Teensy: ordered counts, left*10 + right
+
+#define XIAO_COLOR_NONE_WIRE 254
 
 // XIAO_REG_FLAG bits.
 #define XIAO_FLAG_COMMIT      0x01
@@ -19,6 +26,7 @@
 #define FEAT_NONE          0
 #define FEAT_UTURN         1
 #define FEAT_SILVER        3
+#define FEAT_LINE_LOST     4
 #define FEAT_BLACK_INTERSECT 6
 
 // FEATURE byte: line-follow green turns (hardcoded forward+turn on Teensy).
@@ -35,5 +43,6 @@
 #define MODE_LINEFOLLOW    0
 #define MODE_SEARCH_LINE   1
 #define MODE_NOGI          2
+#define MODE_GAP           3
 #define MODE_EVAC_COLOR_MASK  5
 #define MODE_CENTER_POINT  6

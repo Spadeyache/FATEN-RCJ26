@@ -1,5 +1,6 @@
 #include "LINE_Follow.h"
 #include "StateMachine.h"
+#include "DeployPlan.h"
 #include "../../config.h"
 #include "../../pins_teensy.h"
 
@@ -22,7 +23,8 @@
 //  here does all the voting/debouncing (see CommandFilter::update).
 //
 //  Dispatch (highest priority first):
-//    front touch           → release pending arm, stop 6 s, 180° spin, resume
+//    FEAT_LINE_LOST → gap #1 releases left, gap #2 releases right, stop 6 s, forward 50 mm,
+//                            timed U-turn, then spin until center-point sees black
 //    FEAT_GREEN_RIGHT      → counted; turn on count LEFT/RIGHT (sets which arm
 //                            deploys at the wall); after both counts passed,
 //                            the next right green = END → stop 12 s;
@@ -57,14 +59,15 @@ namespace {
     // Which arm the next front-touch (wall) releases; set by the deploy turn.
     enum PendingArm : uint8_t { ARM_NONE, ARM_LEFT, ARM_RIGHT };
     PendingArm    _pendingArm        = ARM_NONE;
+    uint8_t       _deployGapCount    = 0;
 
     // The very first left green of the run turns LEFT normally; the mirrored
     // deploy-return rule (turn right until both deploys passed) starts after.
     bool          _firstLeftGreenDone = false;
 
     bool bothDeployCountsPassed() {
-        return _greenRightCount >= GREEN_RIGHT_TURN_COUNT_LEFT &&
-               _greenRightCount >= GREEN_RIGHT_TURN_COUNT_RIGHT;
+        return _greenRightCount >= DeployPlan::leftDeployCount() &&
+               _greenRightCount >= DeployPlan::rightDeployCount();
     }
 
     // One-shot green cooldown: after firing any green turn (u-turn/left/right)
@@ -73,6 +76,8 @@ namespace {
     bool          _disableGreen      = false;
     unsigned long _disableGreenStart = 0;
     unsigned long _disableGreenMs    = DISABLE_GREEN_MS;
+
+    constexpr uint32_t DEPLOY_ARM_GRAB_HOLD_MS = 600;
 
     void armGreenCooldown() {
         _disableGreen      = true;
@@ -150,6 +155,60 @@ namespace {
         Processing::XiaoDecode::setMode(XIAO_MODE_LINE);
     }
 
+    void runDeployGapSequence() {
+        Actions::Drive::stop();
+        ++_deployGapCount;
+        const PendingArm gapArm =
+            (_deployGapCount == 1) ? ARM_LEFT :
+            (_deployGapCount == 2) ? ARM_RIGHT : ARM_NONE;
+#if PRINT_ACTIONS
+        Serial.printf("Action: Deploy gap #%u -> release %s arm\n",
+                      _deployGapCount,
+                      gapArm == ARM_LEFT ? "LEFT" : gapArm == ARM_RIGHT ? "RIGHT" : "NO");
+#endif
+        if (gapArm == ARM_LEFT) {
+            Actions::Arm::liftDown();
+            Actions::Arm::releaseLeft();
+            pumpXiaoFor(DEPLOY_ARM_GRAB_HOLD_MS);
+            Actions::Arm::liftCarry();
+        } else if (gapArm == ARM_RIGHT) {
+            Actions::Arm::liftDown();
+            Actions::Arm::releaseRight();
+            pumpXiaoFor(DEPLOY_ARM_GRAB_HOLD_MS);
+            Actions::Arm::liftCarry();
+        }
+        _pendingArm = ARM_NONE;
+
+        // Course-specific: a deploy gap while the right-green count sits at exactly
+        // 3 counts as marker #4 (3 → 4 only; no other count is bumped here).
+        if (_greenRightCount == 3) {
+            ++_greenRightCount;
+#if PRINT_ACTIONS
+            Serial.println("Deploy gap: green-right count bumped 3 -> 4");
+#endif
+        }
+
+        pumpXiaoFor(DEPLOY_TOUCH_STOP_MS);
+        Actions::Forward::forward(LINE_FOLLOW_BASE_SPEED_FLAT, DEPLOY_GAP_FORWARD_MM,
+                                  /*useIMU=*/false, /*pumpComms=*/true);
+        Processing::XiaoDecode::setMode(XIAO_MODE_CENTER_POINT);
+        pumpXiaoFor(60);
+        Actions::Turn::turn(DEPLOY_UTURN_TIMED_DEG, DEPLOY_UTURN_SPEED);
+        const unsigned long finishTimeoutMs =
+            (unsigned long)(DEPLOY_CENTER_FINISH_MAX_DEG * TURN_SPIN_MS_PER_DEG *
+                            MAX_MOTOR_SPEED / DEPLOY_UTURN_SPEED);
+        const bool centered = Actions::Turn::turnUntilCenterPoint(1.0f,
+                                                                  DEPLOY_UTURN_SPEED,
+                                                                  finishTimeoutMs);
+#if PRINT_ACTIONS
+        Serial.printf("Deploy gap center finish: %s\n", centered ? "centered" : "timeout");
+#endif
+        Actions::Drive::stop();
+        Processing::XiaoDecode::setMode(XIAO_MODE_LINE);
+        Processing::XiaoDecode::clearFilter();
+        armGreenCooldown();
+    }
+
     void runForwardIfNeeded(float speed, float mm) {
         if (speed != 0.0f && mm != 0.0f) {
             Actions::Forward::forward(speed, mm, /*useIMU=*/false, /*pumpComms=*/true);
@@ -171,36 +230,6 @@ void onEnter() {
 
 void update() {
     clearGreenIfElapsed();
-
-    // Front touch = deploy wall: release the arm picked at the deploy turn
-    // (nothing if no deploy is pending), stop DEPLOY_TOUCH_STOP_MS, spin 180°,
-    // resume line following. Always active in this state.
-    if (Sensors::Touch::front()) {
-        Actions::Drive::stop();
-#if PRINT_ACTIONS
-        Serial.printf("Action: Deploy touch -> release %s arm\n",
-                      _pendingArm == ARM_LEFT ? "LEFT" : _pendingArm == ARM_RIGHT ? "RIGHT" : "NO");
-#endif
-        if (_pendingArm == ARM_LEFT)       Actions::Arm::releaseLeft();
-        else if (_pendingArm == ARM_RIGHT) Actions::Arm::releaseRight();
-        _pendingArm = ARM_NONE;
-
-        // Course-specific: a touch while the right-green count sits at exactly
-        // 3 counts as marker #4 (3 → 4 only; no other count is bumped here).
-        if (_greenRightCount == 3) {
-            ++_greenRightCount;
-#if PRINT_ACTIONS
-            Serial.println("Deploy touch: green-right count bumped 3 -> 4");
-#endif
-        }
-
-        pumpXiaoFor(DEPLOY_TOUCH_STOP_MS);
-        Actions::Turn::turn(180.0f, DEPLOY_UTURN_SPEED);
-        Actions::Drive::stop();
-        Processing::XiaoDecode::clearFilter();
-        armGreenCooldown();
-        return;
-    }
 
     switch (Processing::XiaoDecode::command()) {
         // Green right: counted. On count LEFT/RIGHT → deploy turn (remember
@@ -224,8 +253,8 @@ void update() {
             }
 
             ++_greenRightCount;
-            const bool deployLeft  = (_greenRightCount == GREEN_RIGHT_TURN_COUNT_LEFT);
-            const bool deployRight = (_greenRightCount == GREEN_RIGHT_TURN_COUNT_RIGHT);
+            const bool deployLeft  = (_greenRightCount == DeployPlan::leftDeployCount());
+            const bool deployRight = (_greenRightCount == DeployPlan::rightDeployCount());
             #if PRINT_ACTIONS
                         Serial.printf("Action: Green-Right #%u -> %s\n", _greenRightCount,
                                       deployLeft ? "TURN (left arm)"
@@ -248,6 +277,10 @@ void update() {
                 armBlackIntersectCooldown();
             }
             }
+            return;
+
+        case FEAT_LINE_LOST:
+            runDeployGapSequence();
             return;
 
         // Green left: the very first one of the run is a genuine marker →

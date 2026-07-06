@@ -25,6 +25,7 @@
 #include "src/processing/K230Decode.h"
 // #include "src/processing/Mapping.h"   // DISABLED — see Mapping.*.disabled
 #include "src/state_machine/StateMachine.h"
+#include "src/state_machine/DeployPlan.h"
 
 // Debug force-start. Set FORCE_START_STATE to 0 before normal runs.
 #define FORCE_START_STATE 0
@@ -47,6 +48,7 @@ FLASHMEM void setup() {
     Sensors::K230_link::init();
     Sensors::ToF::init();
 
+    DeployPlan::init();
     StateMachine::init();
 #if FORCE_START_STATE
     StateMachine::transitionTo(FORCE_STATE_TARGET);
@@ -81,6 +83,7 @@ void loop() {
     // 2. Run processing layer (decode, filter, fuse).
     Processing::XiaoDecode::tick();
     Processing::K230Decode::tick();
+    DeployPlan::tick();
     // Mapping is disabled.
 
     // 3. Debug Serial commands ('m' = map dump, 'p' = pose print). DISABLED (mapping off).

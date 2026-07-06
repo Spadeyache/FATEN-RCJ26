@@ -18,10 +18,12 @@ void tick(bool instantRun = false);  // re-runs filter every 20 ms (or instantly
 
 uint8_t command();        // confirmed FEAT_* event (FEAT_NONE if none)
 float   lineError();      // 0..254
+float   gapAngle();       // 0..254, 127 = straight
 bool    commitFlag();     // XIAO green-turn commit in progress
 bool    tightSlowFlag();  // XIAO tight-turn target is low in frame
 bool    silverSeen();
 bool    evacBlackSeen();
+bool    gapFrontFlag();
 
 void    setMode(XiaoMode m);
 void    clearFilter();

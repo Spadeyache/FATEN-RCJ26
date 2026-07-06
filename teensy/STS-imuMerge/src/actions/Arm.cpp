@@ -16,7 +16,6 @@ namespace {
     constexpr int KRS_PARK_US    = 800;   // parked pose at boot — TODO tune
     constexpr int KRS_GRAB_US    = 2215;
     constexpr int KRS_AIR_US    = 1300;
-    constexpr int KRS_RELEASE_US = 1650;
 
     constexpr int HS0_CLOSE_US = 2000;
     constexpr int HS0_OPEN_US  = 1000;
@@ -83,9 +82,6 @@ void grabRight(bool closed, bool blocking) {
     writeServoSmooth(_hs45hb0, _hs1CurrentUs, targetUs, blocking);
 }
 
-// --- left bucket mechanics ---------------------------------------------------
-void store() { liftPark(); }
-
 // --- drops ------------------------------------------------------------------
 void releaseLeft()  { grabLeft(false); }
 void releaseRight() { grabRight(false); }
@@ -104,7 +100,6 @@ void lift(int us) {
 void liftDown()    { lift(KRS_GRAB_US);   }
 void liftCarry()   { lift(KRS_AIR_US);    }
 void liftPark()    { lift(KRS_PARK_US);   }
-void liftRelease() { lift(KRS_RELEASE_US); }
 
 }  // namespace Arm
 }  // namespace Actions

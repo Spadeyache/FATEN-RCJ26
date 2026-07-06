@@ -77,38 +77,88 @@ class Detector:
         self._ai2d_out = nn.from_numpy(
             np.ones((1, 3, self.model_h, self.model_w), dtype=np.uint8))
 
+        self._can_bypass_ai2d = (
+            getattr(config, "BYPASS_AI2D_DIRECT", False)
+            and self.preprocess == "direct"
+            and self.sensor_w == self.model_w
+            and self.sensor_h == self.model_h
+        )
+        if self._can_bypass_ai2d:
+            print("detector: direct tensor path enabled (ai2d bypass)")
+
+        # Reused NCHW staging buffer. Allocating ~900KB per frame instead
+        # triggers long gc pauses that tank fps -- fill this in place.
+        self._nchw_buf = np.zeros((1, 3, self.sensor_h, self.sensor_w),
+                                  dtype=np.uint8)
+
     # ------------------------------------------------------------------
     def infer(self, img):
         """Run one inference. Returns list of [cls, score, x1, y1, x2, y2]
         in SENSOR pixel coords (post un-letterbox)."""
         t0 = time.ticks_ms() if config.PROFILE_TIMING else 0
         chw = self._chw_from_image(img)
-        ai2d_input_tensor = nn.from_numpy(chw)
-        self._ai2d_builder.run(ai2d_input_tensor, self._ai2d_out)
-        del ai2d_input_tensor
+        input_tensor = nn.from_numpy(chw)
+        if self._can_bypass_ai2d:
+            kpu_input = input_tensor
+        else:
+            self._ai2d_builder.run(input_tensor, self._ai2d_out)
+            kpu_input = self._ai2d_out
         t1 = time.ticks_ms() if config.PROFILE_TIMING else 0
 
-        self._kpu.set_input_tensor(0, self._ai2d_out)
-        self._kpu.run()
+        try:
+            self._kpu.set_input_tensor(0, kpu_input)
+            self._kpu.run()
+        except Exception as e:
+            if self._can_bypass_ai2d:
+                print("detector: direct tensor path failed; falling back to ai2d:", e)
+                self._can_bypass_ai2d = False
+                self._ai2d_builder.run(input_tensor, self._ai2d_out)
+                self._kpu.set_input_tensor(0, self._ai2d_out)
+                self._kpu.run()
+            else:
+                raise
+        del input_tensor
+        try:
+            gc.collect()
+        except Exception:
+            pass
         t2 = time.ticks_ms() if config.PROFILE_TIMING else 0
 
         results = []
-        for i in range(self._kpu.outputs_size()):
-            d = self._kpu.get_output_tensor(i)
-            arr = d.to_numpy()
-            total = 1
-            for s in arr.shape:
-                total *= s
-            results.append(arr.reshape((total,)))
-            del d
+        try:
+            for i in range(self._kpu.outputs_size()):
+                d = self._kpu.get_output_tensor(i)
+                arr = d.to_numpy()
+                total = 1
+                for s in arr.shape:
+                    total *= s
+                results.append(arr.reshape((total,)))
+                del d
+        except MemoryError as e:
+            print("detector: output ndarray malloc failed; dropping frame:", e)
+            try:
+                gc.collect()
+            except Exception:
+                pass
+            return []
 
         if not results:
             return []
 
-        boxes = yd.decode_anchorfree(
-            results[0], self.num_classes, self.conf_threshold,
-            num_anchors=config.NUM_ANCHORS_640x480)
-        boxes = yd.nms_class_wise(boxes, self.nms_threshold)
+        try:
+            boxes = yd.decode_anchorfree(
+                results[0], self.num_classes, self.conf_threshold,
+                num_anchors=config.NUM_ANCHORS_640x480)
+            boxes = yd.nms_class_wise(boxes, self.nms_threshold)
+        except MemoryError as e:
+            print("detector: postprocess ndarray malloc failed; dropping frame:", e)
+            del results
+            try:
+                gc.collect()
+            except Exception:
+                pass
+            return []
+        del results
 
         det = []
         for b in boxes:
@@ -233,34 +283,31 @@ class Detector:
         if y2 > self.sensor_h: y2 = float(self.sensor_h)
         return [x1, y1, x2, y2]
 
-    @staticmethod
-    def _chw_from_image(img):
+    def _chw_from_image(self, img):
         """Convert a sensor snapshot to a (3, H, W) uint8 CHW plane.
 
         RGB888  -> to_numpy_ref() is (H, W, 3) RGB; split into planes directly
                    (matches the calibrated preprocessing: RGB, swapRB=false).
         GRAYSCALE -> single plane replicated across all 3 channels.
+        Writes into the preallocated self._chw_buf (no per-frame alloc).
         """
         hwc = img.to_numpy_ref()
         shape = hwc.shape
+        chw = self._nchw_buf
         if len(shape) == 3 and shape[2] == 3:
-            H, W, _ = shape
-            chw = np.zeros((3, H, W), dtype=np.uint8)
-            chw[0] = hwc[:, :, 0]   # R
-            chw[1] = hwc[:, :, 1]   # G
-            chw[2] = hwc[:, :, 2]   # B
+            chw[0, 0] = hwc[:, :, 0]   # R
+            chw[0, 1] = hwc[:, :, 1]   # G
+            chw[0, 2] = hwc[:, :, 2]   # B
             return chw
         if len(shape) == 2:
-            H, W = shape
             plane = hwc
         elif len(shape) == 3 and shape[2] == 1:
-            H, W, _ = shape
             plane = hwc[:, :, 0]
         else:
             H, W, C = shape
-            return hwc.reshape((H * W, C)).transpose().copy().reshape((C, H, W))
-        chw = np.zeros((3, H, W), dtype=np.uint8)
-        chw[0] = plane
-        chw[1] = plane
-        chw[2] = plane
+            chw[0] = hwc.reshape((H * W, C)).transpose().copy().reshape((C, H, W))
+            return chw
+        chw[0, 0] = plane
+        chw[0, 1] = plane
+        chw[0, 2] = plane
         return chw

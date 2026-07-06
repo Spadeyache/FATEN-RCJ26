@@ -35,6 +35,50 @@ import status_led
 _text_ok = True
 
 
+def _clip_int(v, lo, hi):
+    try:
+        v = int(v)
+    except Exception:
+        return lo
+    if v < lo:
+        return lo
+    if v > hi:
+        return hi
+    return v
+
+
+def _sanitize_boxes(boxes, width, height, num_classes):
+    """Return display/UART-safe boxes, dropping malformed detections."""
+    clean = []
+    for b in boxes:
+        try:
+            cls_id = int(b[0])
+            score = float(b[1])
+            x1 = _clip_int(b[2], 0, width - 1)
+            y1 = _clip_int(b[3], 0, height - 1)
+            x2 = _clip_int(b[4], 0, width - 1)
+            y2 = _clip_int(b[5], 0, height - 1)
+        except Exception as e:
+            print("box dropped (parse failed):", e)
+            continue
+        if cls_id < 0 or cls_id >= num_classes:
+            print("box dropped (bad class):", cls_id)
+            continue
+        if score < 0.0:
+            score = 0.0
+        if score > 1.0:
+            score = 1.0
+        if x2 < x1:
+            x1, x2 = x2, x1
+        if y2 < y1:
+            y1, y2 = y2, y1
+        if x2 <= x1 or y2 <= y1:
+            continue
+        clean.append([cls_id, score, x1, y1, x2, y2])
+    clean.sort(key=lambda d: -float(d[1]))
+    return clean
+
+
 def _draw_label(img, x, y, text, color):
     global _text_ok
     if not (_text_ok and getattr(config, "DRAW_LABELS", True)):
@@ -133,37 +177,68 @@ def main():
                 continue
 
             # RUN: full pipeline.
+            t_a = time.ticks_ms()
             img = camera.get_image(sensor)
             saved = camera.maybe_save(img)
             if saved:
                 print("saved ->", saved)
+            t_b = time.ticks_ms()
 
-            boxes = det.infer(img)               # ALL boxes >= CONF_THRESHOLD,
+            try:
+                boxes = det.infer(img)           # ALL boxes >= CONF_THRESHOLD,
                                                  # [cls, score, x1,y1,x2,y2],
                                                  # sorted high->low confidence
+            except MemoryError as e:
+                print("infer skipped (ndarray malloc fail):", e)
+                try:
+                    gc.collect()
+                except Exception:
+                    pass
+                boxes = []
+            boxes = _sanitize_boxes(boxes, sensor.width(), sensor.height(),
+                                    len(det.labels))
             status_led.set_status("found" if len(boxes) > 0 else "run")
 
             # Teensy only wants the strongest few targets: send the top-N by
             # confidence. The K230 preview below still draws every box above
             # threshold.
+            t_c = time.ticks_ms()
             tx_boxes = boxes
             if len(tx_boxes) > config.TX_TOP_N:
                 tx_boxes = sorted(boxes, key=lambda d: -float(d[1]))[:config.TX_TOP_N]
-            robot_io.send_boxes(u, tx_boxes)
+            try:
+                robot_io.send_boxes(u, tx_boxes)
+            except Exception as e:
+                print("uart send skipped (box error):", e)
 
             # Draw ALL detected boxes on preview (not just the ones sent).
-            if config.SHOW_DISPLAY:
-                for d in boxes:
-                    cls_id = int(d[0])
-                    color = config.COLOR_PALETTE[cls_id % len(config.COLOR_PALETTE)]
-                    x1, y1, x2, y2 = d[2], d[3], d[4], d[5]
-                    img.draw_rectangle(int(x1), int(y1),
-                                       int(x2 - x1), int(y2 - y1),
-                                       color=color, thickness=2)
-                    name = det.labels[cls_id] if cls_id < len(det.labels) else "c{}".format(cls_id)
-                    _draw_label(img, int(x1), max(0, int(y1) - 16),
-                                "{} {:.2f}".format(name, float(d[1])), color)
-                Display.show_image(img)
+            show_this_frame = (config.SHOW_DISPLAY and
+                               (frame % getattr(config, "DISPLAY_EVERY_N", 1) == 0))
+            if show_this_frame and getattr(config, "DRAW_BOXES", True):
+                draw_boxes = boxes
+                max_draw = getattr(config, "MAX_BOXES_DRAW", 12)
+                if len(draw_boxes) > max_draw:
+                    draw_boxes = draw_boxes[:max_draw]
+                for d in draw_boxes:
+                    try:
+                        cls_id = int(d[0])
+                        color = config.COLOR_PALETTE[cls_id % len(config.COLOR_PALETTE)]
+                        x1, y1, x2, y2 = d[2], d[3], d[4], d[5]
+                        img.draw_rectangle(int(x1), int(y1),
+                                           int(x2 - x1), int(y2 - y1),
+                                           color=color, thickness=2)
+                        name = det.labels[cls_id] if cls_id < len(det.labels) else "c{}".format(cls_id)
+                        _draw_label(img, int(x1), max(0, int(y1) - 16),
+                                    "{} {:.2f}".format(name, float(d[1])), color)
+                    except Exception as e:
+                        print("draw box skipped:", e)
+            if show_this_frame:
+                try:
+                    Display.show_image(img)
+                except Exception as e:
+                    print("display show skipped:", e)
+
+            t_d = time.ticks_ms()
 
             frame += 1
             if (frame & 0x1F) == 0:
@@ -174,6 +249,13 @@ def main():
                     1, time.ticks_diff(now, t_window))
                 print("f={:5d} fps={:5.2f} run={} dets={}".format(
                     frame, fps, run_state, len(boxes)))
+                if config.PROFILE_TIMING:
+                    # Whole-loop split: cap(snapshot) / inf(prep+kpu+decode) /
+                    # disp(draw+show_image). The `timing:` line only covers inf.
+                    print("loop: cap={}ms inf={}ms disp={}ms".format(
+                        time.ticks_diff(t_b, t_a),
+                        time.ticks_diff(t_c, t_b),
+                        time.ticks_diff(t_d, t_c)))
                 t_window = now
 
     except KeyboardInterrupt:

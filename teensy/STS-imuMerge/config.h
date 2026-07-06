@@ -35,7 +35,14 @@
 #define XIAO_REG_FEATURE    0x01
 #define XIAO_REG_COM        0x02
 #define XIAO_REG_MODE       0x03
+#define XIAO_REG_ANGLE      0x04
 #define XIAO_REG_FLAG       0x05
+#define XIAO_REG_FATEN_LEFT_COLOR    0x20  // T->X: Faten left arm colordet id, 254 = none
+#define XIAO_REG_FATEN_RIGHT_COLOR   0x21  // T->X: Faten right arm colordet id, 254 = none
+#define XIAO_REG_FATEN_COLOR_SEQ     0x22  // T->X: increments when Faten colors are resent
+#define XIAO_REG_FATEN_DEPLOY_PACKED 0x23  // X->T: ordered counts, left*10 + right
+
+#define XIAO_COLOR_NONE_WIRE 254
 
 #define XIAO_FLAG_COMMIT      0x01
 #define XIAO_FLAG_TIGHT_SLOW  0x02
@@ -46,6 +53,7 @@
 #define FEAT_NONE           0
 #define FEAT_UTURN          1   // XIAO GreenFilter-confirmed both-green
 #define FEAT_SILVER         3   // raw silver on the scan row (Teensy filters)
+#define FEAT_LINE_LOST      4   // raw no-line/gap reading (Teensy filters)
 #define FEAT_BLACK_INTERSECT 6   // saturated black row in LINE mode; suppress green rereads
 #define FEAT_GREEN_LEFT     7   // XIAO GreenFilter-confirmed left turn  (hardcoded fwd+turn)
 #define FEAT_GREEN_RIGHT    8   // XIAO GreenFilter-confirmed right turn (hardcoded fwd+turn)
@@ -59,6 +67,7 @@ enum XiaoMode : uint8_t {
     XIAO_MODE_LINE        = 0,
     XIAO_MODE_SEARCH_LINE = 1,
     XIAO_MODE_NOGI        = 2,
+    XIAO_MODE_GAP         = 3,
     XIAO_MODE_EVAC_COLOR_MASK = 5,   // evac entry/exit: silver side scan + row-45 black flag
     XIAO_MODE_CENTER_POINT = 6,      // front arc: feature=1 when black point is centered
 };
@@ -146,6 +155,7 @@ enum XiaoMode : uint8_t {
 #define FILTER_THRESHOLD_SILVER   4   // silver (evac entry)
 #define FILTER_THRESHOLD_BLACK_INTERSECT 5  // saturated black row before/through an intersection
 #define FILTER_THRESHOLD_GREEN    6   // green left/right (matches main); u-turn = both sides build up
+#define FILTER_THRESHOLD_LINELOST 10  // sustained line loss -> gap/deploy sequence
 
 // After firing any green turn (u-turn / left / right), ignore all green for this
 // long so the same intersection isn't re-read on the way out.
@@ -164,6 +174,9 @@ enum XiaoMode : uint8_t {
 // arm, stop this long, spin 180°, resume line follow.
 #define DEPLOY_TOUCH_STOP_MS       6000
 #define DEPLOY_UTURN_SPEED         60.0f
+#define DEPLOY_UTURN_TIMED_DEG     145.0f
+#define DEPLOY_GAP_FORWARD_MM      50.0f
+#define DEPLOY_CENTER_FINISH_MAX_DEG 90.0f
 
 // End of run: once the right-green count has passed BOTH trigger counts, every
 // further right green is the end marker — stop this long.
@@ -184,12 +197,12 @@ enum XiaoMode : uint8_t {
 
 #define INTERSECTION_GREEN_LEFT_FLAT_FORWARD_SPEED        LINE_FOLLOW_BASE_SPEED_FLAT
 #define INTERSECTION_GREEN_LEFT_FLAT_FORWARD_MM           52.0f
-#define INTERSECTION_GREEN_LEFT_FLAT_TURN_ANGLE          -90.0f
+#define INTERSECTION_GREEN_LEFT_FLAT_TURN_ANGLE          -111.0f
 #define INTERSECTION_GREEN_LEFT_FLAT_TURN_SPEED           60.0f
 
 #define INTERSECTION_GREEN_RIGHT_FLAT_FORWARD_SPEED       LINE_FOLLOW_BASE_SPEED_SLOPE
 #define INTERSECTION_GREEN_RIGHT_FLAT_FORWARD_MM          52.0f
-#define INTERSECTION_GREEN_RIGHT_FLAT_TURN_ANGLE          90.0f
+#define INTERSECTION_GREEN_RIGHT_FLAT_TURN_ANGLE          111.0f
 #define INTERSECTION_GREEN_RIGHT_FLAT_TURN_SPEED          60.0f
 
 // Green turn finish:

@@ -31,19 +31,15 @@ void init();
 void grabLeft(bool closed, bool blocking = true);
 void grabRight(bool closed, bool blocking = true);
 
-// Left bucket pose. Currently unused by the simplified evac grab flow.
-void store();
-
-// Drops.
-void releaseLeft();        // the ball in the left gripper
-void releaseRight();       // the ball in the right gripper
+// Drops (open the gripper). Used by LINE_Follow's arm-drop.
+void releaseLeft();        // open the left gripper
+void releaseRight();       // open the right gripper
 
 // Lift (KRS, PWM). lift() sets a raw pulse; the named helpers are the poses.
 void lift(int us);
 void liftDown();      // lower to grab pose
 void liftCarry();     // raise to carry pose
 void liftPark();      // parked pose
-void liftRelease();
 
 void attachServos();
 void detachServos();

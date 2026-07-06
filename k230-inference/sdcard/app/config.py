@@ -60,6 +60,9 @@ NMS_THRESHOLD       = 0.50
 MAX_BOXES_TX        = 16          # hard cap per wire frame (must match robot_io.MAX_BOXES)
 TX_TOP_N            = 3           # only the N highest-confidence boxes are sent to the Teensy
                                  # (the K230 display still draws ALL boxes above CONF_THRESHOLD)
+BYPASS_AI2D_DIRECT  = False       # Experimental. True can be faster, but may
+                                 # trigger ndarray malloc fail on K230 heap.
+MAX_BOXES_DRAW      = 12          # draw at most this many boxes; avoids slow/crashy preview bursts
 
 
 # ============================================================================
@@ -87,9 +90,13 @@ STATUS_COLOR_FOUND = (0, 255, 0)     # green: at least one victim
 # Display / debug
 # ============================================================================
 SHOW_DISPLAY       = True
-DRAW_LABELS        = True   # draw class name+score text on boxes. Uses the
-                           # bitmap font (no FreeType); set False to draw boxes
-                           # only if your firmware has no usable font at all.
+DISPLAY_EVERY_N    = 1     # Show preview every N frames. Raise to 2/3/5 if display costs too much.
+DRAW_BOXES         = True  # Set False to keep preview but skip rectangle drawing.
+DRAW_LABELS        = False  # class name+score text on boxes. Off by default:
+                           # this firmware prints "Deprecated function..." on
+                           # EVERY draw_string call, spamming the log each
+                           # frame. Boxes stay colour-coded per class (see
+                           # COLOR_PALETTE), which is enough to identify them.
 DEBUG_EVERY        = 30
 PROFILE_TIMING     = True
 SETTLE_MS          = 200

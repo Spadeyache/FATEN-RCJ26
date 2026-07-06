@@ -14,6 +14,16 @@
 
 NUM_ANCHORS_640x480 = 6300   # 80*60 + 40*30 + 20*15
 
+# Vectorized decode needs ulab (on CanMV) or numpy (host tests). If neither
+# imports, decode_anchorfree() silently uses the pure-Python fallback below.
+try:
+    from ulab import numpy as _np
+except ImportError:
+    try:
+        import numpy as _np
+    except ImportError:
+        _np = None
+
 
 def iou_xyxy(a, b):
     ix1 = a[0] if a[0] > b[0] else b[0]
@@ -39,7 +49,64 @@ def decode_anchorfree(flat_out, num_classes, conf_thr,
 
     flat_out is channel-major: flat[c * N + n] = channel c, anchor n.
     Returns list of [cls, score, x1, y1, x2, y2] in MODEL letterbox coords.
+
+    Fast path: ulab-vectorized (per-class max + argsort), so Python only
+    touches the handful of anchors above threshold instead of all 6300 x nc.
+    The interpreted fallback is the FPS killer (~hundreds of ms/frame on
+    the K230) -- it only runs if ulab is missing or an op is unsupported.
     """
+    global _fast_warned
+    if _np is not None:
+        try:
+            return _decode_fast(flat_out, num_classes, conf_thr, num_anchors)
+        except Exception as e:
+            if not _fast_warned:
+                # Loud on purpose: the fallback costs ~100x. If you see this,
+                # the ulab build lacks an op (or flat_out isn't an ndarray).
+                print("decode: FAST PATH FAILED -> python fallback:", repr(e))
+                _fast_warned = True
+    elif not _fast_warned:
+        print("decode: no ulab/numpy -> python fallback (SLOW)")
+        _fast_warned = True
+    return _decode_python(flat_out, num_classes, conf_thr, num_anchors)
+
+
+_fast_warned = False
+
+
+_MAX_FAST_BOXES = 100   # safety cap; NMS cost explodes past this anyway
+
+
+def _decode_fast(flat, nc, conf_thr, N):
+    """Vectorized decode. `flat` must be a ulab/numpy 1-D array.
+
+    No argsort: CanMV's ulab raises NotImplementedError for 1-D argsort
+    ("flattened arrays"). Instead we pull detections out best-first with one
+    C-speed argmax per box above threshold, suppressing each hit. Real frames
+    have a handful of boxes, so this is ~10 argmax calls over N floats.
+    """
+    scores = flat[4 * N:(4 + nc) * N].reshape((nc, N))
+    best_s = _np.max(scores, axis=0)        # (N,) best class score per anchor
+    best_c = _np.argmax(scores, axis=0)     # (N,) that class id
+
+    boxes = []
+    while len(boxes) < _MAX_FAST_BOXES:
+        n = int(_np.argmax(best_s))         # highest remaining score
+        s = float(best_s[n])
+        if s < conf_thr:
+            break                           # everything left is below threshold
+        cx = float(flat[n])
+        cy = float(flat[N + n])
+        hw = float(flat[2 * N + n]) / 2
+        hh = float(flat[3 * N + n]) / 2
+        boxes.append([int(best_c[n]), s,
+                      cx - hw, cy - hh, cx + hw, cy + hh])
+        best_s[n] = -1.0                    # suppress; find the next best
+    return boxes
+
+
+def _decode_python(flat_out, num_classes, conf_thr, num_anchors):
+    """Pure-Python fallback. Same output, ~100x slower on device."""
     N = num_anchors
     off_cx = 0
     off_cy = N
@@ -85,6 +152,18 @@ def nms_class_wise(boxes, iou_thr):
             cb = [b for b in cb if iou_xyxy(head[2:6], b[2:6]) < iou_thr]
     kept.sort(key=lambda b: -b[1])
     return kept
+
+
+# Import-time self-test on a tiny tensor so the boot log states which decode
+# path this firmware will actually run (shows up before the first frame).
+if _np is not None:
+    try:
+        _decode_fast(_np.zeros(((4 + 2) * 4,), dtype=_np.float32), 2, 0.5, 4)
+        print("decode: ulab fast path OK")
+    except Exception as _e:
+        print("decode: fast path UNAVAILABLE ({}) -> python fallback (SLOW)".format(repr(_e)))
+else:
+    print("decode: no ulab/numpy -> python fallback (SLOW)")
 
 
 def unletterbox_box(box_xyxy, ratio, left_pad, top_pad, ori_w, ori_h):

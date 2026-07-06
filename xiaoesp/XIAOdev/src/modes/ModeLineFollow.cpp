@@ -84,7 +84,7 @@ constexpr uint8_t GREEN_PX_THRESHOLD = 5;
 
 // During a black-saturated intersection row, ignore/reset green votes so green
 // after the intersection does not accidentally command a turn.
-constexpr uint8_t INTERSECTION_BLACK_SAT_THRESHOLD = 45;
+constexpr uint8_t INTERSECTION_BLACK_SAT_THRESHOLD = 30;
 
 // Green-left/right commit target. Ends after the branch has been seen and the
 // line settles back to exactly two crossings (in + one out) for this many frames.
@@ -911,6 +911,7 @@ void modeLineFollowRun(camera_fb_t* fb, YacheEncodedSerial& teensy) {
     const bool bottomLinePoint = hasBottomLinePoint(lc);
     const bool blackIntersect = colorBlack > INTERSECTION_BLACK_SAT_THRESHOLD;
     const bool intersectionSaturated = blackIntersect;
+    const bool gapDetected = lc.count == 0;
 
     uint8_t greenLeft = 0, greenRight = 0, blackLeft = 0, blackRight = 0;
     uint8_t rawGreen = rawGreenOnColorRow(fb, colorCom, colorBlack, redCount,
@@ -963,11 +964,12 @@ void modeLineFollowRun(camera_fb_t* fb, YacheEncodedSerial& teensy) {
         s_lastPos = 0.0f;
     }
 
-    // Priority: silver > black-intersect > green.
+    // Priority: silver > green > gap > black-intersect.
     if (greenCmd == 1) featureId = FEAT_UTURN;
     if (greenCmd == 2) featureId = FEAT_GREEN_LEFT;
     if (greenCmd == 3) featureId = FEAT_GREEN_RIGHT;
     if (blackIntersect && greenCmd == 0) featureId = FEAT_BLACK_INTERSECT;
+    if (gapDetected && greenCmd == 0) featureId = FEAT_LINE_LOST;
     if (silverDetected) featureId = FEAT_SILVER;
     updateCommitSettle(cls, lc.count);
     updateCurveRelease(fresh, s_lastAngle, steerOut);
@@ -977,7 +979,11 @@ void modeLineFollowRun(camera_fb_t* fb, YacheEncodedSerial& teensy) {
     xs_storeLineSteer(steerOut, viewerCommitActive, s_commitLocked, s_commitSettle, greenCmd,
                       arcBlackCount, arcBlackSaturated);
     // Viewer-only sensor state. Silver and green write each side independently.
-    xs_setSensorBoth(XS_BLACK, XS_PRIO_LINE);
+    if (gapDetected) {
+        xs_setSensorBoth(XS_WHITE, XS_PRIO_GAP);
+    } else {
+        xs_setSensorBoth(XS_BLACK, XS_PRIO_LINE);
+    }
     if (greenLeft > GREEN_PX_THRESHOLD) {
         xs_setSensorSide(XS_LEFT, XS_GREEN, XS_PRIO_GREEN);
     }
@@ -1005,10 +1011,10 @@ void modeLineFollowRun(camera_fb_t* fb, YacheEncodedSerial& teensy) {
     teensy.send(XIAO_REG_FLAG, xiaoFlags);
 
     SPRINTF(SPRINT_RESULTS, "[RES]",
-        "mode=0 arc=1 feat=%d err=%d n=%d in=%d out=%d fresh=%d ang=%.1f pos=%.1f ccom=%.1f sL=%d sR=%d red=%d blk25=%d ablk=%d bot=%d sat=%d asat=%d gL=%d gR=%d rawG=%d gc=%d cmt=%d cc=%d tslow=%d outY=%d",
+        "mode=0 arc=1 feat=%d err=%d n=%d in=%d out=%d fresh=%d ang=%.1f pos=%.1f ccom=%.1f sL=%d sR=%d red=%d blk25=%d ablk=%d bot=%d gap=%d sat=%d asat=%d gL=%d gR=%d rawG=%d gc=%d cmt=%d cc=%d tslow=%d outY=%d",
         featureId, errByte, lc.count, cls.inIndex, steerOut, fresh ? 1 : 0,
         s_lastAngle, s_lastPos, colorCom, silverLeft, silverRight, redCount, colorBlack, arcBlackCount, bottomLinePoint ? 1 : 0,
-        intersectionSaturated ? 1 : 0, arcBlackSaturated ? 1 : 0, greenLeft, greenRight,
+        gapDetected ? 1 : 0, intersectionSaturated ? 1 : 0, arcBlackSaturated ? 1 : 0, greenLeft, greenRight,
         rawGreen, greenCmd, s_commitActive ? 1 : 0, s_curveActive ? 1 : 0,
         (xiaoFlags & XIAO_FLAG_TIGHT_SLOW) ? 1 : 0,
         steerOut >= 0 ? (int)lc.crossings[steerOut].pixelY : -1);
