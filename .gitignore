@@ -2,6 +2,15 @@ electronics/fp-info-cache
 electronics/sym-lib-table
 *.lck
 
+# EasyEDA auto-backup zips
+electronics/**/*_backup/
+electronics/**/debug.log
+
+# Windows cruft / accidental duplicates
+Thumbs.db
+desktop.ini
+* - Copy/
+
 dev-tools/*.gz
 dev-tools/*.img
 
