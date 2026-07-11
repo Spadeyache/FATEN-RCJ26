@@ -1,6 +1,0 @@
-GNNEConv2D
-B,OC,IC,OH,OW,KH,KW
-1,128,264,15,20,1,1
-GNNEActivation
- , , , 
-1,128,15,20

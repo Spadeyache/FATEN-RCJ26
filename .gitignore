@@ -22,10 +22,20 @@ dev-tools/*.img
 .claude/
 **/.claude/
 
-# K230 / NNCase generated outputs
-k230-train/exports/
+# K230 / NNCase generated outputs (compiler dumps, model build exports)
+k230/train/exports/
+k230-final-train/**/exports/
 **/*_diag/
 **/dump/
+
+# Training datasets (image/label data lives outside git; keep only scripts + configs)
+k230/data/datasets/
+**/datasets - Copy/
+**/labels.cache
+
+# macOS cruft
+.DS_Store
+._*
 
 # Python / training cache
 __pycache__/

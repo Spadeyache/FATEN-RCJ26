@@ -1,8 +1,0 @@
-path: /workspace/datasets/points
-train: train/images
-val: val/images
-
-nc: 2
-names:
-  0: Green
-  1: Red

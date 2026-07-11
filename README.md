@@ -4,6 +4,7 @@
 
 Firmware, vision, AI training pipeline, and electronics for team **FATEN**'s [RoboCupJunior Rescue Line](https://junior.robocup.org/rescue/) robot. The robot follows a line course, handles gaps, obstacles and intersections, then enters an evacuation zone where it detects, grabs and carries victims using an onboard YOLO model.
 
+🌐 Team website: [faten-1tdj.vercel.app](https://faten-1tdj.vercel.app/en/index.html)
 📸 Competition photos and videos: [Google Drive folder](https://drive.google.com/drive/folders/1ek6edaTA_Ugfu6BttLYHi5sbRvwh5g2C)
 
 <!-- TODO: add a photo of the robot here
@@ -136,7 +137,7 @@ Team FATEN thanks the sponsors who made this robot possible:
   <a href="https://www.pololu.com/"><img src="images/pololu.png" alt="Pololu" height="48"></a>
 </p>
 
-- **[EasyEDA](https://easyeda.com/) & [JLCPCB](https://jlcpcb.com/)** — provided the PCB design software and $300 of board fabrication credit; the integrated design-to-manufacture workflow carried our boards smoothly from schematic to delivered PCB.
+- **[EasyEDA](https://easyeda.com/) & [JLCPCB](https://jlcpcb.com/)** — provided the PCB design software and board fabrication credit; the integrated design-to-manufacture workflow carried our boards smoothly from schematic to delivered PCB.
 - **[Keeppower](https://keeppower.com/)** — supplied high-spec protected batteries, with the protection circuit custom-designed for our robot, and covered most of the battery and shipping costs.
 - **[Hitec](https://hitecrcd.com/)** — provided motors for the robot arm along with battery chargers and maintenance jigs; their high-spec LiFePO4 balance charger kept our batteries reliably charged throughout the competition.
 - **[Pololu](https://www.pololu.com/)** — supported the team's sensor hardware, including the VL53L7CX multizone time-of-flight sensor the robot uses for wall and obstacle detection.
@@ -156,3 +157,11 @@ Our team members represent:
 ### Open source
 
 This robot builds on Ultralytics YOLOv8, nncase, CanMV, Teensyduino, and the Arduino ESP32 core.
+
+## License
+
+This project is licensed under the **Creative Commons Attribution-NonCommercial 4.0 International License (CC BY-NC 4.0)** — see [LICENSE](LICENSE) for details.
+
+In short: you're welcome to **study this project, learn from it, and build your own work on top of it**, as long as you **credit team FATEN** (a link back to this repository) and **don't use it for commercial purposes**. Please don't just lift the code wholesale — use it as a reference and make it your own.
+
+Third-party components (YOLOv8, nncase, CanMV, Teensyduino, the Arduino ESP32 core, etc.) remain under their own licenses.

@@ -1,8 +1,0 @@
-{
-  "kmodel_path": "exports/v09_mixquant_top10/model.kmodel",
-  "kmodel_size_bytes": 1361224,
-  "compile_seconds": 11.349601745605469,
-  "quant_scheme_path": "exports/v09_mixquant_top10/quant_scheme_edited.json",
-  "preprocess_mode": "baked_imagenet",
-  "ptq_code": 3
-}

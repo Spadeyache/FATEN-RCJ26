@@ -1,0 +1,6 @@
+# nncase compiler diagnostic dumps are generated artifacts, not source code.
+# Keep them out of GitHub's language statistics (they were being mis-detected
+# as "IL Assembly" and drowning out the real firmware/vision code).
+k230/**/dump/** linguist-generated=true
+k230-final-train/**/dump/** linguist-generated=true
+*.il linguist-generated=true

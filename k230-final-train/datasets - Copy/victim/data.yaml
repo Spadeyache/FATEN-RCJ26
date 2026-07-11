@@ -1,9 +1,0 @@
-path: /workspace/datasets/victim
-train: train/images
-val: val/images
-
-nc: 3
-names:
-  0: Dead
-  1: Live
-  2: Point
