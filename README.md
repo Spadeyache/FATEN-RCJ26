@@ -1,6 +1,10 @@
 # RoboCupJunior Rescue Line — Robot
 
-Firmware, vision, AI training pipeline, and electronics for a [RoboCupJunior Rescue Line](https://junior.robocup.org/rescue/) robot. The robot follows a line course, handles gaps, obstacles and intersections, then enters an evacuation zone where it detects, grabs and carries victims using an onboard YOLO model.
+<img src="images/faten.png" alt="Team FATEN logo" height="80">
+
+Firmware, vision, AI training pipeline, and electronics for team **FATEN**'s [RoboCupJunior Rescue Line](https://junior.robocup.org/rescue/) robot. The robot follows a line course, handles gaps, obstacles and intersections, then enters an evacuation zone where it detects, grabs and carries victims using an onboard YOLO model.
+
+📸 Competition photos and videos: [Google Drive folder](https://drive.google.com/drive/folders/1ek6edaTA_Ugfu6BttLYHi5sbRvwh5g2C)
 
 <!-- TODO: add a photo of the robot here
 ![Robot](Docs/robot.jpg)
@@ -120,4 +124,35 @@ See [k230-final-train/README.md](k230-final-train/README.md) for the step-by-ste
 
 ## Acknowledgements
 
-Thanks to our sponsors and the open-source projects this robot builds on: Ultralytics YOLOv8, nncase, CanMV, Teensyduino, and the Arduino ESP32 core.
+### Sponsors
+
+Team FATEN thanks the sponsors who made this robot possible:
+
+<p>
+  <a href="https://easyeda.com/"><img src="images/easyeda.png" alt="EasyEDA" height="48"></a>&nbsp;&nbsp;&nbsp;
+  <a href="https://jlcpcb.com/"><img src="images/jlcpcb.png" alt="JLCPCB" height="48"></a>&nbsp;&nbsp;&nbsp;
+  <a href="https://keeppower.com/"><img src="images/keeppower.png" alt="Keeppower" height="48"></a>&nbsp;&nbsp;&nbsp;
+  <a href="https://hitecrcd.com/"><img src="images/hitec.webp" alt="Hitec" height="48"></a>&nbsp;&nbsp;&nbsp;
+  <a href="https://www.pololu.com/"><img src="images/pololu.png" alt="Pololu" height="48"></a>
+</p>
+
+- **[EasyEDA](https://easyeda.com/) & [JLCPCB](https://jlcpcb.com/)** — provided the PCB design software and $300 of board fabrication credit; the integrated design-to-manufacture workflow carried our boards smoothly from schematic to delivered PCB.
+- **[Keeppower](https://keeppower.com/)** — supplied high-spec protected batteries, with the protection circuit custom-designed for our robot, and covered most of the battery and shipping costs.
+- **[Hitec](https://hitecrcd.com/)** — provided motors for the robot arm along with battery chargers and maintenance jigs; their high-spec LiFePO4 balance charger kept our batteries reliably charged throughout the competition.
+- **[Pololu](https://www.pololu.com/)** — supported the team's sensor hardware, including the VL53L7CX multizone time-of-flight sensor the robot uses for wall and obstacle detection.
+
+More photos from the competition are in our [Google Drive folder](https://drive.google.com/drive/folders/1ek6edaTA_Ugfu6BttLYHi5sbRvwh5g2C).
+
+### Institutions
+
+Our team members represent:
+
+<p>
+  <a href="https://www.nyu.edu/"><img src="images/nyu-logo.png" alt="New York University" height="48"></a>&nbsp;&nbsp;&nbsp;
+  <a href="https://www.columbia.edu/"><img src="images/columbia-logo.jpg" alt="Columbia University" height="48"></a>&nbsp;&nbsp;&nbsp;
+  <a href="https://www.chalmers.se/en/"><img src="images/chalmers-logo.png" alt="Chalmers University of Technology" height="48"></a>
+</p>
+
+### Open source
+
+This robot builds on Ultralytics YOLOv8, nncase, CanMV, Teensyduino, and the Arduino ESP32 core.
