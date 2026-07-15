@@ -2,7 +2,7 @@
 
 <img src="images/faten.png" alt="Team FATEN logo" height="80">
 
-Firmware, vision, AI training pipeline, and electronics for team **FATEN**'s [RoboCupJunior Rescue Line](https://junior.robocup.org/rescue/) robot. The robot follows a line course, handles gaps, obstacles and intersections, then enters an evacuation zone where it detects, grabs and carries victims using an onboard YOLO model.
+Firmware, vision, AI training pipeline, and electronics for team **FATEN**'s [RoboCupJunior Rescue Line](https://junior.robocup.org/rescue/) robot. The robot follows a line course, handles gaps, obstacles, and intersections, then enters an evacuation zone where it detects, grabs, and carries victims using an onboard YOLO(formerly MobileNet-SSD-v2-Lite) model.
 
 🌐 Team website: [faten-1tdj.vercel.app](https://faten-1tdj.vercel.app/en/index.html)
 📸 Competition photos and videos: [Google Drive folder](https://drive.google.com/drive/folders/1ek6edaTA_Ugfu6BttLYHi5sbRvwh5g2C)
