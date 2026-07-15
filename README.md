@@ -13,7 +13,7 @@ Firmware, vision, AI training pipeline, and electronics for team **FATEN**'s [Ro
 
 ## How the robot works
 
-One microcontroller drives the robot; two smart co-processors pre-digest the camera data so the control loop stays fast and deterministic. The Teensy never touches raw pixels — it only receives small, decoded messages.
+One microcontroller drives the robot; two smart co-processors digest the camera data which the control loop stays fast and deterministic.
 
 ```mermaid
 flowchart LR
@@ -47,7 +47,7 @@ flowchart LR
     ACT -- "ICS bus" --> ARM
 ```
 
-The Teensy firmware is a strict 5-layer architecture (`drivers → sensors → processing → state_machine/actions`) where calls only flow downward, with one file pair per state-machine state (`LINE_Follow`, `LINE_Gap`, `LINE_Obstacle`, `EVAC_Entry`, `EVAC_SearchDeploy`, `EVAC_Exit`, …). See [teensy/STS-imuMerge/README.md](teensy/STS-imuMerge/README.md) and the interactive [system map](Docs/architecture.html) for the full picture.
+The Teensy firmware is a 5-layer architecture (`drivers → sensors → processing → state_machine/actions`) where calls only flow downward, with one file pair per state-machine state (`LINE_Follow`, `LINE_Gap`, `LINE_Obstacle`, `EVAC_Entry`, `EVAC_SearchDeploy`, `EVAC_Exit`, …). See [teensy/STS-imuMerge/README.md](teensy/STS-imuMerge/README.md) and the interactive [system map](Docs/architecture.html) for the full picture.
 
 ## Hardware
 
@@ -57,7 +57,7 @@ The Teensy firmware is a strict 5-layer architecture (`drivers → sensors → p
 | Seeed XIAO ESP32-S3 Sense | Line-camera co-processor: line position, green/red markers, silver tape, gap detection |
 | Sipeed CanMV K230D Zero | AI co-processor: YOLOv8n victim / colour detection (kmodel via nncase) |
 | MPU6050 | IMU — pitch / roll / yaw |
-| VL53L7CX | Multizone ToF — walls and obstacle distance |
+| Pololu VL53L7CX | Multizone ToF — walls and obstacle distance |
 | 4× Feetech STS3032 | Serial-bus wheel servos (1 Mbps) |
 | Kondo KRS servos & Hitech HS45HB | Victim arm and grippers |
 | Custom PCBs (EasyEDA) | Power distribution, adapters, breakouts — see [electronics/](electronics/) |
@@ -160,8 +160,8 @@ This robot builds on Ultralytics YOLOv8, nncase, CanMV, Teensyduino, and the Ard
 
 ## License
 
-This project is licensed under the **Creative Commons Attribution-NonCommercial 4.0 International License (CC BY-NC 4.0)** — see [LICENSE](LICENSE) for details.
+This project is licensed under the **Creative Commons Attribution-NonCommercial 4.0 International License (CC BY-NC 4.0)** see [LICENSE](LICENSE) for details.
 
-In short: you're welcome to **study this project, learn from it, and build your own work on top of it**, as long as you **credit team FATEN** (a link back to this repository) and **don't use it for commercial purposes**. Please don't just lift the code wholesale — use it as a reference and make it your own.
+In short: you're welcome to study this project, learn from it, and build your own work on top of it, as long as you credit team FATEN (a link back to this repository) and don't use it for commercial purposes. Please don't just lift the code wholesale.
 
 Third-party components (YOLOv8, nncase, CanMV, Teensyduino, the Arduino ESP32 core, etc.) remain under their own licenses.
