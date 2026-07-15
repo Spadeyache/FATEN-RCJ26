@@ -59,7 +59,7 @@ The Teensy firmware is a strict 5-layer architecture (`drivers → sensors → p
 | MPU6050 | IMU — pitch / roll / yaw |
 | VL53L7CX | Multizone ToF — walls and obstacle distance |
 | 4× Feetech STS3032 | Serial-bus wheel servos (1 Mbps) |
-| Kondo KRS servos (ICS bus) | Victim arm and grippers |
+| Kondo KRS servos & Hitech HS45HB | Victim arm and grippers |
 | Custom PCBs (EasyEDA) | Power distribution, adapters, breakouts — see [electronics/](electronics/) |
 
 ## Repository layout
