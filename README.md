@@ -62,6 +62,10 @@ The Teensy firmware is a 5-layer architecture (`drivers → sensors → processi
 | Kondo KRS servos & Hitech HS45HB | Victim arm and grippers |
 | Custom PCBs (EasyEDA) | Power distribution, adapters, breakouts — see [electronics/](electronics/) |
 
+The custom PCBs form a stacked electronics module. The map below shows how the boards connect:
+
+![FATEN electronics map](images/FATEN%20electronics%20map.png)
+
 ## Repository layout
 
 | Directory | Contents |
