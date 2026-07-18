@@ -47,3 +47,7 @@ __pycache__/
 *.onnx
 *.kmodel
 *.engine
+
+# Generated Kondo Kagaku ICS/Doxygen API website.
+# Keep IcsClass_V300 source, readme, and MIT_Licence.txt for attribution.
+teensy/STS-imuMerge/IcsClass_V300/ICS_ArduinoFunctonListV3_0_0(See to index html)/
