@@ -4,3 +4,16 @@
 k230/**/dump/** linguist-generated=true
 k230-final-train/**/dump/** linguist-generated=true
 *.il linguist-generated=true
+
+# Generated HTML reports and API documentation: keep them in the repository,
+# but exclude them from GitHub language statistics and collapse them in diffs.
+"teensy/STS-imuMerge/IcsClass_V300/ICS_ArduinoFunctonListV3_0_0(See to index html)/**" linguist-generated=true
+k230/train/reports/**/*.html linguist-generated=true
+k230-final-train/**/report*.html linguist-generated=true
+k230-final-train/docs/diagnosis-reports/**/*.html linguist-generated=true
+
+# Third-party libraries: retained for reproducible firmware builds and license
+# compliance, but excluded from the language bar as vendored dependencies.
+teensy/STS-imuMerge/src/vendor/** linguist-vendored=true
+teensy/STS-imuMerge/IcsClass_V300/src/** linguist-vendored=true
+teensy/STS-imuMerge/IcsClass_V300/examples/** linguist-vendored=true
