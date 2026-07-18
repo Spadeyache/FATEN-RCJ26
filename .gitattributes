@@ -5,6 +5,10 @@ k230/**/dump/** linguist-generated=true
 k230-final-train/**/dump/** linguist-generated=true
 *.il linguist-generated=true
 
+# Legacy K230 training workspace, superseded by k230-final-train/.
+# Keep it browsable as project history without counting it in the language bar.
+k230/** linguist-detectable=false
+
 # Generated HTML reports and API documentation: keep them in the repository,
 # but exclude them from GitHub language statistics and collapse them in diffs.
 "teensy/STS-imuMerge/IcsClass_V300/ICS_ArduinoFunctonListV3_0_0(See to index html)/**" linguist-generated=true
