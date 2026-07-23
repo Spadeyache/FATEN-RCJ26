@@ -1,5 +1,7 @@
 # RoboCupJunior Rescue Line — Robot
 
+Key features we have. PostTrainingQuantization(PTQ) with results simulated on the K230D chip, half-duplex serial driver with 74HCT126, asymmetric PID dependent on the IMU, custom touch sensors, and an IR camera used on the hardware.
+
 <img src="images/faten.png" alt="Team FATEN logo" height="80">
 
 Firmware, vision, AI training pipeline, and electronics for team **FATEN**'s [RoboCupJunior Rescue Line](https://junior.robocup.org/rescue/) robot. The robot follows a line course, handles gaps, obstacles, and intersections, then enters an evacuation zone where it detects, grabs, and carries victims using an onboard YOLO(formerly MobileNet-SSD-v2-Lite) model.
